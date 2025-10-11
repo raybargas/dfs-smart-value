@@ -774,7 +774,7 @@ Smart Value =
                         st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
                     else:
                         st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
-                st.rerun()
+            st.rerun()
     with col2:
         st.markdown("**Quick Actions**")
         if st.button("✕ Deselect All", use_container_width=True, key="deselect_all"):
@@ -785,7 +785,7 @@ Smart Value =
         if is_valid:
             if st.button("Next: Optimization Config ➡️", use_container_width=True, type="primary", key="quick_next"):
                 st.session_state['page'] = 'optimization'
-                st.rerun()
+            st.rerun()
         else:
             # Disabled button with tooltip
             st.button(

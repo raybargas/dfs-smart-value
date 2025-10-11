@@ -33,50 +33,38 @@ def render_data_ingestion():
     """
     # Apply modern styles
     st.markdown(get_base_styles(), unsafe_allow_html=True)
-    st.markdown(get_hero_section_styles(), unsafe_allow_html=True)
-    st.markdown(get_upload_zone_styles(), unsafe_allow_html=True)
     st.markdown(get_card_styles(), unsafe_allow_html=True)
     st.markdown(get_badge_styles(), unsafe_allow_html=True)
     
-    # Compact Header with Instructions inline
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.markdown("""
-        <div style="padding: 1rem 0;">
-            <h1 style="margin: 0; font-size: 2rem; font-weight: 700;">
+    # ULTRA-COMPACT Header: Single line, inline everything
+    st.markdown("""
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; margin-bottom: 0.75rem;">
+        <div style="display: flex; align-items: baseline; gap: 1rem;">
+            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; display: inline;">
                 🏈 <span class="gradient-text">DFS Lineup Optimizer</span>
-            </h1>
-            <p style="margin: 0.25rem 0 0 0; color: #b0b0b0; font-size: 0.95rem;">
-                Smart Value-Driven Fantasy Lineup Builder
-            </p>
+            </h2>
+            <span style="color: #707070; font-size: 0.875rem;">Smart Value-Driven Builder</span>
         </div>
-        """, unsafe_allow_html=True)
-    with col2:
-        with st.expander("ℹ️ Help", expanded=False):
-            st.caption("**Required:** Name, Position, Salary, Projection")
-            st.caption("**Optional:** Team, Opponent, Ownership")
-            st.caption("**Formats:** CSV, Excel (.xlsx, .xls)")
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Two-column layout: Upload + Actions side by side
-    col_upload, col_action = st.columns([2, 1])
+    # Ultra-compact 3-column layout: Upload | Test Button | Help
+    col_upload, col_test, col_help = st.columns([3, 1.5, 0.75])
     
     with col_upload:
         uploaded_file = st.file_uploader(
-            "📂 Upload Player Data",
+            "Upload",
             type=['csv', 'xlsx', 'xls'],
-            help="CSV or Excel file with player projections",
+            help="CSV or Excel file",
             key="player_data_uploader",
-            accept_multiple_files=False,
             label_visibility="collapsed"
         )
     
-    with col_action:
-        st.markdown('<div style="padding-top: 0.5rem;">', unsafe_allow_html=True)
-        if st.button("🎯 Load Test Data", 
-                     help="Load DKSalaries Week 6 sample", 
+    with col_test:
+        if st.button("🎯 Test Data", 
+                     help="Load Week 6 sample", 
                      use_container_width=True,
-                     key="load_test_btn",
-                     type="secondary"):
+                     key="load_test_btn"):
             try:
                 import io
                 import os
@@ -89,13 +77,16 @@ def render_data_ingestion():
                         uploaded_file = io.BytesIO(file_content)
                         uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
                         st.session_state['uploaded_test_file'] = uploaded_file
-                        st.success("✅ Loaded!")
                         st.rerun()
                 else:
-                    st.error(f"Test file not found")
+                    st.error("Not found")
             except Exception as e:
                 st.error(f"Error: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col_help:
+        with st.expander("ℹ️"):
+            st.caption("**Need:** Name, Pos, Salary, Proj")
+            st.caption("**Formats:** CSV, Excel")
     
     # Check if we already have loaded data and should just display it
     if 'player_data' in st.session_state and st.session_state['player_data'] is not None and uploaded_file is None:
@@ -196,18 +187,7 @@ def display_continue_button() -> None:
 
 def display_upload_placeholder() -> None:
     """Display compact placeholder when no file is uploaded."""
-    st.info("👆 **Upload your player data** or click **Load Test Data** to get started with Week 6 sample data")
-    
-    # Optional: Compact example format
-    with st.expander("📄 Example Format"):
-        sample_data = pd.DataFrame({
-            'Name': ['P. Mahomes', 'C. McCaffrey', 'T. Hill'],
-            'Position': ['QB', 'RB', 'WR'],
-            'Salary': [8500, 9200, 8000],
-            'Projection': [24.2, 22.1, 21.8],
-            'Team': ['KC', 'SF', 'MIA']
-        })
-        st.dataframe(sample_data, hide_index=True, use_container_width=True)
+    st.info("👆 Upload CSV/Excel or click **Test Data** for Week 6 sample")
 
 
 def display_missing_column_error(error_msg: str, filename: str) -> None:
