@@ -200,11 +200,11 @@ def render_player_selection():
             # Initialize session state for custom weights if not exists
             if 'smart_value_custom_weights' not in st.session_state:
                 st.session_state['smart_value_custom_weights'] = {
-                    'base': 0.40,
-                    'opportunity': 0.30,
-                    'trends': 0.15,
-                    'risk': 0.10,
-                    'matchup': 0.05
+                    'base': 0.25,
+                    'opportunity': 0.25,
+                    'trends': 0.20,
+                    'risk': 0.15,
+                    'matchup': 0.15
                 }
             
             st.markdown("#### 🎯 Main Category Weights")
@@ -333,11 +333,11 @@ def render_player_selection():
             # Reset to default button
             if st.button("↩️ Reset to Balanced", use_container_width=True):
                 st.session_state['smart_value_custom_weights'] = {
-                    'base': 0.40,
-                    'opportunity': 0.30,
-                    'trends': 0.15,
-                    'risk': 0.10,
-                    'matchup': 0.05
+                    'base': 0.25,
+                    'opportunity': 0.25,
+                    'trends': 0.20,
+                    'risk': 0.15,
+                    'matchup': 0.15
                 }
                 # Clear cached data
                 if 'smart_value_calculated' in st.session_state:

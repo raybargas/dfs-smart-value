@@ -4,7 +4,7 @@ Smart Value Calculator
 Calculates a sophisticated, multi-factor value score that goes beyond simple projection/salary.
 Incorporates opportunity metrics, trends, risk factors, and matchup quality.
 
-Formula: Smart Value = BASE (40%) + OPPORTUNITY (30%) + TRENDS (15%) + RISK (10%) + MATCHUP (5%)
+Formula: Smart Value = BASE (25%) + OPPORTUNITY (25%) + TRENDS (20%) + RISK (15%) + MATCHUP (15%)
 """
 
 import pandas as pd
@@ -15,11 +15,11 @@ from typing import Dict, Optional
 # Weight Profiles
 WEIGHT_PROFILES = {
     'balanced': {
-        'base': 0.40,
-        'opportunity': 0.30,
-        'trends': 0.15,
-        'risk': 0.10,
-        'matchup': 0.05
+        'base': 0.25,
+        'opportunity': 0.25,
+        'trends': 0.20,
+        'risk': 0.15,
+        'matchup': 0.15
     },
     'cash': {
         'base': 0.45,
