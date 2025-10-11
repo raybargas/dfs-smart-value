@@ -206,6 +206,7 @@ def analyze_season_stats(
             'season_mom': 0.0,
             'season_snap': 0.0,
             'season_fpg': 0.0,
+            'season_ceiling': 0.0,
             'season_var': 0.0,
             'season_tgt': 0.0,
             'season_eztgt': 0,
@@ -233,6 +234,7 @@ def analyze_season_stats(
         player_df['season_mom'] = 0.0
         player_df['season_snap'] = 0.0
         player_df['season_fpg'] = 0.0
+        player_df['season_ceiling'] = 0.0  # Best game of the season
         player_df['season_var'] = 0.0
         player_df['season_tgt'] = 0.0
         player_df['season_eztgt'] = 0
@@ -296,6 +298,11 @@ def analyze_season_stats(
                 # Get FP/G from snaps sheet
                 fp_g = snap_match.get('FP/G', 0.0)
                 player_df.at[idx, 'season_fpg'] = round(float(fp_g), 1) if pd.notna(fp_g) else 0.0
+                
+                # Calculate season ceiling (best game)
+                weekly_fp = snap_metrics['weekly_fp']
+                max_fp = max(weekly_fp) if weekly_fp else 0.0
+                player_df.at[idx, 'season_ceiling'] = round(float(max_fp), 1)
                 
                 matched_count += 1
             

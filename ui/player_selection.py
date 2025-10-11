@@ -839,12 +839,16 @@ Smart Value =
             flag_tooltip.append("⚠️ WR REGRESSION RISK: Scored 20+ last week, 80% chance of regression")
         
         # Flag 2: 3.5X Salary Rule (RB/WR/TE only - not QBs)
+        # Rule: Each player needs to score 3.5 × (salary/1000) to be worth their cost
+        # Flag when their season ceiling (best game) is below this threshold
         if row['position'] in ['RB', 'WR', 'TE']:
             salary = row['salary']
-            projection = row['projection']
-            if salary > (projection * 3500):  # 3.5X rule: salary > 3.5 × projection
+            required_points = (salary / 1000) * 3.5  # Points needed to be worth the cost
+            season_ceiling = row.get('season_ceiling', 0)  # Best game this season
+            
+            if season_ceiling > 0 and season_ceiling < required_points:
                 is_ceiling_concern = True
-                flag_tooltip.append(f"💰 CEILING CONCERN: Salary (${salary:,}) > 3.5x projection ({projection:.1f}pts × 3.5 = ${projection*3500:,.0f}) - typically excludes 98% from optimal lineups")
+                flag_tooltip.append(f"💰 3.5X RISK: Needs {required_points:.1f} pts to justify ${salary:,} salary, but season ceiling is only {season_ceiling:.1f} pts (never shown ability to hit this threshold - excludes 98% from optimal lineups)")
         
         # Combine flags
         has_warning = is_wr_regression or is_ceiling_concern
