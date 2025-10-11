@@ -84,15 +84,43 @@ def show():
     if 'current_week' not in st.session_state:
         st.session_state.current_week = get_current_nfl_week()
     
+    # Check database status and offer initialization
+    try:
+        from src.db_init import check_data_freshness
+        data_status = check_data_freshness()
+        
+        if not data_status.get('vegas_lines') or not data_status.get('injury_reports'):
+            st.warning("⚠️ **Database not initialized or data missing**")
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.info(f"Vegas Lines: {data_status.get('vegas_count', 0)} records | Injury Reports: {data_status.get('injury_count', 0)} records")
+            with col2:
+                if st.button("🔄 Initialize & Fetch Data", type="primary", use_container_width=True):
+                    from src.db_init import initialize_database
+                    current_week = st.session_state.current_week
+                    if initialize_database(current_week):
+                        st.success("✅ Database initialized successfully!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Database initialization failed. Check API keys in Settings → Secrets.")
+            
+            st.markdown("---")
+    except Exception as e:
+        st.error(f"Error checking database status: {e}")
+    
     # Auto-load cached data on first visit
     if 'narrative_data_loaded' not in st.session_state:
         st.session_state.narrative_data_loaded = False
     
     if not st.session_state.narrative_data_loaded:
         # Auto-load cached data for the current week
-        load_vegas_lines_from_db()
-        load_injury_reports_from_db()
-        st.session_state.narrative_data_loaded = True
+        try:
+            load_vegas_lines_from_db()
+            load_injury_reports_from_db()
+            st.session_state.narrative_data_loaded = True
+        except Exception as e:
+            st.error(f"Error loading data: {e}")
     
     # Week selector and navigation at the top
     col1, col2, col3 = st.columns([1, 2, 1])
