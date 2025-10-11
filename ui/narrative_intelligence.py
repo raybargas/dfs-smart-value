@@ -98,79 +98,64 @@ def show():
     if 'current_week' not in st.session_state:
         st.session_state.current_week = get_current_nfl_week()
     
-    # Auto-load data on first visit
+    # Auto-load data on first visit (silently)
     if 'narrative_data_auto_loaded' not in st.session_state:
         st.session_state.narrative_data_auto_loaded = False
     
     if not st.session_state.narrative_data_auto_loaded:
-        # Try to auto-load cached data
+        # Try to auto-load cached data silently
         try:
             from src.db_init import initialize_database
             current_week = st.session_state.current_week
             
-            # Load from cache (won't hit APIs unless cache is missing)
-            initialize_database(current_week, use_cache=True, force_refresh=False)
+            # Load from cache silently (won't hit APIs unless cache is missing)
+            initialize_database(current_week, use_cache=True, force_refresh=False, verbose=False)
             st.session_state.narrative_data_auto_loaded = True
             
             # Load data into session state
             load_vegas_lines_from_db()
             load_injury_reports_from_db()
-        except Exception as e:
-            # Non-critical - just log
+        except Exception:
+            # Non-critical - just log silently
             pass
     
-    # Check database and cache status
+    # Check database and cache status (silently)
     try:
         from src.db_init import check_data_freshness
-        from src.data_cache import get_cache_status, list_cached_weeks
         
         data_status = check_data_freshness()
         current_week = st.session_state.current_week
-        cache_status = get_cache_status(current_week)
         
-        # Show manual refresh option in an expander (only if user wants fresh data)
-        if data_status.get('vegas_lines') or data_status.get('injury_reports'):
-            with st.expander("🔄 Refresh Data (Optional)"):
-                st.caption("Fetch fresh data from APIs (only needed for latest updates)")
-                
-                cached_weeks = list_cached_weeks()
-                if cached_weeks:
-                    st.info(f"📦 Weeks with cached data: {', '.join(map(str, cached_weeks))}")
-                
-                if st.button("🌐 Refresh from APIs", use_container_width=True, help="Fetch fresh data from The Odds API and MySportsFeeds"):
-                    from src.db_init import initialize_database
-                    with st.spinner("Fetching fresh data from APIs..."):
-                        if initialize_database(current_week, use_cache=False, force_refresh=True):
-                            st.success("✅ Fresh data fetched and cached!")
-                            st.info("💡 Commit updated cache files to Git to share with team")
-                            # Reload data
-                            load_vegas_lines_from_db()
-                            load_injury_reports_from_db()
-                            st.rerun()
-                        else:
-                            st.error("❌ API fetch failed. Check API keys.")
-        else:
-            # Data missing and auto-load failed - show error
-            st.error("⚠️ **No data available**")
-            st.info("**Database:** Vegas: 0 | Injuries: 0")
-            st.caption("Auto-load failed. Click below to manually load or refresh data.")
+        # If no data, show simple "Load Data" button
+        if not data_status.get('vegas_lines') or not data_status.get('injury_reports'):
+            st.info("💡 **Data not loaded yet** - Click below to load Vegas lines and injury reports")
             
-            if st.button("📦 Load Data", type="primary", use_container_width=True, help="Load from cache or fetch from APIs"):
+            if st.button("📥 Load Data from APIs", type="primary", use_container_width=True):
                 from src.db_init import initialize_database
-                with st.spinner("Loading data..."):
-                    if initialize_database(current_week, use_cache=True, force_refresh=False):
-                        st.success("✅ Data loaded successfully!")
+                if initialize_database(current_week, use_cache=True, force_refresh=False, verbose=True):
+                    load_vegas_lines_from_db()
+                    load_injury_reports_from_db()
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to load data. Check API keys in settings.")
+            
+            st.markdown("---")
+        else:
+            # Data loaded - show optional refresh in collapsed expander
+            with st.expander("🔄 Refresh Data (Optional)"):
+                st.caption("Fetch latest data from APIs")
+                
+                if st.button("🌐 Refresh from APIs", use_container_width=True):
+                    from src.db_init import initialize_database
+                    if initialize_database(current_week, use_cache=False, force_refresh=True, verbose=True):
                         load_vegas_lines_from_db()
                         load_injury_reports_from_db()
                         st.rerun()
                     else:
-                        st.error("❌ Failed to load data.")
-            
-            st.markdown("---")
-    except Exception as e:
-        st.error(f"Error checking status: {e}")
-        import traceback
-        st.error(traceback.format_exc())
+                        st.error("❌ API fetch failed.")
+    except Exception:
+        # Silently fail - data will load on button click
+        pass
     
     # ULTRA-COMPACT Week selector and status - single row
     col1, col2, col3, col4 = st.columns([0.8, 2, 1.5, 1])

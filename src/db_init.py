@@ -71,7 +71,7 @@ def fetch_vegas_lines(week: int, api_key: Optional[str] = None) -> bool:
         from src.api.odds_api import OddsAPIClient
         
         client = OddsAPIClient(api_key=api_key)
-        client.fetch_nfl_odds(week=week, force_refresh=True)
+        client.fetch_nfl_odds(use_cache=False)  # Don't use cache when forcing refresh
         
         return True
         
@@ -107,9 +107,7 @@ def fetch_injury_reports(week: int, api_key: Optional[str] = None) -> bool:
         
         client = MySportsFeedsClient(api_key=api_key)
         # Note: You'll need to implement fetch_injury_reports method in MySportsFeedsClient
-        # For now, we'll just log that it's attempted
-        st.info(f"📊 Fetching injury reports for Week {week}...")
-        
+        # For now, just silently return success
         # TODO: Implement injury report fetching in MySportsFeedsClient
         # client.fetch_injury_reports(week=week)
         
@@ -122,7 +120,7 @@ def fetch_injury_reports(week: int, api_key: Optional[str] = None) -> bool:
         return False
 
 
-def initialize_database(week: int, use_cache: bool = True, force_refresh: bool = False) -> bool:
+def initialize_database(week: int, use_cache: bool = True, force_refresh: bool = False, verbose: bool = True) -> bool:
     """
     Full database initialization: run migrations + load/fetch data.
     
@@ -130,15 +128,21 @@ def initialize_database(week: int, use_cache: bool = True, force_refresh: bool =
         week: NFL week number
         use_cache: Try to load from cache first before fetching
         force_refresh: Force API fetch even if cache exists
+        verbose: Show status messages (set to False for silent loading)
     
     Returns:
         True if successful, False otherwise
     """
-    with st.spinner("🗄️ Initializing database..."):
-        # Step 1: Run migrations
+    if verbose:
+        with st.spinner("🗄️ Initializing database..."):
+            # Step 1: Run migrations
+            if not run_migrations():
+                return False
+            st.success("✅ Database tables created")
+    else:
+        # Silent mode - no status messages
         if not run_migrations():
             return False
-        st.success("✅ Database tables created")
     
     # Import cache utilities
     from src.data_cache import (
@@ -152,36 +156,56 @@ def initialize_database(week: int, use_cache: bool = True, force_refresh: bool =
     # Step 2: Vegas Lines
     vegas_from_cache = False
     if use_cache and not force_refresh:
-        with st.spinner(f"📦 Loading Vegas lines from cache for Week {week}..."):
+        if verbose:
+            with st.spinner(f"📦 Loading Vegas lines from cache for Week {week}..."):
+                cache_result = load_vegas_lines_from_cache(week)
+                if cache_result:
+                    st.success(f"✅ Vegas lines loaded from cache ({cache_result['record_count']} records)")
+                    vegas_from_cache = True
+        else:
             cache_result = load_vegas_lines_from_cache(week)
             if cache_result:
-                st.success(f"✅ Vegas lines loaded from cache ({cache_result['record_count']} records)")
                 vegas_from_cache = True
     
     if not vegas_from_cache:
-        with st.spinner(f"📊 Fetching Vegas lines from API for Week {week}..."):
+        if verbose:
+            with st.spinner(f"📊 Fetching Vegas lines from API for Week {week}..."):
+                vegas_success = fetch_vegas_lines(week)
+                if vegas_success:
+                    # Save to cache for next time
+                    save_vegas_lines_to_cache(week)
+                    st.success(f"✅ Vegas lines fetched and cached for Week {week}")
+        else:
             vegas_success = fetch_vegas_lines(week)
             if vegas_success:
-                # Save to cache for next time
                 save_vegas_lines_to_cache(week)
-                st.success(f"✅ Vegas lines fetched and cached for Week {week}")
     
     # Step 3: Injury Reports
     injury_from_cache = False
     if use_cache and not force_refresh:
-        with st.spinner(f"📦 Loading injury reports from cache for Week {week}..."):
+        if verbose:
+            with st.spinner(f"📦 Loading injury reports from cache for Week {week}..."):
+                cache_result = load_injury_reports_from_cache(week)
+                if cache_result:
+                    st.success(f"✅ Injury reports loaded from cache ({cache_result['record_count']} records)")
+                    injury_from_cache = True
+        else:
             cache_result = load_injury_reports_from_cache(week)
             if cache_result:
-                st.success(f"✅ Injury reports loaded from cache ({cache_result['record_count']} records)")
                 injury_from_cache = True
     
     if not injury_from_cache:
-        with st.spinner(f"🏥 Fetching injury reports from API for Week {week}..."):
+        if verbose:
+            with st.spinner(f"🏥 Fetching injury reports from API for Week {week}..."):
+                injury_success = fetch_injury_reports(week)
+                if injury_success:
+                    # Save to cache for next time
+                    save_injury_reports_to_cache(week)
+                    st.success(f"✅ Injury reports fetched and cached for Week {week}")
+        else:
             injury_success = fetch_injury_reports(week)
             if injury_success:
-                # Save to cache for next time
                 save_injury_reports_to_cache(week)
-                st.success(f"✅ Injury reports fetched and cached for Week {week}")
     
     return True
 
