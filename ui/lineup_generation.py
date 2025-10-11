@@ -32,12 +32,17 @@ def render_lineup_generation():
     progress, and navigates to the next page. Users don't interact with it directly.
     """
     
+    # Apply compact styles
+    from src.styles import get_base_styles, get_card_styles
+    st.markdown(get_base_styles(), unsafe_allow_html=True)
+    st.markdown(get_card_styles(), unsafe_allow_html=True)
+    
     # Step 1: Validate session state (prerequisite checks)
     if 'optimization_config' not in st.session_state or 'player_pool' not in st.session_state:
         # Missing data - show error and provide navigation back
         st.error("⚠️ Missing configuration. Please go back to Optimization Configuration.")
         
-        if st.button("← Back to Configuration", type="primary"):
+        if st.button("⬅️ Back to Configuration", type="primary"):
             st.session_state['page'] = 'optimization'
             st.rerun()
         
@@ -47,11 +52,13 @@ def render_lineup_generation():
     config = st.session_state['optimization_config']
     player_pool_df = st.session_state['player_pool']
     
-    # Step 3: Display generation status message
+    # ULTRA-COMPACT Loading message
     st.markdown(f"""
-    <div style="text-align: center; margin: 2rem 0;">
-        <h2 style="color: #f9fafb;">🔄 Generating {config['lineup_count']} Lineups...</h2>
-        <p style="color: #9ca3af;">Please wait while we optimize your lineups.</p>
+    <div style="text-align: center; padding: 1rem 0; margin-bottom: 1rem;">
+        <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">
+            🔄 <span class="gradient-text">Generating {config['lineup_count']} Lineups</span>
+        </h2>
+        <p style="color: #707070; font-size: 0.875rem; margin: 0.5rem 0 0 0;">Please wait...</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -93,36 +100,32 @@ def render_lineup_generation():
         if len(lineups) > 0:
             st.success(f"✅ Successfully generated **{len(lineups)}** of {config['lineup_count']} lineups in **{generation_time:.1f} seconds**.")
             
-            st.markdown("""
-            **What happened?**  
-            The optimizer successfully generated some lineups but couldn't complete the full batch. 
+            st.info("""
+            **Note:** The optimizer couldn't generate the full batch. 
             This typically means the uniqueness constraint was too tight for your player pool size.
             """)
             
-            # Show two options: adjust settings or view partial results
-            col1, col2 = st.columns(2)
+            # COMPACT navigation: adjust or view results
+            col1, col2 = st.columns([1, 4])
             
             with col1:
-                if st.button("← Adjust Settings and Retry", use_container_width=True):
+                if st.button("⬅️ Adjust", use_container_width=True, help="Go back to adjust settings"):
                     st.session_state['page'] = 'optimization'
                     st.rerun()
             
             with col2:
-                if st.button("View Results →", type="primary", use_container_width=True):
+                if st.button("▶️ View Results", type="primary", use_container_width=True):
                     st.session_state['page'] = 'results'
                     st.rerun()
         else:
             # No lineups generated - critical failure
             st.error("❌ Could not generate any lineups. Please adjust your settings and try again.")
             
-            st.markdown("""
-            **Possible issues:**
-            - Player pool too small for the uniqueness constraint
-            - Ownership filter excluded too many players
-            - Salary cap constraints impossible to satisfy
+            st.info("""
+            **Possible issues:** Player pool too small, uniqueness too tight, or ownership filter too strict.
             """)
             
-            if st.button("← Back to Configuration", type="primary", use_container_width=True):
+            if st.button("⬅️ Back to Configuration", type="primary", use_container_width=True):
                 st.session_state['page'] = 'optimization'
                 st.rerun()
     else:
