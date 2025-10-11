@@ -763,7 +763,7 @@ Smart Value =
             label_visibility="collapsed"
         )
         
-        # Apply threshold if changed from 0
+        # Apply threshold button (only shown when threshold > 0)
         if smart_threshold > 0:
             if st.button(f"✓ Select ≥ {smart_threshold}", use_container_width=True, key="apply_threshold"):
                 # Initialize selections if not exists
@@ -777,7 +777,9 @@ Smart Value =
                         st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
                     else:
                         st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
-            st.rerun()
+                
+                # Only rerun when button is clicked
+                st.rerun()
     
     with col2:
         st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
