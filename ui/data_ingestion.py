@@ -48,8 +48,8 @@ def render_data_ingestion():
     </div>
     """, unsafe_allow_html=True)
     
-    # Ultra-compact 3-column layout: Upload | Test Button | Help
-    col_upload, col_test, col_help = st.columns([3.5, 1.5, 0.5])
+    # Ultra-compact 2-column layout: Upload | Info
+    col_upload, col_help = st.columns([4, 0.5])
     
     with col_upload:
         uploaded_file = st.file_uploader(
@@ -60,70 +60,31 @@ def render_data_ingestion():
             label_visibility="visible"
         )
     
-    with col_test:
-        st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
-        
-        # Check for last upload timestamp
-        import os
-        import datetime
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
-        timestamp_file = os.path.join(current_dir, "..", "last_upload_timestamp.txt")
-        
-        last_updated_text = ""
-        if os.path.exists(timestamp_file):
-            try:
-                with open(timestamp_file, 'r') as f:
-                    timestamp_str = f.read().strip()
-                    upload_time = datetime.datetime.fromisoformat(timestamp_str)
-                    
-                    # Calculate time ago
-                    now = datetime.datetime.now()
-                    diff = now - upload_time
-                    
-                    if diff.days > 0:
-                        last_updated_text = f"{diff.days}d ago"
-                    elif diff.seconds >= 3600:
-                        hours = diff.seconds // 3600
-                        last_updated_text = f"{hours}h ago"
-                    elif diff.seconds >= 60:
-                        minutes = diff.seconds // 60
-                        last_updated_text = f"{minutes}m ago"
-                    else:
-                        last_updated_text = "Just now"
-            except:
-                pass
-        
-        # Show last updated info above button
-        if last_updated_text:
-            st.caption(f"🕒 {last_updated_text}")
-        
-        if st.button("📊 Load Latest", 
-                     help="Load most recent dataset", 
-                     use_container_width=True,
-                     key="load_test_btn"):
-            try:
-                import io
-                
-                if os.path.exists(test_file_path):
-                    with open(test_file_path, 'rb') as f:
-                        file_content = f.read()
-                        uploaded_file = io.BytesIO(file_content)
-                        uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
-                        st.session_state['uploaded_test_file'] = uploaded_file
-                        st.rerun()
-                else:
-                    st.error("No data saved yet")
-            except Exception as e:
-                st.error(f"Error: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
     with col_help:
         st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
         with st.expander("ℹ️"):
             st.caption("**Need:** Name, Pos, Salary, Proj")
             st.caption("**Formats:** CSV, Excel")
         st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Auto-load saved dataset on first visit (if no data in session and no upload)
+    if 'player_data' not in st.session_state or st.session_state['player_data'] is None:
+        if uploaded_file is None and 'auto_loaded' not in st.session_state:
+            # Try to auto-load the saved dataset
+            import os
+            import io
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
+            
+            if os.path.exists(test_file_path):
+                try:
+                    with open(test_file_path, 'rb') as f:
+                        file_content = f.read()
+                        uploaded_file = io.BytesIO(file_content)
+                        uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
+                        st.session_state['auto_loaded'] = True
+                except Exception:
+                    pass
     
     # Check if we already have loaded data and should just display it
     if 'player_data' in st.session_state and st.session_state['player_data'] is not None and uploaded_file is None:
@@ -136,13 +97,12 @@ def render_data_ingestion():
             display_continue_button()
         return
     
-    # Process uploaded file (either from uploader or test data button)
-    is_from_test_button = False
-    if 'uploaded_test_file' in st.session_state and st.session_state['uploaded_test_file'] is not None:
-        uploaded_file = st.session_state['uploaded_test_file']
-        is_from_test_button = True
-        # Clear after retrieving
-        del st.session_state['uploaded_test_file']
+    # Determine if this is from auto-load
+    is_from_auto_load = st.session_state.get('auto_loaded', False)
+    if is_from_auto_load:
+        # Clear the flag after first use
+        if 'auto_loaded' in st.session_state:
+            del st.session_state['auto_loaded']
     
     if uploaded_file is not None:
         try:
@@ -154,8 +114,8 @@ def render_data_ingestion():
                 st.session_state['player_data'] = df
                 st.session_state['data_summary'] = summary
                 
-                # Save uploaded file as new test data default (only if from user upload, not test button)
-                if not is_from_test_button:
+                # Save uploaded file as new default dataset (only if manually uploaded, not auto-loaded)
+                if not is_from_auto_load:
                     try:
                         import os
                         import datetime
@@ -201,7 +161,7 @@ def render_data_ingestion():
                 del st.session_state['smart_value_data']
             
             # Display success and summary
-            display_success_message(summary, is_from_test_button)
+            display_success_message(summary, is_from_auto_load)
             display_data_summary(summary)
             display_continue_button()
             
@@ -219,7 +179,7 @@ def render_data_ingestion():
         display_upload_placeholder()
 
 
-def display_success_message(summary: Dict[str, Any], is_from_test_button: bool = False) -> None:
+def display_success_message(summary: Dict[str, Any], is_from_auto_load: bool = False) -> None:
     """Display success message with player count - compact inline."""
     total = summary['total_players']
     position_breakdown = summary.get('position_breakdown', {})
@@ -227,11 +187,43 @@ def display_success_message(summary: Dict[str, Any], is_from_test_button: bool =
     # Compact inline summary with position counts
     positions_text = " · ".join([f"{pos}: {count}" for pos, count in sorted(position_breakdown.items())])
     
+    # Get timestamp info if available
+    import os
+    import datetime
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    timestamp_file = os.path.join(current_dir, "..", "last_upload_timestamp.txt")
+    
+    last_updated_text = ""
+    if os.path.exists(timestamp_file):
+        try:
+            with open(timestamp_file, 'r') as f:
+                timestamp_str = f.read().strip()
+                upload_time = datetime.datetime.fromisoformat(timestamp_str)
+                
+                # Calculate time ago
+                now = datetime.datetime.now()
+                diff = now - upload_time
+                
+                if diff.days > 0:
+                    last_updated_text = f"{diff.days}d ago"
+                elif diff.seconds >= 3600:
+                    hours = diff.seconds // 3600
+                    last_updated_text = f"{hours}h ago"
+                elif diff.seconds >= 60:
+                    minutes = diff.seconds // 60
+                    last_updated_text = f"{minutes}m ago"
+                else:
+                    last_updated_text = "Just now"
+        except:
+            pass
+    
     col1, col2 = st.columns([3, 1])
     with col1:
         st.success(f"✅ Loaded **{total} players** · {positions_text}")
-        if not is_from_test_button:
-            st.caption("💾 Saved for quick access")
+        if is_from_auto_load and last_updated_text:
+            st.caption(f"🕒 Dataset from {last_updated_text}")
+        elif not is_from_auto_load:
+            st.caption("💾 Saved as default dataset")
     with col2:
         if st.button("▶️ Continue", 
                      type="primary", 
@@ -254,7 +246,7 @@ def display_continue_button() -> None:
 
 def display_upload_placeholder() -> None:
     """Display compact placeholder when no file is uploaded."""
-    st.info("👆 Upload CSV/Excel or click **Load Latest** to use saved dataset")
+    st.info("👆 Upload CSV/Excel to get started")
 
 
 def display_missing_column_error(error_msg: str, filename: str) -> None:
