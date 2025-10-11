@@ -29,15 +29,20 @@ def render_optimization_config():
             st.rerun()
         return
     
-    # 2. Header
+    # Apply compact styles
+    from src.styles import get_base_styles, get_card_styles
+    st.markdown(get_base_styles(), unsafe_allow_html=True)
+    st.markdown(get_card_styles(), unsafe_allow_html=True)
+    
+    # ULTRA-COMPACT Header: Single line with inline subtitle
     st.markdown("""
-    <div style="text-align: center; margin-bottom: 2rem;">
-        <h1 style="color: #f9fafb; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem;">
-            🎯 Optimization Configuration
-        </h1>
-        <p style="color: #9ca3af; font-size: 1.1rem; margin: 0;">
-            Configure lineup generation parameters. Adjust settings to match your tournament strategy.
-        </p>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; margin-bottom: 0.75rem;">
+        <div style="display: flex; align-items: baseline; gap: 1rem;">
+            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; display: inline;">
+                🎯 <span class="gradient-text">Optimization Config</span>
+            </h2>
+            <span style="color: #707070; font-size: 0.875rem;">Configure lineup generation</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -48,21 +53,25 @@ def render_optimization_config():
     # 3.5. Detailed Player Pool View (with Narrative Intelligence)
     display_player_pool_details(pool_df)
     
-    # 4. Configuration Controls
-    st.markdown("### Lineup Generation Settings")
+    # COMPACT Configuration Controls
+    st.markdown("### ⚙️ Lineup Settings")
     
-    # Task 2.1: Lineup Count Slider
-    lineup_count = st.slider(
-        "Number of Lineups",
-        min_value=1,
-        max_value=20,
-        value=5,
-        step=1,
-        help="Generate 1-20 unique lineup variations. More lineups = more coverage but longer generation time.",
-        key="lineup_count"
-    )
-    
-    st.markdown(f"**Selected:** {lineup_count} lineups")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        # Task 2.1: Lineup Count Slider
+        lineup_count = st.slider(
+            "Number of Lineups",
+            min_value=1,
+            max_value=20,
+            value=5,
+            step=1,
+            help="Generate 1-20 unique lineup variations. More lineups = more coverage but longer generation time.",
+            key="lineup_count"
+        )
+    with col2:
+        st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
+        st.metric("", f"{lineup_count}", label_visibility="collapsed")
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # Store in session state (temporary config)
     if 'temp_config' not in st.session_state:
@@ -70,24 +79,27 @@ def render_optimization_config():
     st.session_state['temp_config']['lineup_count'] = lineup_count
     
     # Task 2.2: Uniqueness Slider
-    uniqueness_pct = st.slider(
-        "Lineup Uniqueness",
-        min_value=40,
-        max_value=70,
-        value=55,
-        step=5,
-        format="%d%%",
-        help="Minimum percentage of different players between lineups. Higher = more diverse but potentially lower-scoring lineups.",
-        key="uniqueness_pct"
-    )
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        uniqueness_pct = st.slider(
+            "Lineup Uniqueness",
+            min_value=40,
+            max_value=70,
+            value=55,
+            step=5,
+            format="%d%%",
+            help="Minimum percentage of different players between lineups. Higher = more diverse but potentially lower-scoring lineups.",
+            key="uniqueness_pct"
+        )
+    with col2:
+        st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
+        st.metric("", f"{uniqueness_pct}%", label_visibility="collapsed")
+        st.markdown('</div>', unsafe_allow_html=True)
     
     unique_players_needed = math.ceil(9 * (uniqueness_pct / 100))
     max_shared = 9 - unique_players_needed
     
-    st.markdown(f"""
-    **At {uniqueness_pct}% uniqueness:** Each lineup will have at least **{unique_players_needed} unique players** 
-    (max {max_shared} players shared with any other lineup).
-    """)
+    st.caption(f"≥ {unique_players_needed} unique players per lineup (max {max_shared} shared)")
     
     st.session_state['temp_config']['uniqueness_pct'] = uniqueness_pct
     
@@ -135,7 +147,7 @@ def render_optimization_config():
     st.session_state['temp_config']['optimization_objective'] = optimization_objective
     
     # Task 2.3: Max Ownership Filter
-    st.markdown("### Optional Filters")
+    st.markdown("### 🔍 Optional Filters")
     
     # Check if ownership data exists
     has_ownership = 'ownership' in pool_df.columns
@@ -181,19 +193,28 @@ def render_optimization_config():
         max_ownership_enabled, max_ownership_pct, validation_result
     )
     
-    # 7. Generate & Back Buttons (Task 4.3)
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # ULTRA-COMPACT Navigation: Single row with Back and Generate
+    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
+    
+    # Show validation error/warning at the top if exists
+    if validation_result['status'] == 'invalid':
+        st.error(validation_result['message'])
+    elif validation_result['status'] == 'warning':
+        st.warning(validation_result['message'])
+    
+    col1, col2 = st.columns([1, 4])
+    
+    with col1:
+        if st.button("⬅️ Back", use_container_width=True, key="back_btn", help="Back to Player Selection"):
+            # Configuration persists in temp_config
+            st.session_state['page'] = 'player_selection'
+            st.rerun()
     
     with col2:
         if validation_result['status'] == 'invalid':
-            st.error(validation_result['message'])
             st.button("🚀 Generate Lineups", disabled=True, 
-                      help="Fix validation errors to enable", use_container_width=True)
+                      help="Fix validation errors to enable", use_container_width=True, type="primary")
         else:
-            if validation_result['status'] == 'warning':
-                st.warning(validation_result['message'])
-            
             if st.button("🚀 Generate Lineups", type="primary", use_container_width=True):
                 # Store config in session state
                 st.session_state['optimization_config'] = {
@@ -209,15 +230,6 @@ def render_optimization_config():
                 st.session_state['player_pool'] = pool_df
                 st.session_state['page'] = 'lineup_generation'
                 st.rerun()
-    
-    # Back button
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("← Back to Player Selection", use_container_width=True):
-            # Configuration persists in temp_config
-            st.session_state['page'] = 'player_selection'
-            st.rerun()
 
 
 def get_player_pool() -> pd.DataFrame:
