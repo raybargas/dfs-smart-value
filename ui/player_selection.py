@@ -868,20 +868,27 @@ Smart Value =
     
     with col1:
         st.caption("🎯 Smart Value Threshold")
-        smart_threshold = st.slider(
-            "",
-            min_value=0,
-            max_value=100,
-            value=0,
-            step=5,
-            help="Auto-select all players with Smart Value at or above this threshold",
-            key="smart_value_threshold",
-            label_visibility="collapsed"
-        )
         
-        # Apply threshold button (only shown when threshold > 0)
-        if smart_threshold > 0:
-            if st.button(f"✓ Select ≥ {smart_threshold}", use_container_width=True, key="apply_threshold"):
+        # Use form to prevent slider from triggering reruns
+        with st.form(key="threshold_form", clear_on_submit=False):
+            smart_threshold = st.slider(
+                "",
+                min_value=0,
+                max_value=100,
+                value=0,
+                step=5,
+                help="Move slider to set threshold, then click button to apply",
+                label_visibility="collapsed"
+            )
+            
+            # Submit button - only triggers action when clicked
+            submitted = st.form_submit_button(
+                f"✓ Select ≥ {smart_threshold}" if smart_threshold > 0 else "Select Players",
+                use_container_width=True,
+                disabled=smart_threshold == 0
+            )
+            
+            if submitted and smart_threshold > 0:
                 # Initialize selections if not exists
                 if 'selections' not in st.session_state:
                     st.session_state['selections'] = {}
@@ -1422,10 +1429,10 @@ Smart Value =
         # Apply same validation as top navigation button
         if is_valid:
             if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn2"):
-                # Store selections for next page
-                st.session_state['player_selections'] = selections
-                st.session_state['page'] = 'optimization'
-                st.rerun()
+        # Store selections for next page
+        st.session_state['player_selections'] = selections
+        st.session_state['page'] = 'optimization'
+        st.rerun()
         else:
             # Disabled button with tooltip
             st.button(
