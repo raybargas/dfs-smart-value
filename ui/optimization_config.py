@@ -1,0 +1,559 @@
+"""
+Optimization Configuration UI Component
+
+This module implements the Streamlit UI for configuring lineup optimization parameters,
+including lineup count, uniqueness constraints, and optional ownership filters.
+"""
+
+import streamlit as st
+import pandas as pd
+import math
+from pathlib import Path
+import sys
+
+# Add src directory to path
+src_path = Path(__file__).parent.parent / "src"
+sys.path.insert(0, str(src_path))
+
+from models import PlayerSelection
+
+
+def render_optimization_config():
+    """Main render function for Component 3: Optimization Configuration."""
+    
+    # 1. Validation: Check player pool exists
+    if 'player_data' not in st.session_state or 'selections' not in st.session_state:
+        st.error("No player pool found. Please complete player selection first.")
+        if st.button("← Back to Player Selection"):
+            st.session_state['page'] = 'player_selection'
+            st.rerun()
+        return
+    
+    # 2. Header
+    st.markdown("""
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <h1 style="color: #f9fafb; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem;">
+            🎯 Optimization Configuration
+        </h1>
+        <p style="color: #9ca3af; font-size: 1.1rem; margin: 0;">
+            Configure lineup generation parameters. Adjust settings to match your tournament strategy.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 3. Player Pool Summary (Task 4.1)
+    pool_df = get_player_pool()
+    display_pool_summary(pool_df)
+    
+    # 3.5. Detailed Player Pool View (with Narrative Intelligence)
+    display_player_pool_details(pool_df)
+    
+    # 4. Configuration Controls
+    st.markdown("### Lineup Generation Settings")
+    
+    # Task 2.1: Lineup Count Slider
+    lineup_count = st.slider(
+        "Number of Lineups",
+        min_value=1,
+        max_value=20,
+        value=5,
+        step=1,
+        help="Generate 1-20 unique lineup variations. More lineups = more coverage but longer generation time.",
+        key="lineup_count"
+    )
+    
+    st.markdown(f"**Selected:** {lineup_count} lineups")
+    
+    # Store in session state (temporary config)
+    if 'temp_config' not in st.session_state:
+        st.session_state['temp_config'] = {}
+    st.session_state['temp_config']['lineup_count'] = lineup_count
+    
+    # Task 2.2: Uniqueness Slider
+    uniqueness_pct = st.slider(
+        "Lineup Uniqueness",
+        min_value=40,
+        max_value=70,
+        value=55,
+        step=5,
+        format="%d%%",
+        help="Minimum percentage of different players between lineups. Higher = more diverse but potentially lower-scoring lineups.",
+        key="uniqueness_pct"
+    )
+    
+    unique_players_needed = math.ceil(9 * (uniqueness_pct / 100))
+    max_shared = 9 - unique_players_needed
+    
+    st.markdown(f"""
+    **At {uniqueness_pct}% uniqueness:** Each lineup will have at least **{unique_players_needed} unique players** 
+    (max {max_shared} players shared with any other lineup).
+    """)
+    
+    st.session_state['temp_config']['uniqueness_pct'] = uniqueness_pct
+    
+    # Optimization Objective Selector
+    st.markdown("### Optimization Strategy")
+    
+    # Check if Smart Value is available
+    has_smart_value = 'smart_value' in pool_df.columns and pool_df['smart_value'].notna().any()
+    
+    optimization_objective = st.radio(
+        "What should the optimizer maximize?",
+        options=['projection', 'smart_value'],
+        format_func=lambda x: {
+            'projection': '📊 Projected Points (Traditional)',
+            'smart_value': '🧠 Smart Value Score (Advanced)'
+        }[x],
+        index=1 if has_smart_value else 0,  # Default to Smart Value if available
+        help="Choose what the optimizer maximizes when building lineups",
+        key="optimization_objective"
+    )
+    
+    if optimization_objective == 'projection':
+        st.info("""
+        **Traditional Approach:** Maximizes raw projected fantasy points.
+        
+        ✅ Simple and straightforward  
+        ✅ Directly targets highest scoring potential  
+        ⚠️ Ignores value, trends, and risk factors
+        """)
+    else:
+        if not has_smart_value:
+            st.error("⚠️ Smart Value scores not available. Go back to Player Selection to calculate Smart Value.")
+            optimization_objective = 'projection'  # Fallback
+        else:
+            st.success("""
+            **Advanced Approach:** Maximizes your custom Smart Value score.
+            
+            ✅ Incorporates your configured weights (Base, Opportunity, Trends, Risk, Matchup)  
+            ✅ Accounts for value, momentum, regression, and game environment  
+            ✅ Position-specific customization applied  
+            ✅ Uses your sub-weight configurations  
+            🎯 **This uses YOUR custom optimization formula!**
+            """)
+    
+    st.session_state['temp_config']['optimization_objective'] = optimization_objective
+    
+    # Task 2.3: Max Ownership Filter
+    st.markdown("### Optional Filters")
+    
+    # Check if ownership data exists
+    has_ownership = 'ownership' in pool_df.columns
+    
+    max_ownership_enabled = st.checkbox(
+        "Limit Max Ownership",
+        value=False,
+        help="Exclude players projected to be owned by more than X% of the field. Use for contrarian/GPP strategies.",
+        key="max_ownership_enabled"
+    )
+    
+    max_ownership_pct = None
+    if max_ownership_enabled:
+        if not has_ownership:
+            st.warning("⚠️ Ownership data not available in uploaded file. Filter disabled.")
+            max_ownership_enabled = False
+        else:
+            max_ownership_pct = st.number_input(
+                "Max Ownership %",
+                min_value=1,
+                max_value=100,
+                value=30,
+                step=5,
+                help="Players with ownership > this value will be excluded",
+                key="max_ownership_input"
+            )
+            
+            # Show filtered pool size
+            filtered_pool = pool_df[pool_df['ownership'] <= max_ownership_pct]
+            st.info(f"After ownership filter: **{len(filtered_pool)} players** remain (from {len(pool_df)} total)")
+    
+    st.session_state['temp_config']['max_ownership_enabled'] = max_ownership_enabled
+    st.session_state['temp_config']['max_ownership_pct'] = max_ownership_pct
+    
+    # 5. Validation (before displaying constraints and buttons)
+    validation_result = validate_configuration(
+        pool_df, lineup_count, uniqueness_pct, max_ownership_enabled, max_ownership_pct
+    )
+    
+    # 6. Constraints Summary Panel (Task 4.2)
+    display_constraints_summary(
+        pool_df, lineup_count, uniqueness_pct, 
+        max_ownership_enabled, max_ownership_pct, validation_result
+    )
+    
+    # 7. Generate & Back Buttons (Task 4.3)
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        if validation_result['status'] == 'invalid':
+            st.error(validation_result['message'])
+            st.button("🚀 Generate Lineups", disabled=True, 
+                      help="Fix validation errors to enable", use_container_width=True)
+        else:
+            if validation_result['status'] == 'warning':
+                st.warning(validation_result['message'])
+            
+            if st.button("🚀 Generate Lineups", type="primary", use_container_width=True):
+                # Store config in session state
+                st.session_state['optimization_config'] = {
+                    'lineup_count': lineup_count,
+                    'uniqueness_pct': uniqueness_pct / 100,  # Convert to decimal
+                    'max_ownership_enabled': max_ownership_enabled,
+                    'max_ownership_pct': max_ownership_pct / 100 if max_ownership_pct else None,
+                    'optimization_objective': optimization_objective,
+                    'estimated_time': validation_result['estimated_time'],
+                    'validation_status': validation_result['status'],
+                    'validation_message': validation_result['message']
+                }
+                st.session_state['player_pool'] = pool_df
+                st.session_state['page'] = 'lineup_generation'
+                st.rerun()
+    
+    # Back button
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("← Back to Player Selection", use_container_width=True):
+            # Configuration persists in temp_config
+            st.session_state['page'] = 'player_selection'
+            st.rerun()
+
+
+def get_player_pool() -> pd.DataFrame:
+    """Extract player pool from session state selections."""
+    # Use enriched data if available, otherwise fall back to original data
+    if 'enriched_player_data' in st.session_state and st.session_state['enriched_player_data'] is not None:
+        df = st.session_state['enriched_player_data'].copy()
+    else:
+        df = st.session_state['player_data'].copy()
+    
+    # Defensive check: ensure required columns exist
+    required_cols = ['position', 'name', 'salary', 'projection']
+    if not all(col in df.columns for col in required_cols):
+        st.error("⚠️ Player data is missing required columns. Please go back to Player Selection to refresh the data.")
+        st.info(f"Available columns: {list(df.columns)}")
+        st.info("💡 **Tip:** Click 'Player Pool Selection' in the sidebar to reload the enriched data.")
+        st.stop()
+    
+    selections = st.session_state['selections']
+    
+    # Get indices of players in pool (EXCLUDED = eligible, LOCKED = must include)
+    # Note: EXCLUDED is repurposed to mean "in pool, eligible"
+    pool_indices = [idx for idx, state in selections.items() 
+                    if state in [PlayerSelection.EXCLUDED.value, PlayerSelection.LOCKED.value]]
+    
+    if not pool_indices:
+        return pd.DataFrame()  # Empty pool
+    
+    pool_df = df.loc[pool_indices].copy()
+    
+    # Ensure opponent column exists (fallback for cached data)
+    if 'opponent' not in pool_df.columns:
+        pool_df['opponent'] = "-"
+    
+    # Add selection state to the DataFrame so optimizer knows which are locked
+    pool_df['selection_state'] = pool_df.index.map(selections)
+    
+    return pool_df
+
+
+def validate_configuration(pool_df: pd.DataFrame, lineup_count: int, uniqueness_pct: int, 
+                           max_ownership_enabled: bool, max_ownership_pct: int) -> dict:
+    """
+    Validate configuration and return status dict.
+    
+    Args:
+        pool_df: Player pool DataFrame
+        lineup_count: Number of lineups to generate
+        uniqueness_pct: Uniqueness percentage (40-70)
+        max_ownership_enabled: Whether ownership filter is enabled
+        max_ownership_pct: Max ownership percentage (if enabled)
+    
+    Returns:
+        Dict with keys: 'status' ('valid'/'warning'/'invalid'), 
+                       'message' (str), 
+                       'estimated_time' (float in seconds)
+    """
+    result = {
+        'status': 'valid',  # 'valid', 'warning', 'invalid'
+        'message': '',
+        'estimated_time': 0.0
+    }
+    
+    # Apply ownership filter if enabled
+    filtered_pool = pool_df.copy()
+    if max_ownership_enabled and max_ownership_pct:
+        filtered_pool = filtered_pool[filtered_pool['ownership'] <= max_ownership_pct]
+        if len(filtered_pool) < 20:  # Warning threshold
+            result['status'] = 'warning'
+            result['message'] = f"⚠️ Ownership filter leaves only {len(filtered_pool)} players. Consider relaxing filter."
+    
+    # Check position requirements
+    position_counts = filtered_pool['position'].value_counts()
+    
+    required_positions = {
+        'QB': 1,
+        'RB': 2,
+        'WR': 3,
+        'TE': 1,
+        'DST': 1
+    }
+    
+    for pos, min_count in required_positions.items():
+        if position_counts.get(pos, 0) < min_count:
+            result['status'] = 'invalid'
+            result['message'] = f"❌ Not enough {pos}s in pool (need at least {min_count}, have {position_counts.get(pos, 0)})"
+            return result
+    
+    # Check uniqueness feasibility
+    unique_players_needed = math.ceil(9 * (uniqueness_pct / 100))
+    max_possible_lineups = len(filtered_pool) // unique_players_needed
+    
+    if lineup_count > max_possible_lineups:
+        result['status'] = 'invalid'
+        result['message'] = (
+            f"❌ Player pool too small for {lineup_count} lineups with "
+            f"{uniqueness_pct}% uniqueness. "
+            f"Maximum possible: {max_possible_lineups} lineups. "
+            f"Reduce lineup count or uniqueness constraint."
+        )
+        return result
+    
+    # Estimate generation time
+    result['estimated_time'] = estimate_generation_time(
+        lineup_count, uniqueness_pct, len(filtered_pool)
+    )
+    
+    return result
+
+
+def estimate_generation_time(lineup_count: int, uniqueness_pct: int, pool_size: int) -> float:
+    """
+    Estimate generation time in seconds.
+    
+    Args:
+        lineup_count: Number of lineups to generate
+        uniqueness_pct: Uniqueness percentage (40-70)
+        pool_size: Size of player pool
+    
+    Returns:
+        Estimated time in seconds (rounded to nearest 5)
+    """
+    base_time = 0.5 + (lineup_count * 0.5)
+    complexity_multiplier = 1.0
+    
+    # Adjust for uniqueness (higher = more solver iterations)
+    if uniqueness_pct >= 60:
+        complexity_multiplier *= 1.3
+    if uniqueness_pct >= 70:
+        complexity_multiplier *= 1.5
+    
+    # Adjust for pool size (smaller pool = faster)
+    if pool_size < 50:
+        complexity_multiplier *= 0.8
+    elif pool_size > 200:
+        complexity_multiplier *= 1.2
+    
+    estimated_time = base_time * complexity_multiplier
+    
+    # Round to nearest 5 seconds for UX
+    return max(5, round(estimated_time / 5) * 5)
+
+
+def display_pool_summary(pool_df: pd.DataFrame):
+    """Display player pool summary card."""
+    # Verify required columns exist
+    required_cols = ['position', 'salary', 'projection']
+    missing_cols = [col for col in required_cols if col not in pool_df.columns]
+    
+    if missing_cols:
+        st.error(f"⚠️ Missing required columns in player pool: {', '.join(missing_cols)}")
+        st.info("💡 **Tip:** Go back to the Player Selection screen to refresh the data enrichment.")
+        st.stop()
+    
+    position_counts = pool_df['position'].value_counts()
+    avg_salary = pool_df['salary'].mean()
+    total_projection = pool_df['projection'].sum()
+    
+    # Count locked players if selection_state column exists
+    locked_players = []
+    if 'selection_state' in pool_df.columns:
+        locked_players = pool_df[pool_df['selection_state'] == PlayerSelection.LOCKED.value]
+    
+    st.markdown("""
+    <div style="background-color: #1a1a1a; border-radius: 8px; padding: 1.5rem; margin: 1rem 0; border: 1px solid #333;">
+        <h3 style="color: #f9fafb; margin-top: 0;">📊 Player Pool Summary</h3>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Players", len(pool_df))
+    with col2:
+        st.metric("Avg Salary", f"${avg_salary:,.0f}")
+    with col3:
+        st.metric("Total Proj Points", f"{total_projection:.1f}")
+    with col4:
+        pos_breakdown = ", ".join([f"{pos}: {count}" for pos, count in position_counts.items()])
+        st.markdown(f"**Positions:**<br>{pos_breakdown}", unsafe_allow_html=True)
+    
+    # Display narrative intelligence summary if data is enriched
+    has_narrative_data = 'injury_status' in pool_df.columns or 'itt' in pool_df.columns
+    if has_narrative_data:
+        st.markdown("<div style='margin-top: 1rem; padding: 1rem; background: #1e1e3a; border-radius: 6px; border-left: 4px solid #3b82f6;'>", unsafe_allow_html=True)
+        st.markdown("**📊 Narrative Intelligence Data Available**", unsafe_allow_html=True)
+        
+        narrative_stats = []
+        if 'injury_status' in pool_df.columns:
+            injured_count = pool_df['injury_status'].notna().sum()
+            if injured_count > 0:
+                narrative_stats.append(f"🏥 {injured_count} players with injury reports")
+        
+        if 'itt' in pool_df.columns:
+            itt_count = pool_df['itt'].notna().sum()
+            if itt_count > 0:
+                avg_itt = pool_df['itt'].mean()
+                narrative_stats.append(f"🎰 {itt_count} players with ITT data (avg: {avg_itt:.1f})")
+        
+        if 'red_flags' in pool_df.columns:
+            red_flag_count = (pool_df['red_flags'] > 0).sum()
+            yellow_flag_count = (pool_df['yellow_flags'] > 0).sum()
+            if red_flag_count > 0 or yellow_flag_count > 0:
+                narrative_stats.append(f"⚠️ {red_flag_count} red flags, {yellow_flag_count} yellow flags")
+        
+        if narrative_stats:
+            for stat in narrative_stats:
+                st.markdown(f"• {stat}", unsafe_allow_html=True)
+        else:
+            st.markdown("• Enriched data loaded successfully", unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Display locked players if any
+    if len(locked_players) > 0:
+        st.markdown("<div style='margin-top: 1rem; padding: 1rem; background: #1e3a2e; border-radius: 6px; border-left: 4px solid #10b981;'>", unsafe_allow_html=True)
+        st.markdown(f"**🔒 {len(locked_players)} Locked Players** (will appear in ALL lineups):", unsafe_allow_html=True)
+        locked_names = ", ".join([f"**{row['name']}** ({row['position']})" for _, row in locked_players.iterrows()])
+        st.markdown(locked_names, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def display_player_pool_details(pool_df: pd.DataFrame):
+    """Display detailed player pool breakdown with narrative intelligence data."""
+    # Check if we have narrative intelligence data
+    has_narrative_data = 'injury_status' in pool_df.columns or 'itt' in pool_df.columns
+    
+    if not has_narrative_data:
+        return  # Don't show this section if no narrative data
+    
+    with st.expander("🔍 View Player Pool Details (with Narrative Intelligence)", expanded=False):
+        st.markdown("**Main Slate Players with Contextual Data**")
+        
+        # Prepare display columns
+        display_cols = ['name', 'position', 'team', 'salary', 'projection']
+        col_names = ['Player', 'Pos', 'Team', 'Salary', 'Proj']
+        
+        # Add narrative intelligence columns if they exist
+        if 'itt' in pool_df.columns:
+            display_cols.append('itt')
+            col_names.append('ITT')
+        
+        if 'opponent' in pool_df.columns:
+            display_cols.append('opponent')
+            col_names.append('vs')
+        
+        if 'injury_status' in pool_df.columns:
+            display_cols.append('injury_status')
+            col_names.append('Injury')
+        
+        if 'injury_details' in pool_df.columns:
+            display_cols.append('injury_details')
+            col_names.append('Details')
+        
+        if 'red_flags' in pool_df.columns:
+            display_cols.extend(['red_flags', 'yellow_flags', 'green_flags'])
+            col_names.extend(['🔴', '🟡', '🟢'])
+        
+        # Filter to only include columns that exist
+        available_cols = [col for col in display_cols if col in pool_df.columns]
+        
+        # Create display dataframe
+        display_df = pool_df[available_cols].copy()
+        
+        # Format salary with $ and commas
+        if 'salary' in display_df.columns:
+            display_df['salary'] = display_df['salary'].apply(lambda x: f"${x:,.0f}")
+        
+        # Format ITT to 1 decimal
+        if 'itt' in display_df.columns:
+            display_df['itt'] = display_df['itt'].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "N/A")
+        
+        # Format projection to 1 decimal
+        if 'projection' in display_df.columns:
+            display_df['projection'] = display_df['projection'].apply(lambda x: f"{x:.1f}")
+        
+        # Sort by position and then by projection (descending)
+        if 'position' in display_df.columns:
+            # Define position order
+            pos_order = {'QB': 1, 'RB': 2, 'WR': 3, 'TE': 4, 'DST': 5}
+            display_df['_pos_order'] = display_df['position'].map(pos_order)
+            display_df = display_df.sort_values(['_pos_order', 'projection'], ascending=[True, False])
+            display_df = display_df.drop('_pos_order', axis=1)
+        
+        # Apply column name mapping
+        col_mapping = dict(zip(available_cols, [col_names[display_cols.index(col)] for col in available_cols]))
+        display_df = display_df.rename(columns=col_mapping)
+        
+        # Display the table
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            height=400
+        )
+        
+        # Add helpful notes
+        st.caption("💡 **ITT** = Implied Team Total (Vegas projected points) | **Injury** statuses: Questionable (Q), Out (O), Doubtful (D)")
+
+
+def display_constraints_summary(pool_df: pd.DataFrame, lineup_count: int, uniqueness_pct: int, 
+                                  max_ownership_enabled: bool, max_ownership_pct: int, 
+                                  validation_result: dict):
+    """Display constraints summary panel."""
+    st.markdown("---")
+    st.markdown("### 📋 Constraints Summary")
+    
+    st.markdown("""
+    <div style="background-color: #1a1a1a; border-radius: 8px; padding: 1.5rem; border: 1px solid #333;">
+    """, unsafe_allow_html=True)
+    
+    # DraftKings Rules
+    st.markdown("**DraftKings NFL Rules (Always Applied):**")
+    st.markdown("""
+    - Salary Cap: $50,000
+    - Positions: 1 QB, 2 RB, 3 WR, 1 TE, 1 FLEX (RB/WR/TE), 1 DST
+    """)
+    
+    # Player Pool Constraints
+    st.markdown("**Player Pool:**")
+    position_counts = pool_df['position'].value_counts()
+    st.markdown(f"- {len(pool_df)} players total")
+    st.markdown(f"- Positions: {position_counts.get('QB', 0)} QB, {position_counts.get('RB', 0)} RB, " +
+                f"{position_counts.get('WR', 0)} WR, {position_counts.get('TE', 0)} TE, {position_counts.get('DST', 0)} DST")
+    if max_ownership_enabled:
+        st.markdown(f"- Ownership limited to ≤{max_ownership_pct}%")
+    
+    # Configuration
+    st.markdown("**Configuration:**")
+    st.markdown(f"- Lineup count: {lineup_count} lineups")
+    st.markdown(f"- Uniqueness: {uniqueness_pct}% (≥{math.ceil(9 * uniqueness_pct / 100)} unique players per lineup)")
+    
+    # Estimated Time
+    time_color = "green" if validation_result['estimated_time'] < 30 else "yellow" if validation_result['estimated_time'] < 60 else "red"
+    st.markdown(f"**Estimated Generation Time:** <span style='color: {time_color};'>~{validation_result['estimated_time']} seconds</span>", 
+                unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+

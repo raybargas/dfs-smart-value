@@ -1,0 +1,373 @@
+"""
+Lineup Optimization Module
+
+This module implements PuLP-based linear programming optimization to generate
+DraftKings-valid NFL lineups that maximize projected points while respecting
+salary cap, position requirements, uniqueness, and ownership constraints.
+"""
+
+import pulp
+import pandas as pd
+import math
+from typing import List, Tuple, Optional
+
+from models import Player, Lineup, PlayerSelection
+
+
+def generate_lineups(
+    player_pool_df: pd.DataFrame,
+    lineup_count: int,
+    uniqueness_pct: float,
+    max_ownership_enabled: bool = False,
+    max_ownership_pct: float = None,
+    optimization_objective: str = 'projection'
+) -> Tuple[List[Lineup], Optional[str]]:
+    """
+    Generate N unique DraftKings-valid lineups using linear programming.
+    
+    This function generates lineups sequentially, adding uniqueness constraints
+    after each successful lineup to ensure diversity. The optimization uses
+    PuLP with CBC solver to maximize the selected objective (projection or smart_value)
+    while respecting all DraftKings contest rules.
+    
+    Args:
+        player_pool_df: DataFrame with player data (filtered pool from Component 2)
+            Required columns: name, position, salary, projection, team, opponent
+            Optional columns: ownership, player_id, smart_value
+        lineup_count: Number of lineups to generate (1-20)
+        uniqueness_pct: Minimum uniqueness between lineups (0.40-0.70)
+            Example: 0.55 means any two lineups share at most 4 players
+        max_ownership_enabled: Whether to apply ownership constraint
+        max_ownership_pct: Maximum ownership percentage (0-1.0) if enabled
+            Example: 0.30 means no player can exceed 30% projected ownership
+        optimization_objective: What to maximize ('projection' or 'smart_value')
+            'projection': Maximize raw projected points (traditional approach)
+            'smart_value': Maximize Smart Value score (custom weighted approach)
+    
+    Returns:
+        Tuple of (List of Lineup objects, Error message or None)
+        - On full success: (all lineups, None)
+        - On partial success: (N-1 lineups, error message explaining why Nth failed)
+        - On immediate failure: ([], error message)
+    
+    Raises:
+        ValueError: If player_pool_df is empty or missing required columns
+    """
+    # Validate input DataFrame
+    required_columns = ['name', 'position', 'salary', 'projection', 'team', 'opponent']
+    missing_columns = [col for col in required_columns if col not in player_pool_df.columns]
+    if missing_columns:
+        raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+    
+    if len(player_pool_df) == 0:
+        raise ValueError("Player pool DataFrame is empty")
+    
+    # Calculate max shared players from uniqueness percentage
+    # Example: 55% uniqueness → must differ by 5 → can share max 4
+    max_shared = int(9 * (1 - uniqueness_pct))
+    
+    lineups = []
+    
+    for i in range(lineup_count):
+        lineup, error = _generate_single_lineup(
+            player_pool_df=player_pool_df,
+            previous_lineups=lineups,
+            max_shared=max_shared,
+            max_ownership_enabled=max_ownership_enabled,
+            max_ownership_pct=max_ownership_pct,
+            lineup_number=i + 1,
+            optimization_objective=optimization_objective
+        )
+        
+        if error:
+            # Return partial results with error message
+            return lineups, f"Could not generate lineup {i+1}: {error}"
+        
+        lineups.append(lineup)
+    
+    return lineups, None  # Full success
+
+
+def _generate_single_lineup(
+    player_pool_df: pd.DataFrame,
+    previous_lineups: List[Lineup],
+    max_shared: int,
+    max_ownership_enabled: bool,
+    max_ownership_pct: float,
+    lineup_number: int,
+    optimization_objective: str = 'projection'
+) -> Tuple[Optional[Lineup], Optional[str]]:
+    """
+    Generate a single lineup using PuLP linear programming.
+    
+    This function formulates and solves a linear programming problem to maximize
+    the selected objective (projection or smart_value) subject to salary cap,
+    position requirements, ownership (if enabled), and uniqueness constraints.
+    
+    Args:
+        player_pool_df: DataFrame with all available players
+        previous_lineups: List of already-generated lineups (for uniqueness)
+        max_shared: Maximum number of players that can be shared with any previous lineup
+        max_ownership_enabled: Whether to apply ownership constraint
+        max_ownership_pct: Maximum ownership (0-1.0) if enabled
+        lineup_number: Lineup ID for this lineup
+        optimization_objective: What to maximize ('projection' or 'smart_value')
+    
+    Returns:
+        Tuple of (Lineup object or None, Error message or None)
+        - On success: (Lineup, None)
+        - On failure: (None, error message explaining infeasibility)
+    """
+    # Convert DataFrame to Player objects
+    players = _dataframe_to_players(player_pool_df)
+    
+    # Create LP problem: maximize projected points
+    prob = pulp.LpProblem(f"DFS_Lineup_{lineup_number}", pulp.LpMaximize)
+    
+    # Decision variables: Binary (0 or 1) for each player
+    # Use player names as keys (must be unique in pool)
+    player_vars = {
+        player.name: pulp.LpVariable(
+            f"player_{player.name.replace(' ', '_')}_{lineup_number}", 
+            cat='Binary'
+        )
+        for player in players
+    }
+    
+    # Objective function: Maximize selected objective (projection or smart_value)
+    if optimization_objective == 'smart_value':
+        # Use Smart Value score (multi-factor weighted value)
+        prob += pulp.lpSum([
+            player_vars[p.name] * (p.smart_value if hasattr(p, 'smart_value') and p.smart_value is not None else p.projection)
+            for p in players
+        ]), "Total_Smart_Value"
+    else:
+        # Default: Use raw projection
+        prob += pulp.lpSum([
+            player_vars[p.name] * p.projection for p in players
+        ]), "Total_Projection"
+    
+    # Constraint 1: Salary cap ($50,000)
+    prob += pulp.lpSum([
+        player_vars[p.name] * p.salary for p in players
+    ]) <= 50000, "Salary_Cap"
+    
+    # Separate players by position for position constraints
+    qbs = [p for p in players if p.position == 'QB']
+    rbs = [p for p in players if p.position == 'RB']
+    wrs = [p for p in players if p.position == 'WR']
+    tes = [p for p in players if p.position == 'TE']
+    dsts = [p for p in players if p.position in ['DST', 'D/ST', 'DEF']]
+    flex_eligible = rbs + wrs + tes
+    
+    # Constraint 2: Position requirements (DraftKings NFL standard)
+    prob += pulp.lpSum([player_vars[p.name] for p in qbs]) == 1, "Exactly_1_QB"
+    prob += pulp.lpSum([player_vars[p.name] for p in rbs]) >= 2, "At_Least_2_RB"
+    prob += pulp.lpSum([player_vars[p.name] for p in wrs]) >= 3, "At_Least_3_WR"
+    prob += pulp.lpSum([player_vars[p.name] for p in tes]) >= 1, "At_Least_1_TE"
+    prob += pulp.lpSum([player_vars[p.name] for p in dsts]) == 1, "Exactly_1_DST"
+    
+    # FLEX constraint: Total RB+WR+TE must equal 7 (2 RB + 3 WR + 1 TE + 1 FLEX)
+    prob += pulp.lpSum([player_vars[p.name] for p in flex_eligible]) == 7, "RB_WR_TE_Total_7"
+    
+    # Total players must be exactly 9
+    prob += pulp.lpSum([player_vars[p.name] for p in players]) == 9, "Total_9_Players"
+    
+    # Constraint 3: Locked players (MUST be in every lineup)
+    locked_players = [p for p in players if p.selection == PlayerSelection.LOCKED]
+    for locked_player in locked_players:
+        prob += player_vars[locked_player.name] == 1, f"Lock_{locked_player.name.replace(' ', '_')}"
+    
+    # Constraint 4: Ownership (if enabled)
+    if max_ownership_enabled and max_ownership_pct is not None:
+        for player in players:
+            if player.ownership is not None:
+                # Binary constraint: if selected, ownership must be <= max
+                # This is simplified: player_vars[player.name] * (ownership / 100) <= max_ownership_pct
+                # Since player_vars is binary (0 or 1):
+                # - If player_vars = 0: constraint is 0 <= max (always true)
+                # - If player_vars = 1: constraint is (ownership/100) <= max
+                prob += player_vars[player.name] * (player.ownership / 100) <= max_ownership_pct, \
+                       f"Ownership_{player.name.replace(' ', '_')}"
+    
+    # Constraint 5: Uniqueness (relative to all previous lineups)
+    for prev_idx, prev_lineup in enumerate(previous_lineups):
+        # Get names of players in previous lineup
+        prev_player_names = set(p.name for p in prev_lineup.players)
+        
+        # Sum of shared players must be <= max_shared
+        prob += pulp.lpSum([
+            player_vars[p.name] for p in players if p.name in prev_player_names
+        ]) <= max_shared, f"Uniqueness_vs_Lineup_{prev_idx + 1}"
+    
+    # Solve the LP problem using CBC solver (suppress output)
+    status = prob.solve(pulp.PULP_CBC_CMD(msg=0))
+    
+    # Check if optimal solution found
+    if status != pulp.LpStatusOptimal:
+        error_msg = _interpret_infeasibility(status, lineup_number)
+        return None, error_msg
+    
+    # Extract solution: get selected players
+    selected_players = [p for p in players if player_vars[p.name].varValue == 1]
+    
+    # Sanity check: should have exactly 9 players
+    if len(selected_players) != 9:
+        return None, f"Solver returned {len(selected_players)} players instead of 9"
+    
+    # Build Lineup object from selected players
+    lineup = _build_lineup_from_players(selected_players, lineup_number)
+    
+    return lineup, None
+
+
+def _dataframe_to_players(df: pd.DataFrame) -> List[Player]:
+    """
+    Convert DataFrame rows to Player objects.
+    
+    Args:
+        df: DataFrame with player data
+            Required columns: name, position, salary, projection, team, opponent
+            Optional columns: ownership, player_id, selection_state
+    
+    Returns:
+        List of Player objects
+    """
+    players = []
+    
+    for _, row in df.iterrows():
+        # Handle optional ownership field
+        ownership = None
+        if 'ownership' in row.index and pd.notna(row['ownership']):
+            ownership = float(row['ownership'])
+        
+        # Handle optional player_id field
+        player_id = None
+        if 'player_id' in row.index and pd.notna(row['player_id']):
+            player_id = str(row['player_id'])
+        
+        # Handle selection state (for locked players)
+        selection_state = PlayerSelection.NORMAL
+        if 'selection_state' in row.index and pd.notna(row['selection_state']):
+            state_value = row['selection_state']
+            if state_value == PlayerSelection.LOCKED.value:
+                selection_state = PlayerSelection.LOCKED
+            elif state_value == PlayerSelection.EXCLUDED.value:
+                selection_state = PlayerSelection.EXCLUDED
+        
+        # Handle optional smart_value field (for advanced optimization)
+        smart_value = None
+        if 'smart_value' in row.index and pd.notna(row['smart_value']):
+            smart_value = float(row['smart_value'])
+        
+        player = Player(
+            name=row['name'],
+            position=row['position'],
+            salary=int(row['salary']),
+            projection=float(row['projection']),
+            team=row['team'],
+            opponent=row['opponent'],
+            ownership=ownership,
+            player_id=player_id,
+            selection=selection_state,
+            smart_value=smart_value
+        )
+        players.append(player)
+    
+    return players
+
+
+def _build_lineup_from_players(players: List[Player], lineup_number: int) -> Lineup:
+    """
+    Build Lineup object from 9 selected players, assigning positions correctly.
+    
+    This function separates players by position and assigns them to the
+    appropriate lineup slots. The FLEX position is determined by selecting
+    the highest-projected player among remaining RBs, WRs, and TEs after
+    filling the core position slots.
+    
+    Args:
+        players: List of exactly 9 Player objects (selected by LP solver)
+        lineup_number: Lineup ID for the new lineup
+    
+    Returns:
+        Lineup object with all positions assigned
+    
+    Raises:
+        IndexError: If not enough players of a required position
+    """
+    # Separate players by position
+    qbs = [p for p in players if p.position == 'QB']
+    rbs = [p for p in players if p.position == 'RB']
+    wrs = [p for p in players if p.position == 'WR']
+    tes = [p for p in players if p.position == 'TE']
+    dsts = [p for p in players if p.position in ['DST', 'D/ST', 'DEF']]
+    
+    # Sort each position by projection (descending) for consistent assignment
+    qbs.sort(key=lambda p: p.projection, reverse=True)
+    rbs.sort(key=lambda p: p.projection, reverse=True)
+    wrs.sort(key=lambda p: p.projection, reverse=True)
+    tes.sort(key=lambda p: p.projection, reverse=True)
+    dsts.sort(key=lambda p: p.projection, reverse=True)
+    
+    # Assign core positions (QB, DST always single)
+    qb = qbs[0]
+    dst = dsts[0]
+    
+    # Assign RBs (first 2 to RB1, RB2; remaining eligible for FLEX)
+    rb1 = rbs[0]
+    rb2 = rbs[1]
+    remaining_rbs = rbs[2:] if len(rbs) > 2 else []
+    
+    # Assign WRs (first 3 to WR1, WR2, WR3; remaining eligible for FLEX)
+    wr1 = wrs[0]
+    wr2 = wrs[1]
+    wr3 = wrs[2]
+    remaining_wrs = wrs[3:] if len(wrs) > 3 else []
+    
+    # Assign TE (first to TE slot; remaining eligible for FLEX)
+    te = tes[0]
+    remaining_tes = tes[1:] if len(tes) > 1 else []
+    
+    # Determine FLEX: pick highest projection among remaining RB/WR/TE
+    flex_candidates = remaining_rbs + remaining_wrs + remaining_tes
+    
+    if not flex_candidates:
+        raise ValueError("No players remaining for FLEX position")
+    
+    flex = max(flex_candidates, key=lambda p: p.projection)
+    
+    return Lineup(
+        lineup_id=lineup_number,
+        qb=qb,
+        rb1=rb1,
+        rb2=rb2,
+        wr1=wr1,
+        wr2=wr2,
+        wr3=wr3,
+        te=te,
+        flex=flex,
+        dst=dst
+    )
+
+
+def _interpret_infeasibility(status: int, lineup_number: int) -> str:
+    """
+    Interpret LP solver status code and return user-friendly error message.
+    
+    Args:
+        status: PuLP status code from prob.solve()
+        lineup_number: The lineup number that failed
+    
+    Returns:
+        Human-readable error message explaining the failure
+    """
+    if status == pulp.LpStatusInfeasible:
+        return "No valid lineup exists with current constraints"
+    elif status == pulp.LpStatusUnbounded:
+        return "Problem is unbounded (should not occur)"
+    elif status == pulp.LpStatusNotSolved:
+        return "Solver failed to complete"
+    else:
+        return f"Optimization failed with status {status}"
+
