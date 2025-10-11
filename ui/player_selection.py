@@ -609,17 +609,20 @@ Smart Value =
     </style>
     """, unsafe_allow_html=True)
     
-    # Header with enhanced styling and Material Icons
+    # Apply compact styles
+    from src.styles import get_base_styles, get_card_styles
+    st.markdown(get_base_styles(), unsafe_allow_html=True)
+    st.markdown(get_card_styles(), unsafe_allow_html=True)
+    
+    # ULTRA-COMPACT Header: Single line with inline instructions
     st.markdown("""
-    <div style="text-align: center; margin-bottom: 2rem;">
-        <h1 style="color: #f9fafb; font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem;">
-            <span class="material-icons md-36" style="vertical-align: text-bottom; color: #10b981;">sports_football</span> 
-            Player Pool Selection
-        </h1>
-        <p style="color: #9ca3af; font-size: 1.1rem; margin: 0;">
-            <span class="material-icons md-18" style="vertical-align: middle; color: #10b981;">check_circle</span> Check "Pool" to include | 
-            <span class="material-icons md-18" style="vertical-align: middle; color: #f59e0b;">lock</span> Check "Lock" to guarantee in ALL lineups
-        </p>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; margin-bottom: 0.75rem;">
+        <div style="display: flex; align-items: baseline; gap: 1rem;">
+            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; display: inline;">
+                🏈 <span class="gradient-text">Player Pool Selection</span>
+            </h2>
+            <span style="color: #707070; font-size: 0.875rem;">Pool = include | Lock = must-start</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -744,11 +747,11 @@ Smart Value =
     
     is_valid, error_msg = check_roster_requirements()
     
-    # Smart Value Threshold Selector + Quick Actions
-    col1, col2, col3 = st.columns([2, 1.5, 1.5])
+    # ULTRA-COMPACT Controls: Single row with Smart Value slider, Deselect, and Next
+    col1, col2, col3, col4 = st.columns([2.5, 1, 1, 1.5])
+    
     with col1:
-        # Smart Value threshold slider
-        st.markdown("**🎯 Smart Value Threshold**")
+        st.caption("🎯 Smart Value Threshold")
         smart_threshold = st.slider(
             "",
             min_value=0,
@@ -762,7 +765,7 @@ Smart Value =
         
         # Apply threshold if changed from 0
         if smart_threshold > 0:
-            if st.button(f"✓ Select Players ≥ {smart_threshold}", use_container_width=True, key="apply_threshold"):
+            if st.button(f"✓ Select ≥ {smart_threshold}", use_container_width=True, key="apply_threshold"):
                 # Initialize selections if not exists
                 if 'selections' not in st.session_state:
                     st.session_state['selections'] = {}
@@ -774,39 +777,48 @@ Smart Value =
                         st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
                     else:
                         st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
-            st.rerun()
+                st.rerun()
+    
     with col2:
-        st.markdown("**Quick Actions**")
-        if st.button("✕ Deselect All", use_container_width=True, key="deselect_all"):
+        st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
+        if st.button("✕ Clear", use_container_width=True, key="deselect_all", help="Deselect all players"):
             st.session_state['selections'] = {idx: PlayerSelection.NORMAL.value for idx in df.index}
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    
     with col3:
+        st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
+        # Position filter shortcut (optional - can expand later)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
         # Quick navigation to optimization config - disabled if requirements not met
         if is_valid:
-            if st.button("Next: Optimization Config ➡️", use_container_width=True, type="primary", key="quick_next"):
+            if st.button("▶️ Continue", use_container_width=True, type="primary", key="quick_next"):
                 st.session_state['page'] = 'optimization'
-            st.rerun()
+                st.rerun()
         else:
             # Disabled button with tooltip
             st.button(
-                "Next: Optimization Config ➡️", 
+                "▶️ Continue", 
                 use_container_width=True, 
                 type="primary", 
                 key="quick_next_disabled",
                 disabled=True,
                 help=f"⚠️ {error_msg}\n\n✅ Minimum requirements:\n• 1 QB\n• 2 RB\n• 3 WR\n• 1 TE\n• 1 DST"
             )
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # Count locked players
     locked_count = sum(1 for s in selections.values() if s == PlayerSelection.LOCKED.value)
     in_pool_count = sum(1 for s in selections.values() if s != PlayerSelection.NORMAL.value)
     
-    # Prepare data for AgGrid with Pool and Lock checkboxes
+    # ULTRA-COMPACT player stats bar - inline, minimal padding
     st.markdown(f"""
-    <div style="background-color: #1a1a1a; border-radius: 4px; padding: 0.5rem; margin: 1rem 0; border: 1px solid #333; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-        <div style="background: #2a2a2a; color: #e0e0e0; padding: 0.4rem; border-radius: 4px 4px 0 0; font-weight: 600; font-size: 0.8rem; text-align: center; border-bottom: 1px solid #444;">
-            Players ({len(df)}) | In Pool: {in_pool_count} | 🔒 Locked: {locked_count}
-        </div>
+    <div style="background: #2C2C2C; color: #D3D3D3; padding: 0.3rem 0.75rem; border-radius: 6px; margin: 0.5rem 0 0.75rem 0; font-size: 0.875rem; text-align: center; border: 1px solid #444;">
+        <strong>{len(df)}</strong> players · <strong style="color: #FF6B35;">{in_pool_count}</strong> in pool · 🔒 <strong>{locked_count}</strong> locked
+    </div>
     """, unsafe_allow_html=True)
     
     # Prepare data for AgGrid
@@ -1222,23 +1234,30 @@ Smart Value =
         - Balance high-value chalk plays with low-ownership gems
         """)
     
-    # Continue button (using Streamlit's native button with primary styling)
-    st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
+    # ULTRA-COMPACT Bottom Navigation - single row
+    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
+    col1, col2 = st.columns([1, 4])
     
-    # Apply same validation as top navigation button
-    if is_valid:
-        if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn"):
-            # Store selections for next page
-            st.session_state['player_selections'] = selections
-            st.session_state['page'] = 'optimization'
+    with col1:
+        if st.button("⬅️ Back", use_container_width=True, key="back_btn", help="Back to Narrative Intelligence"):
+            st.session_state['page'] = 'narrative_intelligence'
             st.rerun()
-    else:
-        # Disabled button with tooltip
-        st.button(
-            "▶️ Continue to Optimization", 
-            type="primary", 
-            use_container_width=True, 
-            key="continue_btn_disabled",
-            disabled=True,
-            help=f"⚠️ {error_msg}\n\n✅ Minimum requirements:\n• 1 QB\n• 2 RB\n• 3 WR\n• 1 TE\n• 1 DST"
-        )
+    
+    with col2:
+        # Apply same validation as top navigation button
+        if is_valid:
+            if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn"):
+                # Store selections for next page
+                st.session_state['player_selections'] = selections
+                st.session_state['page'] = 'optimization'
+                st.rerun()
+        else:
+            # Disabled button with tooltip
+            st.button(
+                "▶️ Continue to Optimization", 
+                type="primary", 
+                use_container_width=True, 
+                key="continue_btn_disabled",
+                disabled=True,
+                help=f"⚠️ {error_msg}\n\n✅ Minimum requirements:\n• 1 QB\n• 2 RB\n• 3 WR\n• 1 TE\n• 1 DST"
+            )
