@@ -875,7 +875,7 @@ Smart Value =
                 "",
                 min_value=0,
                 max_value=100,
-                value=0,
+                value=st.session_state.get('last_threshold', 0),
                 step=5,
                 help="Move slider to set threshold, then click button to apply",
                 label_visibility="collapsed"
@@ -887,20 +887,26 @@ Smart Value =
                 use_container_width=True,
                 disabled=smart_threshold == 0
             )
+        
+        # Handle form submission - submitted and smart_threshold ARE accessible after form
+        if submitted and smart_threshold > 0:
+            # Store threshold for next run
+            st.session_state['last_threshold'] = smart_threshold
             
-            # Handle form submission INSIDE form context where variables are accessible
-            if submitted and smart_threshold > 0:
-                # Initialize selections if not exists
-                if 'selections' not in st.session_state:
-                    st.session_state['selections'] = {}
-                
-                # Select players at or above threshold
-                for idx in df.index:
-                    player_smart_value = df.loc[idx, 'smart_value'] if 'smart_value' in df.columns else 0
-                    if player_smart_value >= smart_threshold:
-                        st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
-                    else:
-                        st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
+            # Select players at or above threshold
+            for idx in df.index:
+                player_smart_value = df.loc[idx, 'smart_value'] if 'smart_value' in df.columns else 0
+                if player_smart_value >= smart_threshold:
+                    st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
+                else:
+                    st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
+            
+            # Update local selections reference
+            selections = st.session_state['selections']
+            
+            # Show success message
+            selected_count = sum(1 for s in selections.values() if s != PlayerSelection.NORMAL.value)
+            st.success(f"✅ Selected {selected_count} players with Smart Value ≥ {smart_threshold}")
     
     with col2:
         st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
@@ -932,6 +938,9 @@ Smart Value =
                 help=f"⚠️ {error_msg}\n\n✅ Minimum requirements:\n• 1 QB\n• 2 RB\n• 3 WR\n• 1 TE\n• 1 DST"
             )
         st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Re-read selections from session state (in case form/buttons updated it)
+    selections = st.session_state['selections']
     
     # Count locked players
     locked_count = sum(1 for s in selections.values() if s == PlayerSelection.LOCKED.value)
@@ -1427,10 +1436,10 @@ Smart Value =
         # Apply same validation as top navigation button
         if is_valid:
             if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn2"):
-                # Store selections for next page
-                st.session_state['player_selections'] = selections
-                st.session_state['page'] = 'optimization'
-                st.rerun()
+        # Store selections for next page
+        st.session_state['player_selections'] = selections
+        st.session_state['page'] = 'optimization'
+        st.rerun()
         else:
             # Disabled button with tooltip
             st.button(
