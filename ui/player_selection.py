@@ -887,22 +887,20 @@ Smart Value =
                 use_container_width=True,
                 disabled=smart_threshold == 0
             )
+        
+        # Handle form submission (outside form context but submitted is still accessible)
+        if submitted and smart_threshold > 0:
+            # Initialize selections if not exists
+            if 'selections' not in st.session_state:
+                st.session_state['selections'] = {}
             
-            if submitted and smart_threshold > 0:
-                # Initialize selections if not exists
-                if 'selections' not in st.session_state:
-                    st.session_state['selections'] = {}
-                
-                # Select players at or above threshold
-                for idx in df.index:
-                    player_smart_value = df.loc[idx, 'smart_value'] if 'smart_value' in df.columns else 0
-                    if player_smart_value >= smart_threshold:
-                        st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
-                    else:
-                        st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
-                
-                # Only rerun when button is clicked
-            st.rerun()
+            # Select players at or above threshold
+            for idx in df.index:
+                player_smart_value = df.loc[idx, 'smart_value'] if 'smart_value' in df.columns else 0
+                if player_smart_value >= smart_threshold:
+                    st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
+                else:
+                    st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
     
     with col2:
         st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
@@ -1429,10 +1427,10 @@ Smart Value =
         # Apply same validation as top navigation button
         if is_valid:
             if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn2"):
-                # Store selections for next page
-                st.session_state['player_selections'] = selections
-                st.session_state['page'] = 'optimization'
-                st.rerun()
+        # Store selections for next page
+        st.session_state['player_selections'] = selections
+        st.session_state['page'] = 'optimization'
+        st.rerun()
         else:
             # Disabled button with tooltip
             st.button(
