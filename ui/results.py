@@ -28,10 +28,15 @@ def render_results():
     4. Navigation back to modify settings
     """
     
+    # Apply compact styles
+    from src.styles import get_base_styles, get_card_styles
+    st.markdown(get_base_styles(), unsafe_allow_html=True)
+    st.markdown(get_card_styles(), unsafe_allow_html=True)
+    
     # Validate session state
     if 'lineups' not in st.session_state or 'generation_metadata' not in st.session_state:
         st.error("⚠️ No lineup data found. Please generate lineups first.")
-        if st.button("← Back to Optimization", type="primary"):
+        if st.button("⬅️ Back to Optimization", type="primary"):
             st.session_state['page'] = 'optimization'
             st.rerun()
         return
@@ -39,16 +44,20 @@ def render_results():
     lineups: List[Lineup] = st.session_state['lineups']
     metadata = st.session_state['generation_metadata']
     
-    # Header
+    # ULTRA-COMPACT Header: Single line
     st.markdown("""
-    <div style="text-align: center; margin-bottom: 2rem;">
-        <h1 style="color: #f9fafb;">🏆 Generated Lineups</h1>
-        <p style="color: #9ca3af;">Review your optimized DFS lineups below</p>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; margin-bottom: 0.75rem;">
+        <div style="display: flex; align-items: baseline; gap: 1rem;">
+            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; display: inline;">
+                🏆 <span class="gradient-text">Generated Lineups</span>
+            </h2>
+            <span style="color: #707070; font-size: 0.875rem;">Review & export</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Generation Summary
-    st.markdown("### 📊 Generation Summary")
+    # COMPACT Generation Summary
+    st.caption("📊 Generation Summary")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -83,15 +92,15 @@ def render_results():
     
     if len(lineups) == 0:
         st.error("❌ No lineups were generated. Please adjust your settings and try again.")
-        if st.button("← Back to Optimization", type="primary"):
+        if st.button("⬅️ Back to Optimization", type="primary"):
             st.session_state['page'] = 'optimization'
             st.rerun()
         return
     
-    st.divider()
+    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
     
-    # Optimization Transparency Section
-    st.markdown("### 🔍 What Influenced These Lineups?")
+    # COMPACT Optimization Transparency Section
+    st.markdown("### 🔍 Optimization Details")
     
     optimization_objective = metadata.get('optimization_objective', 'projection')
     
@@ -158,9 +167,9 @@ def render_results():
         if metadata.get('max_ownership_enabled'):
             st.info(f"✅ **Ownership Filter**: Limited to players ≤ {int(metadata.get('max_ownership_pct', 0)*100)}% projected ownership")
     
-    st.divider()
+    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
     
-    # Display each lineup
+    # COMPACT lineup section
     st.markdown("### 🏈 Your Lineups")
     
     for lineup in lineups:
@@ -227,10 +236,10 @@ def render_results():
                     avg_value = sum(p.value for p in lineup.players) / 9
                     st.markdown(f"**Avg Value:** {avg_value:.2f} pts/$1K")
     
-    st.divider()
+    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
     
-    # Export Options
-    st.markdown("### 💾 Save & Export")
+    # COMPACT Export section
+    st.markdown("### 💾 Export")
     
     col1, col2, col3 = st.columns(3)
     
@@ -275,23 +284,23 @@ def render_results():
         else:
             st.info("N/A for projection mode")
     
-    st.divider()
+    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
     
-    # Navigation
+    # ULTRA-COMPACT Navigation
     col1, col2, col3 = st.columns([1, 1, 1])
     
     with col1:
-        if st.button("← Back to Optimization", use_container_width=True):
+        if st.button("⬅️ Back", use_container_width=True, help="Back to Optimization"):
             st.session_state['page'] = 'optimization'
             st.rerun()
     
     with col2:
-        if st.button("🔄 Generate New Lineups", use_container_width=True):
+        if st.button("🔄 Regenerate", use_container_width=True, help="Generate new lineups"):
             st.session_state['page'] = 'lineup_generation'
             st.rerun()
     
     with col3:
-        if st.button("🏠 Start Over", use_container_width=True):
+        if st.button("🏠 Start Over", use_container_width=True, help="Back to data upload"):
             # Clear session state
             st.session_state['page'] = 'data_ingestion'
             st.session_state['player_data'] = None
