@@ -16,6 +16,13 @@ sys.path.insert(0, str(src_path))
 
 from parser import load_and_validate_player_data
 from opponent_lookup import build_opponent_lookup
+from styles import (
+    get_base_styles,
+    get_hero_section_styles,
+    get_upload_zone_styles,
+    get_card_styles,
+    get_badge_styles
+)
 
 
 def render_data_ingestion():
@@ -24,66 +31,102 @@ def render_data_ingestion():
     
     Provides file upload, parsing, validation, and data display functionality.
     """
-    # Header - more compact
-    st.markdown("### 🏈 DFS Lineup Optimizer")
-    st.markdown("#### 📁 Upload Player Data")
+    # Apply modern styles
+    st.markdown(get_base_styles(), unsafe_allow_html=True)
+    st.markdown(get_hero_section_styles(), unsafe_allow_html=True)
+    st.markdown(get_upload_zone_styles(), unsafe_allow_html=True)
+    st.markdown(get_card_styles(), unsafe_allow_html=True)
+    st.markdown(get_badge_styles(), unsafe_allow_html=True)
     
-    # Instructions
-    with st.expander("ℹ️ Upload Instructions", expanded=False):
-        st.markdown("""
-        **Required Columns:**
-        - Player Name (or Name, Player)
-        - Position (or Pos)
-        - Salary (or Cost, Price)
-        - Projection (or Proj, FPPG, Points)
-        
-        **Optional Columns:**
-        - Team
-        - Opponent
-        - Ownership (or Own, Own%)
-        - Player ID
-        
-        **Supported Formats:** CSV (.csv), Excel (.xlsx, .xls)
-        
-        **Data Requirements:**
-        - Salary range: $3,000 - $10,000
-        - Valid positions: QB, RB, WR, TE, DST
-        - Projections must be positive numbers
-        """)
+    # Hero Section
+    st.markdown("""
+    <div class="hero-section">
+        <div class="hero-title">
+            🏈 <span class="gradient-text">DFS Lineup Optimizer</span>
+        </div>
+        <div class="hero-subtitle">
+            Smart Value-Driven Fantasy Lineup Builder
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # File uploader
+    # Instructions Card
+    with st.expander("📋 Upload Instructions & Requirements", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Required Columns:**")
+            st.markdown("""
+            - Player Name *(or Name, Player)*
+            - Position *(or Pos)*
+            - Salary *(or Cost, Price)*
+            - Projection *(or Proj, FPPG, Points)*
+            """)
+            
+            st.markdown("**Optional Columns:**")
+            st.markdown("""
+            - Team
+            - Opponent
+            - Ownership *(or Own, Own%)*
+            - Player ID
+            """)
+        
+        with col2:
+            st.markdown("**Supported Formats:**")
+            st.markdown("- CSV (.csv)")
+            st.markdown("- Excel (.xlsx, .xls)")
+            
+            st.markdown("**Data Requirements:**")
+            st.markdown("""
+            - Salary: $3,000 - $10,000
+            - Positions: QB, RB, WR, TE, DST
+            - Projections: Positive numbers
+            """)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # File Upload Zone
+    st.markdown('<div class="upload-container">', unsafe_allow_html=True)
+    
     uploaded_file = st.file_uploader(
-        "Choose a CSV or Excel file",
+        "📂 Drop your file here or click to browse",
         type=['csv', 'xlsx', 'xls'],
-        help="Upload your weekly player projections file",
+        help="Upload your weekly player projections file (CSV or Excel)",
         key="player_data_uploader",
         accept_multiple_files=False,
         disabled=False
     )
     
-    # Quick test data button
-    if st.button("📁 Load Test Data", help="Load DKSalaries Week 6 2025 data"):
-        try:
-            import io
-            import os
-            # Get the absolute path to DKSalaries Week 6 file
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
-            
-            if os.path.exists(test_file_path):
-                with open(test_file_path, 'rb') as f:
-                    file_content = f.read()
-                    uploaded_file = io.BytesIO(file_content)
-                    uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
-                    st.session_state['uploaded_test_file'] = uploaded_file
-                    st.success("✅ DKSalaries Week 6 2025 data loaded successfully!")
-                    st.rerun()  # Trigger processing
-            else:
-                st.error(f"Test data file not found at: {test_file_path}")
-        except Exception as e:
-            st.error(f"Error loading test data: {e}")
-            import traceback
-            st.error(traceback.format_exc())
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Action Buttons
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🎯 Load Test Data", 
+                     help="Load DKSalaries Week 6 2025 sample data", 
+                     use_container_width=True,
+                     key="load_test_btn"):
+            try:
+                import io
+                import os
+                # Get the absolute path to DKSalaries Week 6 file
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
+                
+                if os.path.exists(test_file_path):
+                    with open(test_file_path, 'rb') as f:
+                        file_content = f.read()
+                        uploaded_file = io.BytesIO(file_content)
+                        uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
+                        st.session_state['uploaded_test_file'] = uploaded_file
+                        st.success("✅ Test data loaded successfully!")
+                        st.rerun()
+                else:
+                    st.error(f"Test data file not found at: {test_file_path}")
+            except Exception as e:
+                st.error(f"Error loading test data: {e}")
+                import traceback
+                st.error(traceback.format_exc())
     
     # Check if we already have loaded data and should just display it
     if 'player_data' in st.session_state and st.session_state['player_data'] is not None and uploaded_file is None:
@@ -154,36 +197,61 @@ def render_data_ingestion():
 def display_success_message(summary: Dict[str, Any]) -> None:
     """Display success message with player count."""
     total = summary['total_players']
-    st.success(f"✅ Successfully loaded {total} players")
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.success(f"✅ Successfully loaded **{total} players** from your file!")
 
 
 def display_data_summary(summary: Dict[str, Any]) -> None:
-    """Display position breakdown."""
-    st.markdown("##### 📊 Position Breakdown")
+    """Display position breakdown with modern card design."""
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("### 📊 Position Breakdown")
     
-    # Position breakdown in columns - more compact
+    # Position breakdown in stat cards
     position_breakdown = summary['position_breakdown']
     if position_breakdown:
+        # Create responsive columns (5 positions max)
         cols = st.columns(len(position_breakdown))
         for i, (pos, count) in enumerate(sorted(position_breakdown.items())):
             with cols[i]:
-                st.markdown(f"**{pos}:** {count}")
+                st.markdown(f"""
+                <div class="stat-card">
+                    <div class="stat-value">{count}</div>
+                    <div class="stat-label">{pos}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
 
 def display_continue_button() -> None:
     """Display button to proceed to next step."""
-    st.write("")  # Spacing
-    if st.button("▶️ Next: View Narrative Intelligence", type="primary", use_container_width=True, help="Continue to narrative intelligence view"):
-        st.session_state['page'] = 'narrative_intelligence'
-        st.rerun()
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("▶️ Next: View Narrative Intelligence", 
+                     type="primary", 
+                     use_container_width=True, 
+                     help="Continue to narrative intelligence screen",
+                     key="continue_to_narrative"):
+            st.session_state['page'] = 'narrative_intelligence'
+            st.rerun()
 
 
 def display_upload_placeholder() -> None:
     """Display placeholder when no file is uploaded."""
-    st.info("👆 Please upload a player data file to get started")
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="info-card">
+        <h4>🎯 Ready to Build Winning Lineups?</h4>
+        <p>Upload your player data above or click <strong>"Load Test Data"</strong> to try the app with sample Week 6 data.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
     
     # Sample data format
     with st.expander("📄 Example Data Format"):
+        st.markdown("Your file should look something like this:")
         sample_data = pd.DataFrame({
             'Name': ['Patrick Mahomes', 'Christian McCaffrey', 'Tyreek Hill'],
             'Position': ['QB', 'RB', 'WR'],
@@ -193,7 +261,7 @@ def display_upload_placeholder() -> None:
             'Opponent': ['LV', '@ARI', '@BUF'],
             'Ownership': [28.5, 32.0, 22.3]
         })
-        st.dataframe(sample_data, hide_index=True)
+        st.dataframe(sample_data, hide_index=True, use_container_width=True)
 
 
 def display_missing_column_error(error_msg: str, filename: str) -> None:
