@@ -10,7 +10,7 @@ import pandas as pd
 from typing import Dict, Any
 import sys
 from pathlib import Path
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 
 # Add parent directory to path for imports
 parent_path = Path(__file__).parent.parent
@@ -777,7 +777,7 @@ Smart Value =
                         st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
                     else:
                         st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
-                st.rerun()
+            st.rerun()
     
     with col2:
         st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
@@ -818,7 +818,7 @@ Smart Value =
     st.markdown(f"""
     <div style="background: #2C2C2C; color: #D3D3D3; padding: 0.3rem 0.75rem; border-radius: 6px; margin: 0.5rem 0 0.75rem 0; font-size: 0.875rem; text-align: center; border: 1px solid #444;">
         <strong>{len(df)}</strong> players · <strong style="color: #FF6B35;">{in_pool_count}</strong> in pool · 🔒 <strong>{locked_count}</strong> locked
-    </div>
+        </div>
     """, unsafe_allow_html=True)
     
     # Prepare data for AgGrid
@@ -828,9 +828,33 @@ Smart Value =
         is_in_pool = current_selection != PlayerSelection.NORMAL.value
         is_locked = current_selection == PlayerSelection.LOCKED.value
         
-        # Prepare player data with DFS metrics + Season stats
+        # Check for warning flags
+        is_wr_regression = False
+        is_ceiling_concern = False
+        flag_tooltip = []
+        
+        # Flag 1: 80/20 WR Regression Risk (WRs only who scored 20+ last week)
+        if row['position'] == 'WR' and row.get('regression_risk') == '⚠️':
+            is_wr_regression = True
+            flag_tooltip.append("⚠️ WR REGRESSION RISK: Scored 20+ last week, 80% chance of regression")
+        
+        # Flag 2: 3.5X Salary Rule (RB/WR/TE only - not QBs)
+        if row['position'] in ['RB', 'WR', 'TE']:
+            salary = row['salary']
+            projection = row['projection']
+            if salary > (projection * 3500):  # 3.5X rule: salary > 3.5 × projection
+                is_ceiling_concern = True
+                flag_tooltip.append(f"💰 CEILING CONCERN: Salary (${salary:,}) > 3.5x projection ({projection:.1f}pts × 3.5 = ${projection*3500:,.0f}) - typically excludes 98% from optimal lineups")
+        
+        # Combine flags
+        has_warning = is_wr_regression or is_ceiling_concern
+        warning_tooltip = " | ".join(flag_tooltip) if flag_tooltip else ""
+        
+        # Prepare player data with DFS metrics + Season stats + Warning flags
         player_data = {
             '_index': idx,  # Hidden column to track original index
+            '_warning_flag': has_warning,  # Hidden flag for row styling
+            '_warning_tooltip': warning_tooltip,  # Hidden tooltip for warnings
             'Pool': is_in_pool,
             'Lock': is_locked,
             'Player': row['name'],
@@ -870,6 +894,8 @@ Smart Value =
     
     # Configure columns
     gb.configure_column("_index", hide=True)  # Hide the index tracking column
+    gb.configure_column("_warning_flag", hide=True)  # Hide warning flag (used for row styling)
+    gb.configure_column("_warning_tooltip", hide=True)  # Hide warning tooltip
     
     gb.configure_column("Pool", 
                         header_name="Pool",
@@ -902,7 +928,8 @@ Smart Value =
                         filterParams=filter_config,
                         menuTabs=menu_tabs,
                         width=200,
-                        pinned='left')
+                        pinned='left',
+                        tooltipField='_warning_tooltip')
     
     gb.configure_column("Pos", 
                         header_name="Pos",
@@ -1103,6 +1130,19 @@ Smart Value =
     # Build grid options
     grid_options = gb.build()
     
+    # Add row styling for warning flags (light orange/pink for flagged players)
+    grid_options['getRowStyle'] = JsCode("""
+    function(params) {
+        if (params.data._warning_flag === true) {
+            return {
+                'backgroundColor': 'rgba(255, 165, 0, 0.15)',  // Light orange/pink
+                'borderLeft': '3px solid #FFA500'  // Solid orange left border
+            };
+        }
+        return null;
+    }
+    """)
+    
     # Add default sort to Value column
     grid_options['columnDefs'] = [
         {**col, 'sort': 'desc'} if col.get('field') == 'Value' else col
@@ -1246,11 +1286,11 @@ Smart Value =
     with col2:
         # Apply same validation as top navigation button
         if is_valid:
-            if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn"):
-                # Store selections for next page
-                st.session_state['player_selections'] = selections
-                st.session_state['page'] = 'optimization'
-                st.rerun()
+    if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn"):
+        # Store selections for next page
+        st.session_state['player_selections'] = selections
+        st.session_state['page'] = 'optimization'
+        st.rerun()
         else:
             # Disabled button with tooltip
             st.button(
