@@ -108,10 +108,10 @@ def get_base_styles() -> str:
         font-family: {FONTS['primary']};
     }}
     
-    /* Main content area */
+    /* Main content area - COMPACT */
     .main .block-container {{
-        padding-top: 2rem;
-        padding-bottom: 3rem;
+        padding-top: 1rem;
+        padding-bottom: 2rem;
         max-width: 1400px;
     }}
     
@@ -120,7 +120,22 @@ def get_base_styles() -> str:
         .main .block-container {{
             padding-left: 1rem;
             padding-right: 1rem;
+            padding-top: 0.5rem;
         }}
+    }}
+    
+    /* Reduce spacing between elements */
+    .element-container {{
+        margin-bottom: 0.5rem;
+    }}
+    
+    /* Compact file uploader */
+    .stFileUploader {{
+        margin-bottom: 0.5rem;
+    }}
+    
+    .stFileUploader > div {{
+        padding: 0.75rem;
     }}
     
     /* ========== TYPOGRAPHY ========== */
@@ -193,18 +208,19 @@ def get_base_styles() -> str:
         border-color: {COLORS['border_medium']};
     }}
     
-    /* ========== FILE UPLOADER ========== */
+    /* ========== FILE UPLOADER - COMPACT ========== */
     .stFileUploader {{
         background: {COLORS['dark_gray']};
         border: 2px dashed {COLORS['border_medium']};
-        border-radius: 16px;
-        padding: 3rem 2rem;
+        border-radius: 12px;
+        padding: 1rem;
         transition: all 0.3s ease;
     }}
     
     .stFileUploader:hover {{
         border-color: {COLORS['orange_bright']};
         background: {COLORS['medium_gray']};
+        box-shadow: 0 0 15px rgba(255, 107, 53, 0.15);
     }}
     
     .stFileUploader label {{
@@ -400,30 +416,30 @@ def get_base_styles() -> str:
 # ============================================================================
 
 def get_hero_section_styles() -> str:
-    """Styles for hero/header sections."""
+    """Styles for hero/header sections - COMPACT."""
     return f"""
     <style>
     .hero-section {{
         text-align: center;
-        padding: {SPACING['2xl']} {SPACING['md']};
-        margin-bottom: {SPACING['xl']};
-        animation: fadeIn 0.6s ease-out;
+        padding: {SPACING['lg']} {SPACING['md']} {SPACING['md']};
+        margin-bottom: {SPACING['md']};
+        animation: fadeIn 0.4s ease-out;
     }}
     
     .hero-title {{
-        font-size: {FONT_SIZES['hero']};
+        font-size: {FONT_SIZES['h1']};
         font-weight: {FONT_WEIGHTS['bold']};
         color: {COLORS['white']};
-        margin-bottom: {SPACING['sm']};
-        letter-spacing: -0.03em;
+        margin-bottom: {SPACING['xs']};
+        letter-spacing: -0.02em;
         line-height: 1.2;
     }}
     
     .hero-subtitle {{
-        font-size: {FONT_SIZES['h3']};
+        font-size: {FONT_SIZES['body']};
         color: {COLORS['medium_gray_text']};
         font-weight: {FONT_WEIGHTS['regular']};
-        margin-bottom: {SPACING['lg']};
+        margin-bottom: {SPACING['sm']};
     }}
     
     .hero-accent {{
@@ -432,10 +448,13 @@ def get_hero_section_styles() -> str:
     
     @media (max-width: 768px) {{
         .hero-title {{
-            font-size: {FONT_SIZES['h1']};
+            font-size: {FONT_SIZES['h2']};
         }}
         .hero-subtitle {{
-            font-size: {FONT_SIZES['body']};
+            font-size: {FONT_SIZES['small']};
+        }}
+        .hero-section {{
+            padding: {SPACING['md']} {SPACING['sm']} {SPACING['sm']};
         }}
     }}
     </style>
@@ -443,19 +462,19 @@ def get_hero_section_styles() -> str:
 
 
 def get_upload_zone_styles() -> str:
-    """Styles for file upload zones."""
+    """Styles for file upload zones - COMPACT."""
     return f"""
     <style>
     .upload-container {{
-        margin: {SPACING['xl']} auto;
-        max-width: 800px;
+        margin: {SPACING['sm']} auto;
+        max-width: 100%;
     }}
     
     .upload-zone {{
         background: {COLORS['dark_gray']};
         border: 2px dashed {COLORS['border_medium']};
-        border-radius: 16px;
-        padding: {SPACING['2xl']};
+        border-radius: 12px;
+        padding: {SPACING['lg']};
         text-align: center;
         transition: all 0.3s ease;
         cursor: pointer;
@@ -464,20 +483,20 @@ def get_upload_zone_styles() -> str:
     .upload-zone:hover {{
         border-color: {COLORS['orange_bright']};
         background: {COLORS['medium_gray']};
-        box-shadow: 0 0 20px rgba(255, 107, 53, 0.2);
+        box-shadow: 0 0 15px rgba(255, 107, 53, 0.15);
     }}
     
     .upload-icon {{
-        font-size: 3rem;
-        margin-bottom: {SPACING['md']};
+        font-size: 2rem;
+        margin-bottom: {SPACING['sm']};
         color: {COLORS['orange_bright']};
     }}
     
     .upload-text {{
         color: {COLORS['white']};
-        font-size: {FONT_SIZES['h3']};
+        font-size: {FONT_SIZES['body']};
         font-weight: {FONT_WEIGHTS['semibold']};
-        margin-bottom: {SPACING['sm']};
+        margin-bottom: {SPACING['xs']};
     }}
     
     .upload-hint {{
