@@ -942,6 +942,8 @@ Smart Value =
                 disabled=True,
                 help=f"⚠️ {error_msg}\n\n✅ Minimum requirements:\n• 1 QB\n• 2 RB\n• 3 WR\n• 1 TE\n• 1 DST"
             )
+            # Show visible error message
+            st.caption(f"⚠️ {error_msg}")
         st.markdown('</div>', unsafe_allow_html=True)
     
     # Re-read selections from session state (in case form/buttons updated it)
@@ -954,10 +956,21 @@ Smart Value =
     locked_count = sum(1 for s in selections.values() if s == PlayerSelection.LOCKED.value)
     in_pool_count = sum(1 for s in selections.values() if s != PlayerSelection.NORMAL.value)
     
+    # Debug: Show position counts
+    selected_indices = [idx for idx, state in selections.items() 
+                       if state in [PlayerSelection.EXCLUDED.value, PlayerSelection.LOCKED.value]]
+    if selected_indices:
+        selected_df = df.loc[selected_indices]
+        pos_counts = selected_df['position'].value_counts().to_dict()
+        pos_summary = " | ".join([f"{pos}: {count}" for pos, count in sorted(pos_counts.items())])
+    else:
+        pos_summary = "None selected"
+    
     # ULTRA-COMPACT player stats bar - inline, minimal padding
     st.markdown(f"""
     <div style="background: #2C2C2C; color: #D3D3D3; padding: 0.3rem 0.75rem; border-radius: 6px; margin: 0.5rem 0 0.75rem 0; font-size: 0.875rem; text-align: center; border: 1px solid #444;">
-        <strong>{len(df)}</strong> players · <strong style="color: #FF6B35;">{in_pool_count}</strong> in pool · 🔒 <strong>{locked_count}</strong> locked
+        <strong>{len(df)}</strong> players · <strong style="color: #FF6B35;">{in_pool_count}</strong> in pool · 🔒 <strong>{locked_count}</strong> locked<br>
+        <span style="font-size: 0.75rem; color: #999;">Selected: {pos_summary}</span>
         </div>
     """, unsafe_allow_html=True)
     
