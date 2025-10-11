@@ -881,32 +881,34 @@ Smart Value =
                 label_visibility="collapsed"
             )
             
-            # Submit button - only triggers action when clicked
+            # Submit button - always enabled (threshold check happens on submit)
             submitted = st.form_submit_button(
-                f"✓ Select ≥ {smart_threshold}" if smart_threshold > 0 else "Select Players",
-                use_container_width=True,
-                disabled=smart_threshold == 0
+                "✓ Select Players",
+                use_container_width=True
             )
         
         # Handle form submission - submitted and smart_threshold ARE accessible after form
-        if submitted and smart_threshold > 0:
-            # Store threshold for next run
-            st.session_state['last_threshold'] = smart_threshold
-            
-            # Select players at or above threshold
-            for idx in df.index:
-                player_smart_value = df.loc[idx, 'smart_value'] if 'smart_value' in df.columns else 0
-                if player_smart_value >= smart_threshold:
-                    st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
-                else:
-                    st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
-            
-            # Update local selections reference
-            selections = st.session_state['selections']
-            
-            # Show success message
-            selected_count = sum(1 for s in selections.values() if s != PlayerSelection.NORMAL.value)
-            st.success(f"✅ Selected {selected_count} players with Smart Value ≥ {smart_threshold}")
+        if submitted:
+            if smart_threshold > 0:
+                # Store threshold for next run
+                st.session_state['last_threshold'] = smart_threshold
+                
+                # Select players at or above threshold
+                for idx in df.index:
+                    player_smart_value = df.loc[idx, 'smart_value'] if 'smart_value' in df.columns else 0
+                    if player_smart_value >= smart_threshold:
+                        st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
+                    else:
+                        st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
+                
+                # Update local selections reference
+                selections = st.session_state['selections']
+                
+                # Show success message
+                selected_count = sum(1 for s in selections.values() if s != PlayerSelection.NORMAL.value)
+                st.success(f"✅ Selected {selected_count} players with Smart Value ≥ {smart_threshold}")
+            else:
+                st.warning("⚠️ Please move the slider above 0 to select players")
     
     with col2:
         st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
