@@ -63,7 +63,7 @@ def render_data_ingestion():
     with col_test:
         st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
         if st.button("🎯 Test Data", 
-                     help="Load Week 6 sample", 
+                     help="Load last uploaded dataset", 
                      use_container_width=True,
                      key="load_test_btn"):
             try:
@@ -104,8 +104,10 @@ def render_data_ingestion():
         return
     
     # Process uploaded file (either from uploader or test data button)
+    is_from_test_button = False
     if 'uploaded_test_file' in st.session_state and st.session_state['uploaded_test_file'] is not None:
         uploaded_file = st.session_state['uploaded_test_file']
+        is_from_test_button = True
         # Clear after retrieving
         del st.session_state['uploaded_test_file']
     
@@ -118,6 +120,26 @@ def render_data_ingestion():
                 # Store in session state
                 st.session_state['player_data'] = df
                 st.session_state['data_summary'] = summary
+                
+                # Save uploaded file as new test data default (only if from user upload, not test button)
+                if not is_from_test_button:
+                    try:
+                        import os
+                        current_dir = os.path.dirname(os.path.abspath(__file__))
+                        test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
+                        
+                        # Reset file pointer to beginning
+                        uploaded_file.seek(0)
+                        
+                        # Save uploaded file content to test data location
+                        with open(test_file_path, 'wb') as f:
+                            f.write(uploaded_file.read())
+                        
+                        # Reset pointer again for further processing
+                        uploaded_file.seek(0)
+                    except Exception as save_error:
+                        # Non-critical error - just log it
+                        pass
                 
                 # Build opponent lookup from Vegas lines (Week 6 - current week)
                 # This creates a clean team -> opponent mapping
@@ -140,7 +162,7 @@ def render_data_ingestion():
                 del st.session_state['smart_value_data']
             
             # Display success and summary
-            display_success_message(summary)
+            display_success_message(summary, is_from_test_button)
             display_data_summary(summary)
             display_continue_button()
             
@@ -158,7 +180,7 @@ def render_data_ingestion():
         display_upload_placeholder()
 
 
-def display_success_message(summary: Dict[str, Any]) -> None:
+def display_success_message(summary: Dict[str, Any], is_from_test_button: bool = False) -> None:
     """Display success message with player count - compact inline."""
     total = summary['total_players']
     position_breakdown = summary.get('position_breakdown', {})
@@ -169,6 +191,8 @@ def display_success_message(summary: Dict[str, Any]) -> None:
     col1, col2 = st.columns([3, 1])
     with col1:
         st.success(f"✅ Loaded **{total} players** · {positions_text}")
+        if not is_from_test_button:
+            st.caption("💾 Saved as default test data")
     with col2:
         if st.button("▶️ Continue", 
                      type="primary", 
