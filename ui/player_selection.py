@@ -1290,11 +1290,11 @@ Smart Value =
     with col2:
         # Apply same validation as top navigation button
         if is_valid:
-    if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn"):
-        # Store selections for next page
-        st.session_state['player_selections'] = selections
-        st.session_state['page'] = 'optimization'
-        st.rerun()
+            if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn"):
+                # Store selections for next page
+                st.session_state['player_selections'] = selections
+                st.session_state['page'] = 'optimization'
+                st.rerun()
         else:
             # Disabled button with tooltip
             st.button(
