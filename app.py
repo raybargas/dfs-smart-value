@@ -20,7 +20,7 @@ def main():
         page_title="DFS Lineup Optimizer",
         page_icon="🏈",
         layout="wide",
-        initial_sidebar_state="expanded"
+        initial_sidebar_state="auto"  # Auto-collapse on mobile, expanded on desktop
     )
     
     # Initialize session state with persistence

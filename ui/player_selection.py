@@ -161,12 +161,28 @@ def render_player_selection():
     bulk actions, validation warnings, and counts.
     """
     # ========== SMART VALUE CONFIGURATION SIDEBAR ==========
-    # Use custom CSS to make sidebar wider
+    # Use custom CSS to make sidebar wider on desktop, responsive on mobile
     st.markdown("""
     <style>
-    [data-testid="stSidebar"] {
-        min-width: 450px;
-        max-width: 450px;
+    /* Desktop: wider sidebar */
+    @media (min-width: 768px) {
+        [data-testid="stSidebar"] {
+            min-width: 450px;
+            max-width: 450px;
+        }
+    }
+    
+    /* Mobile: allow sidebar to be fully hidden and responsive */
+    @media (max-width: 767px) {
+        [data-testid="stSidebar"] {
+            min-width: auto;
+            max-width: 100%;
+        }
+        
+        /* Ensure sidebar can be fully closed on mobile */
+        [data-testid="stSidebar"][aria-expanded="false"] {
+            display: none;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
