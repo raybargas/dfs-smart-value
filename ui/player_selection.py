@@ -21,6 +21,8 @@ from src.regression_analyzer import check_regression_risk
 from src.opponent_lookup import add_opponents_to_dataframe
 from src.season_stats_analyzer import analyze_season_stats, format_trend_display, format_consistency_display, format_momentum_display, format_variance_display
 from src.smart_value_calculator import calculate_smart_value, get_available_profiles
+from src.database_models import create_session, InjuryReport
+from fuzzywuzzy import fuzz
 
 # Import Phase 2C components for Narrative Intelligence
 try:
@@ -150,6 +152,116 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     df['prior_week_points'] = prior_week_points
     df['regression_tooltip'] = regression_tooltips
     df['leverage_tooltip'] = leverage_tooltips
+    
+    return df
+
+
+def get_injury_data(week: int = 5) -> Dict[str, Dict[str, Any]]:
+    """
+    Fetch injury data from database for the given week.
+    
+    Args:
+        week: NFL week number
+        
+    Returns:
+        Dictionary mapping player names to injury info:
+        {
+            'Player Name': {
+                'status': 'Q',
+                'practice': 'Limited',
+                'body_part': 'Hamstring',
+                'description': '...'
+            }
+        }
+    """
+    try:
+        session = create_session()
+        
+        # Query injury reports for the week
+        injuries = session.query(InjuryReport).filter(
+            InjuryReport.week == week
+        ).all()
+        
+        injury_dict = {}
+        for inj in injuries:
+            # Skip if healthy (no injury status or explicitly "healthy")
+            if not inj.injury_status or inj.injury_status.lower() in ['healthy', 'active', 'none']:
+                continue
+                
+            injury_dict[inj.player_name] = {
+                'status': inj.injury_status,
+                'practice': inj.practice_status,
+                'body_part': inj.body_part,
+                'description': inj.description
+            }
+        
+        session.close()
+        return injury_dict
+        
+    except Exception as e:
+        print(f"Error fetching injury data: {e}")
+        return {}
+
+
+def add_injury_flags_to_dataframe(df: pd.DataFrame, week: int = 5) -> pd.DataFrame:
+    """
+    Add injury flags to player names and create injury tooltips.
+    
+    Args:
+        df: Player DataFrame with 'name' column
+        week: NFL week number for injury data
+        
+    Returns:
+        DataFrame with 'injury_flag', 'injury_tooltip', and modified 'name' columns
+    """
+    injury_data = get_injury_data(week)
+    
+    injury_flags = []
+    injury_tooltips = []
+    
+    for idx, row in df.iterrows():
+        player_name = row['name']
+        
+        # Try exact match first
+        injury_info = injury_data.get(player_name)
+        
+        # If no exact match, try fuzzy matching
+        if not injury_info:
+            best_match = None
+            best_score = 0
+            for inj_name in injury_data.keys():
+                score = fuzz.ratio(player_name.lower(), inj_name.lower())
+                if score > best_score and score >= 85:  # 85% similarity threshold
+                    best_score = score
+                    best_match = inj_name
+            
+            if best_match:
+                injury_info = injury_data[best_match]
+        
+        # Add injury flag and tooltip if found
+        if injury_info:
+            status = injury_info['status']
+            practice = injury_info.get('practice', 'Unknown')
+            body_part = injury_info.get('body_part', 'Unknown')
+            
+            # Create flag display (Q, D, O, IR, etc.)
+            flag = f" [{status}]"
+            injury_flags.append(flag)
+            
+            # Create detailed tooltip
+            tooltip_parts = [f"⚕️ INJURY: {status}"]
+            if body_part and body_part != 'Unknown':
+                tooltip_parts.append(f"Body Part: {body_part}")
+            if practice and practice != 'Unknown':
+                tooltip_parts.append(f"Practice: {practice}")
+            
+            injury_tooltips.append(" | ".join(tooltip_parts))
+        else:
+            injury_flags.append("")
+            injury_tooltips.append("")
+    
+    df['injury_flag'] = injury_flags
+    df['injury_tooltip'] = injury_tooltips
     
     return df
 
@@ -692,6 +804,10 @@ Smart Value =
             opponent_map = st.session_state['opponent_lookup']
             df = add_opponents_to_dataframe(df, opponent_map)
     
+    # Add injury flags to player names
+    current_week = st.session_state.get('current_week', 5)
+    df = add_injury_flags_to_dataframe(df, week=current_week)
+    
     # Verify required columns exist before storing
     required_cols = ['position', 'name', 'salary', 'projection', 'team']
     missing_cols = [col for col in required_cols if col not in df.columns]
@@ -699,7 +815,7 @@ Smart Value =
         st.error(f"⚠️ Missing required columns: {missing_cols}. Please reload your data.")
         return
     
-    # Store enriched data (with opponents + DFS metrics + season stats + smart value) for optimizer
+    # Store enriched data (with opponents + DFS metrics + season stats + smart value + injury flags) for optimizer
     st.session_state['enriched_player_data'] = df.copy()
     
     # Initialize selections if not exists
@@ -779,7 +895,7 @@ Smart Value =
                         st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
                 
                 # Only rerun when button is clicked
-                st.rerun()
+            st.rerun()
     
     with col2:
         st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
@@ -856,14 +972,27 @@ Smart Value =
         has_warning = is_wr_regression or is_ceiling_concern
         warning_tooltip = " | ".join(flag_tooltip) if flag_tooltip else ""
         
-        # Prepare player data with DFS metrics + Season stats + Warning flags
+        # Add injury flag and tooltip
+        injury_flag = row.get('injury_flag', '')
+        injury_tooltip = row.get('injury_tooltip', '')
+        player_name_with_flag = row['name'] + injury_flag
+        
+        # Combine injury tooltip with warning tooltip
+        combined_tooltip = warning_tooltip
+        if injury_tooltip:
+            if combined_tooltip:
+                combined_tooltip = f"{injury_tooltip} | {combined_tooltip}"
+            else:
+                combined_tooltip = injury_tooltip
+        
+        # Prepare player data with DFS metrics + Season stats + Warning flags + Injury flags
         player_data = {
             '_index': idx,  # Hidden column to track original index
             '_warning_flag': has_warning,  # Hidden flag for row styling
-            '_warning_tooltip': warning_tooltip,  # Hidden tooltip for warnings
+            '_warning_tooltip': combined_tooltip,  # Combined tooltip (injury + warnings)
             'Pool': is_in_pool,
             'Lock': is_locked,
-            'Player': row['name'],
+            'Player': player_name_with_flag,
             'Pos': row['position'],
             'Salary': row['salary'],
             'Proj': row['projection'],
@@ -1292,11 +1421,11 @@ Smart Value =
     with col2:
         # Apply same validation as top navigation button
         if is_valid:
-            if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn"):
-                # Store selections for next page
-                st.session_state['player_selections'] = selections
-                st.session_state['page'] = 'optimization'
-                st.rerun()
+    if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn"):
+        # Store selections for next page
+        st.session_state['player_selections'] = selections
+        st.session_state['page'] = 'optimization'
+        st.rerun()
         else:
             # Disabled button with tooltip
             st.button(
