@@ -62,21 +62,21 @@ def render_data_ingestion():
     )
     
     # Quick test data button
-    if st.button("📁 Load Test Data", help="Load the sample test data for testing"):
+    if st.button("📁 Load Test Data", help="Load DKSalaries Week 6 2025 data"):
         try:
             import io
             import os
-            # Get the absolute path to test_data.csv
+            # Get the absolute path to DKSalaries Week 6 file
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            test_file_path = os.path.join(current_dir, "..", "test_data.csv")
+            test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
             
             if os.path.exists(test_file_path):
                 with open(test_file_path, 'rb') as f:
                     file_content = f.read()
                     uploaded_file = io.BytesIO(file_content)
-                    uploaded_file.name = "test_data.csv"
+                    uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
                     st.session_state['uploaded_test_file'] = uploaded_file
-                    st.success("✅ Test data loaded successfully!")
+                    st.success("✅ DKSalaries Week 6 2025 data loaded successfully!")
                     st.rerun()  # Trigger processing
             else:
                 st.error(f"Test data file not found at: {test_file_path}")
