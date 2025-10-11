@@ -49,18 +49,19 @@ def render_data_ingestion():
     """, unsafe_allow_html=True)
     
     # Ultra-compact 3-column layout: Upload | Test Button | Help
-    col_upload, col_test, col_help = st.columns([3, 1.5, 0.75])
+    col_upload, col_test, col_help = st.columns([3.5, 1.5, 0.5])
     
     with col_upload:
         uploaded_file = st.file_uploader(
-            "Upload",
+            "📂 Upload Player Data",
             type=['csv', 'xlsx', 'xls'],
-            help="CSV or Excel file",
+            help="Upload CSV or Excel file with player data",
             key="player_data_uploader",
-            label_visibility="collapsed"
+            label_visibility="visible"
         )
     
     with col_test:
+        st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
         if st.button("🎯 Test Data", 
                      help="Load Week 6 sample", 
                      use_container_width=True,
@@ -82,11 +83,14 @@ def render_data_ingestion():
                     st.error("Not found")
             except Exception as e:
                 st.error(f"Error: {e}")
+        st.markdown('</div>', unsafe_allow_html=True)
     
     with col_help:
+        st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
         with st.expander("ℹ️"):
             st.caption("**Need:** Name, Pos, Salary, Proj")
             st.caption("**Formats:** CSV, Excel")
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # Check if we already have loaded data and should just display it
     if 'player_data' in st.session_state and st.session_state['player_data'] is not None and uploaded_file is None:

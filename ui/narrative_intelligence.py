@@ -69,8 +69,22 @@ def get_available_data_weeks():
 
 def show():
     """Main function to render the Narrative Intelligence page."""
-    st.title("📊 Narrative Intelligence")
-    st.markdown("**Contextual data to inform smarter player pool selection**")
+    # Apply compact styles
+    from src.styles import get_base_styles, get_card_styles
+    st.markdown(get_base_styles(), unsafe_allow_html=True)
+    st.markdown(get_card_styles(), unsafe_allow_html=True)
+    
+    # ULTRA-COMPACT Header: Single line
+    st.markdown("""
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; margin-bottom: 0.5rem;">
+        <div style="display: flex; align-items: baseline; gap: 1rem;">
+            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; display: inline;">
+                📊 <span class="gradient-text">Narrative Intelligence</span>
+            </h2>
+            <span style="color: #707070; font-size: 0.875rem;">Context for smarter picks</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Initialize session state
     if 'vegas_lines_df' not in st.session_state:
@@ -168,36 +182,39 @@ def show():
         except Exception as e:
             st.error(f"Error loading data: {e}")
     
-    # Week selector and navigation at the top
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # ULTRA-COMPACT Week selector and status - single row
+    col1, col2, col3, col4 = st.columns([0.8, 2, 1.5, 1])
+    
     with col1:
         previous_week = st.session_state.current_week
         st.session_state.current_week = st.number_input(
-            "NFL Week",
+            "Week",
             min_value=1,
             max_value=18,
             value=st.session_state.current_week,
-            help="Select the NFL week for data"
+            help="NFL week",
+            label_visibility="collapsed"
         )
-        
-        # If week changed, reload cached data
         if st.session_state.current_week != previous_week:
             load_vegas_lines_from_db()
             load_injury_reports_from_db()
     
     with col2:
-        # Show which data is available
         available_weeks = get_available_data_weeks()
         if available_weeks['vegas'] or available_weeks['injury']:
-            st.caption(f"📊 Cached data available - Vegas: Week {available_weeks['vegas']}, Injury: Week {available_weeks['injury']}")
+            st.caption(f"📊 Vegas: Wk {available_weeks['vegas']} | Injury: Wk {available_weeks['injury']}")
     
     with col3:
-        # Quick navigation button to player selection
-        if st.button("Next: Select Players ➡️", use_container_width=True, type="primary"):
+        # Combine success messages inline
+        vegas_count = len(st.session_state.vegas_lines_df) if st.session_state.vegas_lines_df is not None else 0
+        injury_count = len(st.session_state.injury_reports_df) if st.session_state.injury_reports_df is not None else 0
+        if vegas_count > 0 or injury_count > 0:
+            st.caption(f"✅ {vegas_count} games | {injury_count} injuries")
+    
+    with col4:
+        if st.button("▶️ Continue", use_container_width=True, type="primary", help="Next: Select Players"):
             st.session_state['page'] = 'player_selection'
             st.rerun()
-    
-    st.divider()
     
     # Section 1: Vegas Lines & Implied Team Totals
     render_vegas_lines_section()
@@ -207,21 +224,15 @@ def show():
     # Section 2: Injury Reports
     render_injury_reports_section()
     
-    st.divider()
-    
-    # Section 3: Future Enhancements Placeholder
-    render_future_placeholder()
-    
-    st.divider()
-    
-    # Navigation
+    # Navigation (compact at bottom)
+    st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
     render_navigation()
 
 
 def render_vegas_lines_section():
     """Render Vegas Lines section with data table and refresh button."""
-    st.header("🎰 Vegas Lines & Implied Team Totals")
-    st.markdown("*Team scoring expectations based on betting markets*")
+    st.markdown("### 🎰 Vegas Lines")
+    st.caption("Team scoring expectations from betting markets")
     
     col1, col2, col3 = st.columns([2, 2, 2])
     
@@ -270,8 +281,8 @@ def render_vegas_lines_section():
 
 def render_injury_reports_section():
     """Render Injury Reports section with data table and refresh button."""
-    st.header("🏥 Injury Reports & Practice Status")
-    st.markdown("*Player health status and practice participation*")
+    st.markdown("### 🏥 Injury Reports")
+    st.caption("Player health status and practice participation")
     
     col1, col2, col3 = st.columns([2, 2, 2])
     
@@ -337,18 +348,12 @@ def render_future_placeholder():
 
 
 def render_navigation():
-    """Render bottom navigation - just a back button since Next is at the top."""
-    col1, col2, col3 = st.columns([1, 2, 1])
+    """Render compact bottom navigation."""
+    col1, col2 = st.columns([1, 4])
     
     with col1:
-        if st.button("⬅️ Back to Data Ingestion", use_container_width=True):
+        if st.button("⬅️ Back", use_container_width=True, help="Back to Data Ingestion"):
             st.session_state['page'] = 'data_ingestion'
-            st.rerun()
-    
-    with col3:
-        # Optional: Add a secondary "Next" button for those who scroll to the bottom
-        if st.button("Next: Select Players ➡️", use_container_width=True):
-            st.session_state['page'] = 'player_selection'
             st.rerun()
 
 
