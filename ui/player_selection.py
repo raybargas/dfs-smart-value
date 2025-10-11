@@ -861,6 +861,7 @@ Smart Value =
         
         return True, ""
     
+    # Initial validation check (for top buttons)
     is_valid, error_msg = check_roster_requirements()
     
     # ULTRA-COMPACT Controls: Single row with Smart Value slider, Deselect, and Next
@@ -927,6 +928,8 @@ Smart Value =
         # Quick navigation to optimization config - disabled if requirements not met
         if is_valid:
             if st.button("▶️ Continue", use_container_width=True, type="primary", key="quick_next"):
+                # Store selections for next page
+                st.session_state['player_selections'] = selections
                 st.session_state['page'] = 'optimization'
                 st.rerun()
         else:
@@ -943,6 +946,9 @@ Smart Value =
     
     # Re-read selections from session state (in case form/buttons updated it)
     selections = st.session_state['selections']
+    
+    # Validate roster requirements AFTER selections are updated
+    is_valid, error_msg = check_roster_requirements()
     
     # Count locked players
     locked_count = sum(1 for s in selections.values() if s == PlayerSelection.LOCKED.value)
