@@ -62,15 +62,48 @@ def render_data_ingestion():
     
     with col_test:
         st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
-        if st.button("🎯 Test Data", 
-                     help="Load last uploaded dataset", 
+        
+        # Check for last upload timestamp
+        import os
+        import datetime
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
+        timestamp_file = os.path.join(current_dir, "..", "last_upload_timestamp.txt")
+        
+        last_updated_text = ""
+        if os.path.exists(timestamp_file):
+            try:
+                with open(timestamp_file, 'r') as f:
+                    timestamp_str = f.read().strip()
+                    upload_time = datetime.datetime.fromisoformat(timestamp_str)
+                    
+                    # Calculate time ago
+                    now = datetime.datetime.now()
+                    diff = now - upload_time
+                    
+                    if diff.days > 0:
+                        last_updated_text = f"{diff.days}d ago"
+                    elif diff.seconds >= 3600:
+                        hours = diff.seconds // 3600
+                        last_updated_text = f"{hours}h ago"
+                    elif diff.seconds >= 60:
+                        minutes = diff.seconds // 60
+                        last_updated_text = f"{minutes}m ago"
+                    else:
+                        last_updated_text = "Just now"
+            except:
+                pass
+        
+        # Show last updated info above button
+        if last_updated_text:
+            st.caption(f"🕒 {last_updated_text}")
+        
+        if st.button("📊 Load Latest", 
+                     help="Load most recent dataset", 
                      use_container_width=True,
                      key="load_test_btn"):
             try:
                 import io
-                import os
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
                 
                 if os.path.exists(test_file_path):
                     with open(test_file_path, 'rb') as f:
@@ -80,7 +113,7 @@ def render_data_ingestion():
                         st.session_state['uploaded_test_file'] = uploaded_file
                         st.rerun()
                 else:
-                    st.error("Not found")
+                    st.error("No data saved yet")
             except Exception as e:
                 st.error(f"Error: {e}")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -125,8 +158,10 @@ def render_data_ingestion():
                 if not is_from_test_button:
                     try:
                         import os
+                        import datetime
                         current_dir = os.path.dirname(os.path.abspath(__file__))
                         test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
+                        timestamp_file = os.path.join(current_dir, "..", "last_upload_timestamp.txt")
                         
                         # Reset file pointer to beginning
                         uploaded_file.seek(0)
@@ -134,6 +169,10 @@ def render_data_ingestion():
                         # Save uploaded file content to test data location
                         with open(test_file_path, 'wb') as f:
                             f.write(uploaded_file.read())
+                        
+                        # Save timestamp
+                        with open(timestamp_file, 'w') as f:
+                            f.write(datetime.datetime.now().isoformat())
                         
                         # Reset pointer again for further processing
                         uploaded_file.seek(0)
@@ -192,7 +231,7 @@ def display_success_message(summary: Dict[str, Any], is_from_test_button: bool =
     with col1:
         st.success(f"✅ Loaded **{total} players** · {positions_text}")
         if not is_from_test_button:
-            st.caption("💾 Saved as default test data")
+            st.caption("💾 Saved for quick access")
     with col2:
         if st.button("▶️ Continue", 
                      type="primary", 
@@ -215,7 +254,7 @@ def display_continue_button() -> None:
 
 def display_upload_placeholder() -> None:
     """Display compact placeholder when no file is uploaded."""
-    st.info("👆 Upload CSV/Excel or click **Test Data** for Week 6 sample")
+    st.info("👆 Upload CSV/Excel or click **Load Latest** to use saved dataset")
 
 
 def display_missing_column_error(error_msg: str, filename: str) -> None:
