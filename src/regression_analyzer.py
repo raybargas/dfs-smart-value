@@ -165,7 +165,7 @@ def get_high_scorers_from_prior_week(
         FROM player_game_stats p
         JOIN game_boxscores g ON p.game_id = g.game_id
         WHERE g.week = ?
-        AND p.position IN ('QB', 'RB', 'WR', 'TE')
+        AND p.position = 'WR'
         """
         
         cursor.execute(query, (week,))

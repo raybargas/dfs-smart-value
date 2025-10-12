@@ -24,11 +24,11 @@ from typing import Dict, Optional
 # Tournament strategy: embrace variance, prioritize ceiling, game environment over consistency
 WEIGHT_PROFILES = {
     'balanced': {
-        'base': 0.20,          # ↓5% - Ceiling matters more than pure value
-        'opportunity': 0.30,   # ↑5% - Volume/usage = ceiling potential
-        'trends': 0.15,        # ↓5% - Less consistency penalty, keep momentum
-        'risk': 0.05,          # ↓10% - Embrace variance! (injury only)
-        'matchup': 0.30        # ↑15% - Game environment = ceiling games
+        'base': 0.20,          # Ceiling matters more than pure value
+        'opportunity': 0.30,   # Volume/usage = ceiling potential
+        'trends': 0.20,        # Momentum and role trends
+        'risk': 0.10,          # Moderate variance consideration
+        'matchup': 0.20        # Game environment matters
     },
     'cash': {
         'base': 0.45,          # Safety first in cash games
@@ -40,9 +40,9 @@ WEIGHT_PROFILES = {
     'gpp': {
         'base': 0.20,          # Tournament optimized (same as balanced now)
         'opportunity': 0.30,   # High volume = ceiling outcomes
-        'trends': 0.15,        # Momentum > consistency
-        'risk': 0.05,          # Minimal variance penalty
-        'matchup': 0.30        # Game environment critical
+        'trends': 0.20,        # Momentum and trends
+        'risk': 0.10,          # Moderate variance consideration
+        'matchup': 0.20        # Game environment
     }
 }
 
