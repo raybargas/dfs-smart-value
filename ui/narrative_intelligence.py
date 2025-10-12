@@ -477,16 +477,21 @@ def load_injury_reports_from_db():
             reports = session.query(InjuryReport).filter_by(week=st.session_state.current_week).all()
             
             if reports:
-                # Convert to DataFrame
+                # Convert to DataFrame (filter out IR players - not relevant for weekly DFS)
                 data = []
                 for report in reports:
+                    # Skip IR players (Injured Reserve = out for multiple weeks)
+                    status_upper = report.injury_status.upper() if report.injury_status else ''
+                    if status_upper in ['IR', 'INJURED RESERVE']:
+                        continue
+                    
                     data.append({
                         'Player': report.player_name,
                         'Team': report.team,
                         'Position': report.position or 'N/A',
                         'Status': report.injury_status,
                         'Practice': report.practice_status,
-                        'Body Part': report.body_part,
+                        'Injury': report.body_part,  # Renamed from 'Body Part'
                         'Updated': report.updated_at.strftime('%m/%d %I:%M %p') if report.updated_at else 'N/A'
                     })
                 
@@ -546,7 +551,7 @@ def display_vegas_lines_table(df):
 
 
 def display_injury_reports_table(df):
-    """Display injury reports in a formatted table with color coding."""
+    """Display injury reports in a formatted table with color coding (IR filtered out)."""
     # Add color coding based on status
     def color_status(val):
         if not val or not isinstance(val, str):
@@ -556,7 +561,7 @@ def display_injury_reports_table(df):
             return 'background-color: #fff3cd'  # Yellow
         elif val_upper == 'DOUBTFUL' or val_upper == 'D':
             return 'background-color: #f8d7da'  # Light red
-        elif val_upper in ['OUT', 'O', 'IR', 'INJURED RESERVE']:
+        elif val_upper in ['OUT', 'O']:
             return 'background-color: #f5c6cb'  # Red
         return ''
     
@@ -567,20 +572,20 @@ def display_injury_reports_table(df):
         use_container_width=True,
         hide_index=True,
         column_config={
-            'Player': st.column_config.TextColumn('Player', width='medium'),
+            'Player': st.column_config.TextColumn('Player', width='large'),
             'Team': st.column_config.TextColumn('Team', width='small'),
             'Position': st.column_config.TextColumn('Pos', width='small'),
-            'Status': st.column_config.TextColumn('Status', width='small', help='Injury status: Questionable, Doubtful, Out, or Injured Reserve'),
+            'Status': st.column_config.TextColumn('Status', width='medium', help='Game status: Questionable, Doubtful, or Out for this week'),
             'Practice': st.column_config.TextColumn('Practice', width='small'),
-            'Body Part': st.column_config.TextColumn('Injury', width='medium'),
+            'Injury': st.column_config.TextColumn('Injury', width='large'),
             'Updated': st.column_config.TextColumn('Updated', width='medium')
         }
     )
     
-    # Summary stats
+    # Summary stats (IR filtered out)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total Injuries", len(df))
+        st.metric("Weekly Injuries", len(df))
     with col2:
         # Match full status names from the API
         q_count = len(df[df['Status'].str.upper() == 'QUESTIONABLE'])
@@ -589,9 +594,9 @@ def display_injury_reports_table(df):
         d_count = len(df[df['Status'].str.upper() == 'DOUBTFUL'])
         st.metric("Doubtful", d_count)
     with col4:
-        # Match Out and IR
-        o_count = len(df[df['Status'].str.upper().isin(['OUT', 'IR', 'INJURED RESERVE'])])
-        st.metric("Out/IR", o_count)
+        # Only Out (IR already filtered)
+        o_count = len(df[df['Status'].str.upper().isin(['OUT', 'O'])])
+        st.metric("Out", o_count)
 
 
 # ===== Rate Limiting Functions =====
