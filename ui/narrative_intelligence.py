@@ -427,6 +427,9 @@ def fetch_injury_reports():
     with st.spinner("Fetching injury reports from ESPN API..."):
         try:
             from src.api.espn_api import ESPNAPIClient
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            from src.database_models import InjuryReport
             
             # Fetch from ESPN (no key required)
             espn_client = ESPNAPIClient()
@@ -440,22 +443,37 @@ def fetch_injury_reports():
                     if inj.get('injury_status', '').upper() not in ['IR', 'INJURED RESERVE']
                 ]
                 
-                # Store to database using MySportsFeeds client's storage infrastructure
-                msf_api_key = os.getenv('MYSPORTSFEEDS_API_KEY')
-                if msf_api_key:
-                    msf_client = MySportsFeedsClient(api_key=msf_api_key, db_path="dfs_optimizer.db")
+                # Store directly to database
+                engine = create_engine('sqlite:///dfs_optimizer.db')
+                Session = sessionmaker(bind=engine)
+                session = Session()
+                
+                try:
+                    # Clear existing injuries for this week
+                    session.query(InjuryReport).filter_by(
+                        season=2025,
+                        week=st.session_state.current_week
+                    ).delete()
+                    
+                    # Store ESPN injuries
                     for injury in filtered_injuries:
-                        msf_client._store_injury_report(
+                        injury_report = InjuryReport(
                             season=2025,
                             week=st.session_state.current_week,
                             player_name=injury['player_name'],
                             team=injury['team'],
-                            position=injury['position'],
+                            position=injury.get('position', ''),
                             injury_status=injury['injury_status'],
+                            practice_status='',  # ESPN doesn't provide this
                             body_part=injury.get('body_part', ''),
-                            injury_description=injury.get('long_comment') or injury.get('short_comment', '')
+                            injury_description=injury.get('long_comment') or injury.get('short_comment', ''),
+                            last_update=datetime.now()
                         )
-                    msf_client.close()
+                        session.add(injury_report)
+                    
+                    session.commit()
+                finally:
+                    session.close()
                 
                 # Store rich ESPN data in session state for display
                 st.session_state.espn_injury_data = injuries  # Full ESPN data with context

@@ -112,7 +112,9 @@ def fetch_injury_reports(week: int, api_key: Optional[str] = None) -> bool:
     """
     try:
         from src.api.espn_api import ESPNAPIClient
-        from src.api.mysportsfeeds_api import MySportsFeedsClient
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from src.database_models import InjuryReport
         
         # Fetch from ESPN
         with st.spinner("📡 Fetching injury reports from ESPN (fast, detailed context)..."):
@@ -131,23 +133,37 @@ def fetch_injury_reports(week: int, api_key: Optional[str] = None) -> bool:
         ]
         ir_count = len(injuries) - len(active_injuries)
         
-        # Store in database using MySportsFeeds client's storage method
-        # (reusing existing storage infrastructure, but with ESPN data)
-        msf_api_key = st.secrets.get("MYSPORTSFEEDS_API_KEY") or os.getenv("MYSPORTSFEEDS_API_KEY")
-        if msf_api_key:
-            msf_client = MySportsFeedsClient(api_key=msf_api_key, db_path="dfs_optimizer.db")
-            # Store ESPN injuries using the existing storage method
+        # Store directly in database
+        engine = create_engine('sqlite:///dfs_optimizer.db')
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        
+        try:
+            # Clear existing injuries for this week
+            session.query(InjuryReport).filter_by(
+                season=2025,
+                week=week
+            ).delete()
+            
+            # Store ESPN injuries
             for injury in active_injuries:
-                msf_client._store_injury_report(
+                injury_report = InjuryReport(
                     season=2025,
                     week=week,
                     player_name=injury['player_name'],
                     team=injury['team'],
-                    position=injury['position'],
+                    position=injury.get('position', ''),
                     injury_status=injury['injury_status'],
+                    practice_status='',  # ESPN doesn't provide this
                     body_part=injury.get('body_part', ''),
-                    injury_description=injury.get('long_comment') or injury.get('short_comment', '')
+                    injury_description=injury.get('long_comment') or injury.get('short_comment', ''),
+                    last_update=datetime.now()
                 )
+                session.add(injury_report)
+            
+            session.commit()
+        finally:
+            session.close()
         
         # Count statistics
         status_counts = {}
