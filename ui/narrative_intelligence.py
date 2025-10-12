@@ -423,22 +423,29 @@ def load_vegas_lines_from_db():
 
 
 def fetch_injury_reports():
-    """Fetch injury reports from MySportsFeeds API."""
+    """Fetch injury reports from MySportsFeeds API and store in database."""
     with st.spinner("Fetching injury reports from MySportsFeeds API..."):
         try:
             msf_api_key = os.getenv('MYSPORTSFEEDS_API_KEY')
-            client = MySportsFeedsClient(api_key=msf_api_key)
+            # CRITICAL: Must pass db_path to ensure data is stored correctly
+            client = MySportsFeedsClient(api_key=msf_api_key, db_path="dfs_optimizer.db")
             
-            # Fetch injuries
+            # Fetch injuries (stores to database via _store_injuries)
             injuries = client.fetch_injuries(
                 season=2025,
                 week=st.session_state.current_week,
-                use_cache=False
+                use_cache=False  # Force fresh fetch from API
             )
             
             if injuries:
+                # Filter out IR players (not relevant for weekly DFS)
+                filtered_injuries = [
+                    inj for inj in injuries 
+                    if inj.get('injury_status', '').upper() not in ['IR', 'INJURED RESERVE']
+                ]
+                
                 # Convert to DataFrame
-                df = pd.DataFrame(injuries)
+                df = pd.DataFrame(filtered_injuries)
                 
                 # Format for display
                 display_df = pd.DataFrame({
@@ -447,11 +454,15 @@ def fetch_injury_reports():
                     'Position': df.get('position', 'N/A'),
                     'Status': df['injury_status'],
                     'Practice': df['practice_status'],
-                    'Body Part': df['body_part'],
+                    'Injury': df['body_part'],  # Match column name with load_from_db
                     'Updated': df['last_update'].apply(lambda x: x.strftime('%m/%d %I:%M %p') if pd.notna(x) else 'N/A')
                 })
                 
                 st.session_state.injury_reports_df = display_df
+                
+                # Log for transparency
+                total_fetched = len(injuries)
+                filtered_out = total_fetched - len(filtered_injuries)
                 st.session_state.last_injury_update = datetime.now()
                 set_rate_limit('injury')
                 
@@ -459,7 +470,14 @@ def fetch_injury_reports():
                 if 'enriched_player_data' in st.session_state:
                     del st.session_state['enriched_player_data']
                 
-                st.success(f"✅ Fetched {len(injuries)} injury reports - Player Selection will reload with new data")
+                # Success message with filtering info
+                msg = f"✅ Fetched {len(filtered_injuries)} weekly injury reports"
+                if filtered_out > 0:
+                    msg += f" ({filtered_out} IR players filtered out)"
+                st.success(msg)
+                
+                # Reload from database to ensure display is in sync
+                load_injury_reports_from_db()
             else:
                 st.error("❌ No injury data found. Check API key or week number.")
             
