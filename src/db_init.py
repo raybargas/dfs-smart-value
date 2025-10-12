@@ -105,13 +105,23 @@ def fetch_injury_reports(week: int, api_key: Optional[str] = None) -> bool:
         # Import here to avoid circular dependencies
         from src.api.mysportsfeeds_api import MySportsFeedsClient
         
-        client = MySportsFeedsClient(api_key=api_key)
-        # Note: You'll need to implement fetch_injury_reports method in MySportsFeedsClient
-        # For now, just silently return success
-        # TODO: Implement injury report fetching in MySportsFeedsClient
-        # client.fetch_injury_reports(week=week)
+        client = MySportsFeedsClient(api_key=api_key, db_path="dfs_optimizer.db")
         
-        return True
+        # Fetch current injuries (MySportsFeeds returns CURRENT injuries, not historical)
+        # We'll store them with the specified week number for our purposes
+        injuries = client.fetch_injuries(
+            season=2025,
+            week=week,
+            use_cache=False,  # Force fresh fetch for manual API calls
+            cache_ttl_hours=6
+        )
+        
+        if injuries:
+            st.success(f"✅ Fetched {len(injuries)} injury reports from MySportsFeeds")
+            return True
+        else:
+            st.info("ℹ️ No injury reports found (this may be normal if no players are currently injured)")
+            return True
         
     except Exception as e:
         st.error(f"Error fetching injury reports: {e}")
