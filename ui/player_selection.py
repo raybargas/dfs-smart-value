@@ -861,10 +861,8 @@ Smart Value =
         
         return True, ""
     
-    # Initial validation check (for top buttons)
-    is_valid, error_msg = check_roster_requirements()
-    
-    # ULTRA-COMPACT Controls: Single row with Smart Value slider, Deselect, and Next
+    # ULTRA-COMPACT Controls: Single row with Smart Value slider, Deselect, and Continue
+    # Note: Continue button rendered AFTER validation below
     col1, col2, col3, col4 = st.columns([2.5, 1, 1, 1.5])
     
     with col1:
@@ -923,6 +921,15 @@ Smart Value =
         # Position filter shortcut (optional - can expand later)
         st.markdown('</div>', unsafe_allow_html=True)
     
+    # Col4 (Continue button) rendered AFTER validation - see below line 954
+    
+    # Re-read selections from session state (in case form/buttons updated it)
+    selections = st.session_state['selections']
+    
+    # Validate roster requirements AFTER selections are updated
+    is_valid, error_msg = check_roster_requirements()
+    
+    # NOW render Continue button with CORRECT validation
     with col4:
         st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
         # Quick navigation to optimization config - disabled if requirements not met
@@ -945,12 +952,6 @@ Smart Value =
             # Show visible error message
             st.caption(f"⚠️ {error_msg}")
         st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Re-read selections from session state (in case form/buttons updated it)
-    selections = st.session_state['selections']
-    
-    # Validate roster requirements AFTER selections are updated
-    is_valid, error_msg = check_roster_requirements()
     
     # Count locked players
     locked_count = sum(1 for s in selections.values() if s == PlayerSelection.LOCKED.value)
@@ -1457,10 +1458,10 @@ Smart Value =
         # Apply same validation as top navigation button
         if is_valid:
             if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn2"):
-                # Store selections for next page
-                st.session_state['player_selections'] = selections
-                st.session_state['page'] = 'optimization'
-                st.rerun()
+        # Store selections for next page
+        st.session_state['player_selections'] = selections
+        st.session_state['page'] = 'optimization'
+        st.rerun()
         else:
             # Disabled button with tooltip
             st.button(
