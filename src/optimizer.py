@@ -20,7 +20,8 @@ def generate_lineups(
     uniqueness_pct: float,
     max_ownership_enabled: bool = False,
     max_ownership_pct: float = None,
-    optimization_objective: str = 'projection'
+    optimization_objective: str = 'projection',
+    stacking_enabled: bool = True
 ) -> Tuple[List[Lineup], Optional[str]]:
     """
     Generate N unique DraftKings-valid lineups using linear programming.
@@ -43,6 +44,9 @@ def generate_lineups(
         optimization_objective: What to maximize ('projection' or 'smart_value')
             'projection': Maximize raw projected points (traditional approach)
             'smart_value': Maximize Smart Value score (custom weighted approach)
+        stacking_enabled: Whether to enforce QB + WR/TE same team constraint (default True)
+            True: Force QB + at least 1 WR/TE from same team (GPP strategy)
+            False: Pure optimization without team correlation requirements
     
     Returns:
         Tuple of (List of Lineup objects, Error message or None)
@@ -76,7 +80,8 @@ def generate_lineups(
             max_ownership_enabled=max_ownership_enabled,
             max_ownership_pct=max_ownership_pct,
             lineup_number=i + 1,
-            optimization_objective=optimization_objective
+            optimization_objective=optimization_objective,
+            stacking_enabled=stacking_enabled
         )
         
         if error:
@@ -95,7 +100,8 @@ def _generate_single_lineup(
     max_ownership_enabled: bool,
     max_ownership_pct: float,
     lineup_number: int,
-    optimization_objective: str = 'projection'
+    optimization_objective: str = 'projection',
+    stacking_enabled: bool = True
 ) -> Tuple[Optional[Lineup], Optional[str]]:
     """
     Generate a single lineup using PuLP linear programming.
@@ -112,6 +118,7 @@ def _generate_single_lineup(
         max_ownership_pct: Maximum ownership (0-1.0) if enabled
         lineup_number: Lineup ID for this lineup
         optimization_objective: What to maximize ('projection' or 'smart_value')
+        stacking_enabled: Whether to enforce QB + WR/TE same team constraint
     
     Returns:
         Tuple of (Lineup object or None, Error message or None)
@@ -199,6 +206,25 @@ def _generate_single_lineup(
         prob += pulp.lpSum([
             player_vars[p.name] for p in players if p.name in prev_player_names
         ]) <= max_shared, f"Uniqueness_vs_Lineup_{prev_idx + 1}"
+    
+    # Constraint 6: Stacking (if enabled)
+    if stacking_enabled:
+        # For each QB, ensure at least 1 WR/TE from same team is selected
+        for qb in qbs:
+            qb_team = qb.team
+            
+            # Find all WRs and TEs from same team as this QB
+            same_team_pass_catchers = [
+                p for p in (wrs + tes) if p.team == qb_team
+            ]
+            
+            if same_team_pass_catchers:
+                # If this QB is selected (player_vars[qb.name] == 1), 
+                # then at least 1 pass catcher from same team must also be selected
+                # Constraint: sum(same_team_pass_catchers) >= player_vars[qb.name]
+                prob += pulp.lpSum([
+                    player_vars[p.name] for p in same_team_pass_catchers
+                ]) >= player_vars[qb.name], f"Stack_QB_{qb.name.replace(' ', '_')}"
     
     # Solve the LP problem using CBC solver (suppress output)
     status = prob.solve(pulp.PULP_CBC_CMD(msg=0))

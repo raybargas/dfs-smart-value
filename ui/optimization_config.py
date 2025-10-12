@@ -146,6 +146,35 @@ def render_optimization_config():
     
     st.session_state['temp_config']['optimization_objective'] = optimization_objective
     
+    # Stacking Strategy (for GPP tournament play)
+    st.markdown("### 🔗 Stacking Strategy")
+    
+    stacking_enabled = st.toggle(
+        "Primary Stack (QB + WR/TE same team)",
+        value=True,  # DEFAULT ON for tournament play
+        help="Forces QB + at least 1 WR/TE from same team. Standard GPP construction for correlated upside.",
+        key="stacking_enabled"
+    )
+    
+    if stacking_enabled:
+        st.success("""
+        ✅ **Stack Mode Active**
+        
+        Each lineup will include QB + at least 1 WR/TE from the same team.
+        
+        🎯 **Tournament Strategy**: Correlated scoring increases upside and creates differentiated constructions.
+        """)
+    else:
+        st.info("""
+        ⚪ **Pure Optimization Mode**
+        
+        Optimizer will maximize value without team correlation requirements.
+        
+        ⚠️ May not stack even when strategically advantageous for tournaments.
+        """)
+    
+    st.session_state['temp_config']['stacking_enabled'] = stacking_enabled
+    
     # Task 2.3: Max Ownership Filter
     st.markdown("### 🔍 Optional Filters")
     

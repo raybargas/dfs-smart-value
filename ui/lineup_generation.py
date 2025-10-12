@@ -73,7 +73,8 @@ def render_lineup_generation():
             uniqueness_pct=config['uniqueness_pct'],
             max_ownership_enabled=config.get('max_ownership_enabled', False),
             max_ownership_pct=config.get('max_ownership_pct', None),
-            optimization_objective=config.get('optimization_objective', 'projection')
+            optimization_objective=config.get('optimization_objective', 'projection'),
+            stacking_enabled=config.get('stacking_enabled', True)  # Default ON for GPPs
         )
         
         generation_time = time.time() - start_time
