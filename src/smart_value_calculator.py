@@ -4,7 +4,14 @@ Smart Value Calculator
 Calculates a sophisticated, multi-factor value score that goes beyond simple projection/salary.
 Incorporates opportunity metrics, trends, risk factors, and matchup quality.
 
-Formula: Smart Value = BASE (25%) + OPPORTUNITY (25%) + TRENDS (20%) + RISK (15%) + MATCHUP (15%)
+DEFAULT WEIGHTS (Tournament-Optimized for GPP):
+- BASE (20%): Projection per $1K - ceiling matters more than pure value
+- OPPORTUNITY (30%): Volume/usage metrics - high volume = ceiling potential  
+- TRENDS (15%): Momentum > consistency - embrace variance
+- RISK (5%): Minimal penalty - boom/bust is good in GPP
+- MATCHUP (30%): Game environment - identifies ceiling games
+
+Formula: Smart Value = BASE + OPPORTUNITY + TRENDS + RISK + MATCHUP (scaled 0-100)
 """
 
 import pandas as pd
@@ -13,27 +20,29 @@ from typing import Dict, Optional
 
 
 # Weight Profiles
+# NOTE: Default 'balanced' profile is now optimized for TOURNAMENT (GPP) play
+# Tournament strategy: embrace variance, prioritize ceiling, game environment over consistency
 WEIGHT_PROFILES = {
     'balanced': {
-        'base': 0.25,
-        'opportunity': 0.25,
-        'trends': 0.20,
-        'risk': 0.15,
-        'matchup': 0.15
+        'base': 0.20,          # ↓5% - Ceiling matters more than pure value
+        'opportunity': 0.30,   # ↑5% - Volume/usage = ceiling potential
+        'trends': 0.15,        # ↓5% - Less consistency penalty, keep momentum
+        'risk': 0.05,          # ↓10% - Embrace variance! (injury only)
+        'matchup': 0.30        # ↑15% - Game environment = ceiling games
     },
     'cash': {
-        'base': 0.45,
+        'base': 0.45,          # Safety first in cash games
         'opportunity': 0.25,
         'trends': 0.10,
         'risk': 0.15,
         'matchup': 0.05
     },
     'gpp': {
-        'base': 0.35,
-        'opportunity': 0.25,
-        'trends': 0.20,
-        'risk': 0.10,
-        'matchup': 0.10
+        'base': 0.20,          # Tournament optimized (same as balanced now)
+        'opportunity': 0.30,   # High volume = ceiling outcomes
+        'trends': 0.15,        # Momentum > consistency
+        'risk': 0.05,          # Minimal variance penalty
+        'matchup': 0.30        # Game environment critical
     }
 }
 
