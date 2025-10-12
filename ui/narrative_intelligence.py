@@ -451,14 +451,12 @@ def fetch_injury_reports():
                 try:
                     # Clear existing injuries for this week
                     session.query(InjuryReport).filter_by(
-                        season=2025,
                         week=st.session_state.current_week
                     ).delete()
                     
                     # Store ESPN injuries
                     for injury in filtered_injuries:
                         injury_report = InjuryReport(
-                            season=2025,
                             week=st.session_state.current_week,
                             player_name=injury['player_name'],
                             team=injury['team'],
@@ -466,8 +464,7 @@ def fetch_injury_reports():
                             injury_status=injury['injury_status'],
                             practice_status='',  # ESPN doesn't provide this
                             body_part=injury.get('body_part', ''),
-                            injury_description=injury.get('long_comment') or injury.get('short_comment', ''),
-                            last_update=datetime.now()
+                            description=injury.get('long_comment') or injury.get('short_comment', '')
                         )
                         session.add(injury_report)
                     
