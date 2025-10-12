@@ -900,12 +900,15 @@ Smart Value =
                     else:
                         st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
                 
-                # Update local selections reference
-                selections = st.session_state['selections']
+                # Store to player_selections as well for navigation
+                st.session_state['player_selections'] = st.session_state['selections'].copy()
                 
                 # Show success message
-                selected_count = sum(1 for s in selections.values() if s != PlayerSelection.NORMAL.value)
+                selected_count = sum(1 for s in st.session_state['selections'].values() if s != PlayerSelection.NORMAL.value)
                 st.success(f"✅ Selected {selected_count} players with Smart Value ≥ {smart_threshold}")
+                
+                # CRITICAL: Rerun to update AgGrid with new selections
+                st.rerun()
             else:
                 st.warning("⚠️ Please move the slider above 0 to select players")
     
