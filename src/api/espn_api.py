@@ -173,6 +173,12 @@ class ESPNAPIClient:
                     position_info = athlete.get('position', {})
                     position = position_info.get('abbreviation', '') if position_info else ''
                     
+                    # Filter: Only DFS-relevant positions (QB, RB, WR, TE, K, DST)
+                    # Skip all defensive players, offensive linemen, etc.
+                    dfs_positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST', 'D/ST']
+                    if position not in dfs_positions:
+                        continue
+                    
                     # Injury status from top level
                     status = injury.get('status', 'Unknown')
                     

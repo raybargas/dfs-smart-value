@@ -478,12 +478,23 @@ def fetch_injury_reports():
                 # Convert to DataFrame for basic display
                 df = pd.DataFrame(filtered_injuries)
                 
+                # Map status to short codes for better readability
+                def format_status(status):
+                    status_map = {
+                        'Questionable': 'Q',
+                        'Doubtful': 'D',
+                        'Out': 'Out',
+                        'IR': 'IR',
+                        'Active': 'Q'  # Active typically means game-time decision
+                    }
+                    return status_map.get(status, status)
+                
                 # Format for display
                 display_df = pd.DataFrame({
                     'Player': df['player_name'],
                     'Team': df['team'],
-                    'Position': df.get('position', 'N/A'),
-                    'Status': df['injury_status'],
+                    'Pos': df.get('position', 'N/A'),
+                    'Status': df['injury_status'].apply(format_status),
                     'Injury': df['body_part'],
                     'Context': df['short_comment'].apply(lambda x: x[:80] + '...' if len(x) > 80 else x),
                     'Affected': df['affected_players'].apply(lambda x: ', '.join(x) if x else '—')
@@ -504,13 +515,14 @@ def fetch_injury_reports():
                     del st.session_state['enriched_player_data']
                 
                 # Success message with stats
-                msg = f"✅ Fetched {len(filtered_injuries)} injury reports from ESPN"
+                msg = f"✅ Fetched {len(filtered_injuries)} DFS-relevant injury reports from ESPN"
                 if filtered_out > 0:
-                    msg += f" ({filtered_out} IR players filtered out)"
+                    msg += f" ({filtered_out} IR/non-DFS players filtered)"
                 st.success(msg)
                 
                 if affected_count > 0:
                     st.caption(f"👥 {affected_count} injuries have identified affected players (backups, committee changes, etc.)")
+                st.caption(f"📊 Filtered to DFS positions only: QB, RB, WR, TE, K, DST")
                 
                 # Reload from database to ensure display is in sync
                 load_injury_reports_from_db()
@@ -604,17 +616,17 @@ def display_vegas_lines_table(df):
 
 def display_injury_reports_table(df):
     """Display injury reports with ESPN context and affected players (IR filtered out)."""
-    # Add color coding based on status
+    # Add color coding based on status (now using short codes: Q, D, Out)
     def color_status(val):
         if not val or not isinstance(val, str):
             return ''
         val_upper = val.upper()
-        if val_upper == 'QUESTIONABLE' or val_upper == 'Q':
-            return 'background-color: #fff3cd'  # Yellow
-        elif val_upper == 'DOUBTFUL' or val_upper == 'D':
-            return 'background-color: #f8d7da'  # Light red
-        elif val_upper in ['OUT', 'O']:
-            return 'background-color: #f5c6cb'  # Red
+        if val_upper == 'Q':
+            return 'background-color: #fff3cd; color: #856404; font-weight: bold'  # Yellow
+        elif val_upper == 'D':
+            return 'background-color: #f8d7da; color: #721c24; font-weight: bold'  # Light red
+        elif val_upper == 'OUT':
+            return 'background-color: #f5c6cb; color: #721c24; font-weight: bold'  # Red
         return ''
     
     styled_df = df.style.applymap(color_status, subset=['Status'])
@@ -626,8 +638,8 @@ def display_injury_reports_table(df):
         column_config={
             'Player': st.column_config.TextColumn('Player', width='medium'),
             'Team': st.column_config.TextColumn('Team', width='small'),
-            'Position': st.column_config.TextColumn('Pos', width='small'),
-            'Status': st.column_config.TextColumn('Status', width='small', help='Game status: Questionable, Doubtful, or Out'),
+            'Pos': st.column_config.TextColumn('Pos', width='small'),
+            'Status': st.column_config.TextColumn('Status', width='small', help='Q=Questionable, D=Doubtful, Out=Ruled Out'),
             'Injury': st.column_config.TextColumn('Injury', width='small'),
             'Context': st.column_config.TextColumn('Context', width='large', help='ESPN injury context (click player for full details)'),
             'Affected': st.column_config.TextColumn('Affected Players', width='medium', help='Backups or players impacted by this injury')
@@ -637,15 +649,15 @@ def display_injury_reports_table(df):
     # Summary stats (IR filtered out)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Weekly Injuries", len(df))
+        st.metric("DFS Injuries", len(df))
     with col2:
-        q_count = len(df[df['Status'].str.upper() == 'QUESTIONABLE'])
+        q_count = len(df[df['Status'].str.upper() == 'Q'])
         st.metric("Questionable", q_count)
     with col3:
-        d_count = len(df[df['Status'].str.upper() == 'DOUBTFUL'])
+        d_count = len(df[df['Status'].str.upper() == 'D'])
         st.metric("Doubtful", d_count)
     with col4:
-        o_count = len(df[df['Status'].str.upper().isin(['OUT', 'O'])])
+        o_count = len(df[df['Status'].str.upper() == 'OUT'])
         st.metric("Out", o_count)
     
     # Expandable full context viewer
