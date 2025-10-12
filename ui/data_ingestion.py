@@ -67,9 +67,12 @@ def render_data_ingestion():
             st.caption("**Formats:** CSV, Excel")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Auto-load saved dataset on first visit (if no data in session and no upload)
+    # Track if this is a manual upload (from file uploader widget)
+    is_manual_upload = uploaded_file is not None
+    
+    # Auto-load saved dataset on first visit (if no data in session and no manual upload)
     if 'player_data' not in st.session_state or st.session_state['player_data'] is None:
-        if uploaded_file is None and 'auto_loaded' not in st.session_state:
+        if not is_manual_upload and 'auto_loaded' not in st.session_state:
             # Try to auto-load the saved dataset
             import os
             import io
@@ -97,12 +100,12 @@ def render_data_ingestion():
             display_continue_button()
         return
     
-    # Determine if this is from auto-load
-    is_from_auto_load = st.session_state.get('auto_loaded', False)
-    if is_from_auto_load:
-        # Clear the flag after first use
-        if 'auto_loaded' in st.session_state:
-            del st.session_state['auto_loaded']
+    # Determine if this is from auto-load (only True if auto-load just happened)
+    is_from_auto_load = st.session_state.get('auto_loaded', False) and not is_manual_upload
+    
+    # Clear auto-load flag after first use
+    if 'auto_loaded' in st.session_state:
+        del st.session_state['auto_loaded']
     
     if uploaded_file is not None:
         try:
@@ -114,8 +117,8 @@ def render_data_ingestion():
                 st.session_state['player_data'] = df
                 st.session_state['data_summary'] = summary
                 
-                # Save uploaded file as new default dataset (only if manually uploaded, not auto-loaded)
-                if not is_from_auto_load:
+                # Save uploaded file as new default dataset (only if manually uploaded)
+                if is_manual_upload:
                     try:
                         import os
                         import datetime
@@ -125,20 +128,24 @@ def render_data_ingestion():
                         
                         # Reset file pointer to beginning
                         uploaded_file.seek(0)
+                        file_content = uploaded_file.read()
                         
                         # Save uploaded file content to test data location
                         with open(test_file_path, 'wb') as f:
-                            f.write(uploaded_file.read())
+                            f.write(file_content)
                         
                         # Save timestamp
+                        current_time = datetime.datetime.now()
                         with open(timestamp_file, 'w') as f:
-                            f.write(datetime.datetime.now().isoformat())
+                            f.write(current_time.isoformat())
                         
-                        # Reset pointer again for further processing
-                        uploaded_file.seek(0)
+                        # Mark that we successfully saved
+                        st.session_state['manual_upload_saved'] = True
+                        
                     except Exception as save_error:
-                        # Non-critical error - just log it
-                        pass
+                        # Show error but don't fail the upload
+                        st.warning(f"⚠️ Could not save as default dataset: {save_error}")
+                        st.session_state['manual_upload_saved'] = False
                 
                 # Build opponent lookup from Vegas lines (Week 6 - current week)
                 # This creates a clean team -> opponent mapping
@@ -187,43 +194,46 @@ def display_success_message(summary: Dict[str, Any], is_from_auto_load: bool = F
     # Compact inline summary with position counts
     positions_text = " · ".join([f"{pos}: {count}" for pos, count in sorted(position_breakdown.items())])
     
-    # Get timestamp info if available
+    # Get timestamp info if available (only for auto-loaded data)
     import os
     import datetime
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    timestamp_file = os.path.join(current_dir, "..", "last_upload_timestamp.txt")
-    
     last_updated_text = ""
-    if os.path.exists(timestamp_file):
-        try:
-            with open(timestamp_file, 'r') as f:
-                timestamp_str = f.read().strip()
-                upload_time = datetime.datetime.fromisoformat(timestamp_str)
-                
-                # Calculate time ago
-                now = datetime.datetime.now()
-                diff = now - upload_time
-                
-                if diff.days > 0:
-                    last_updated_text = f"{diff.days}d ago"
-                elif diff.seconds >= 3600:
-                    hours = diff.seconds // 3600
-                    last_updated_text = f"{hours}h ago"
-                elif diff.seconds >= 60:
-                    minutes = diff.seconds // 60
-                    last_updated_text = f"{minutes}m ago"
-                else:
-                    last_updated_text = "Just now"
-        except:
-            pass
+    
+    if is_from_auto_load:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        timestamp_file = os.path.join(current_dir, "..", "last_upload_timestamp.txt")
+        
+        if os.path.exists(timestamp_file):
+            try:
+                with open(timestamp_file, 'r') as f:
+                    timestamp_str = f.read().strip()
+                    upload_time = datetime.datetime.fromisoformat(timestamp_str)
+                    
+                    # Calculate time ago
+                    now = datetime.datetime.now()
+                    diff = now - upload_time
+                    
+                    if diff.days > 0:
+                        last_updated_text = f"{diff.days}d ago"
+                    elif diff.seconds >= 3600:
+                        hours = diff.seconds // 3600
+                        last_updated_text = f"{hours}h ago"
+                    elif diff.seconds >= 60:
+                        minutes = diff.seconds // 60
+                        last_updated_text = f"{minutes}m ago"
+                    else:
+                        last_updated_text = "Just now"
+            except:
+                last_updated_text = "recently"
     
     col1, col2 = st.columns([3, 1])
     with col1:
         st.success(f"✅ Loaded **{total} players** · {positions_text}")
         if is_from_auto_load and last_updated_text:
             st.caption(f"🕒 Dataset from {last_updated_text}")
-        elif not is_from_auto_load:
-            st.caption("💾 Saved as default dataset")
+        else:
+            # Manual upload - show immediate confirmation
+            st.caption("💾 Saved as default dataset · Just now")
     with col2:
         if st.button("▶️ Continue", 
                      type="primary", 
