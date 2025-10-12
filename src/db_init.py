@@ -70,10 +70,21 @@ def fetch_vegas_lines(week: int, api_key: Optional[str] = None) -> bool:
         # Import here to avoid circular dependencies
         from src.api.odds_api import OddsAPIClient
         
-        client = OddsAPIClient(api_key=api_key)
-        client.fetch_nfl_odds(use_cache=False)  # Don't use cache when forcing refresh
+        client = OddsAPIClient(api_key=api_key, db_path="dfs_optimizer.db")
         
-        return True
+        # Fetch NFL odds and store in database
+        games = client.fetch_nfl_odds(
+            markets="spreads,totals",
+            use_cache=False,  # Force fresh fetch for manual API calls
+            cache_ttl_hours=24
+        )
+        
+        if games:
+            st.success(f"✅ Fetched {len(games)} NFL games with Vegas lines")
+            return True
+        else:
+            st.info("ℹ️ No Vegas lines found (this may indicate no games scheduled)")
+            return True
         
     except Exception as e:
         st.error(f"Error fetching Vegas lines: {e}")
