@@ -95,52 +95,79 @@ def fetch_vegas_lines(week: int, api_key: Optional[str] = None) -> bool:
 
 def fetch_injury_reports(week: int, api_key: Optional[str] = None) -> bool:
     """
-    Fetch injury reports from MySportsFeeds API and store in database.
+    Fetch injury reports from ESPN API with rich context.
+    
+    ESPN provides:
+    - Fast, up-to-date injury data (often faster than paid services)
+    - Rich commentary and context (short + long comments)
+    - Affected players (e.g., backup QB info when starter injured)
+    - Free, no authentication required
     
     Args:
-        week: NFL week number
-        api_key: MySportsFeeds API key (from secrets or env)
+        week: NFL week number (for storage purposes)
+        api_key: Unused (kept for compatibility)
     
     Returns:
         True if successful, False otherwise
     """
     try:
-        # Get API key from secrets or environment
-        if api_key is None:
-            api_key = st.secrets.get("MYSPORTSFEEDS_API_KEY") or os.getenv("MYSPORTSFEEDS_API_KEY")
-        
-        if not api_key:
-            st.warning("⚠️ MYSPORTSFEEDS_API_KEY not found in secrets. Injury reports unavailable.")
-            return False
-        
-        # Import here to avoid circular dependencies
+        from src.api.espn_api import ESPNAPIClient
         from src.api.mysportsfeeds_api import MySportsFeedsClient
         
-        client = MySportsFeedsClient(api_key=api_key, db_path="dfs_optimizer.db")
+        # Fetch from ESPN
+        with st.spinner("📡 Fetching injury reports from ESPN (fast, detailed context)..."):
+            espn_client = ESPNAPIClient()
+            injuries = espn_client.fetch_injuries()
+            espn_client.close()
         
-        # Fetch current injuries (MySportsFeeds returns CURRENT injuries, not historical)
-        # We'll store them with the specified week number for our purposes
-        injuries = client.fetch_injuries(
-            season=2025,
-            week=week,
-            use_cache=False,  # Force fresh fetch for manual API calls
-            cache_ttl_hours=6
-        )
+        if not injuries:
+            st.info("ℹ️ No injury reports found")
+            return True
         
-        if injuries:
-            # Count by status for visibility
-            status_counts = {}
-            for inj in injuries:
-                status = inj.get('injury_status', 'Unknown')
-                status_counts[status] = status_counts.get(status, 0) + 1
-            
-            status_str = ", ".join([f"{s}: {c}" for s, c in sorted(status_counts.items())])
-            st.success(f"✅ Fetched {len(injuries)} injury reports from MySportsFeeds")
-            st.caption(f"📊 Breakdown: {status_str}")
-            return True
-        else:
-            st.info("ℹ️ No injury reports found (this may be normal if no players are currently injured)")
-            return True
+        # Filter out IR players (not relevant for DFS)
+        active_injuries = [
+            inj for inj in injuries 
+            if inj.get('injury_status') not in ['IR', 'INJURED RESERVE']
+        ]
+        ir_count = len(injuries) - len(active_injuries)
+        
+        # Store in database using MySportsFeeds client's storage method
+        # (reusing existing storage infrastructure, but with ESPN data)
+        msf_api_key = st.secrets.get("MYSPORTSFEEDS_API_KEY") or os.getenv("MYSPORTSFEEDS_API_KEY")
+        if msf_api_key:
+            msf_client = MySportsFeedsClient(api_key=msf_api_key, db_path="dfs_optimizer.db")
+            # Store ESPN injuries using the existing storage method
+            for injury in active_injuries:
+                msf_client._store_injury_report(
+                    season=2025,
+                    week=week,
+                    player_name=injury['player_name'],
+                    team=injury['team'],
+                    position=injury['position'],
+                    injury_status=injury['injury_status'],
+                    body_part=injury.get('body_part', ''),
+                    injury_description=injury.get('long_comment') or injury.get('short_comment', '')
+                )
+        
+        # Count statistics
+        status_counts = {}
+        affected_count = 0
+        for inj in active_injuries:
+            status = inj.get('injury_status', 'Unknown')
+            status_counts[status] = status_counts.get(status, 0) + 1
+            if inj.get('affected_players'):
+                affected_count += 1
+        
+        status_str = ", ".join([f"{s}: {c}" for s, c in sorted(status_counts.items())])
+        
+        st.success(f"✅ Fetched {len(active_injuries)} injury reports from ESPN")
+        st.caption(f"📊 Status: {status_str}")
+        if ir_count > 0:
+            st.caption(f"🔍 Filtered out {ir_count} IR players")
+        if affected_count > 0:
+            st.caption(f"👥 {affected_count} injuries have identified affected players")
+        
+        return True
         
     except Exception as e:
         st.error(f"Error fetching injury reports: {e}")

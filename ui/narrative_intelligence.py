@@ -423,19 +423,15 @@ def load_vegas_lines_from_db():
 
 
 def fetch_injury_reports():
-    """Fetch injury reports from MySportsFeeds API and store in database."""
-    with st.spinner("Fetching injury reports from MySportsFeeds API..."):
+    """Fetch injury reports from ESPN API with rich context and affected players."""
+    with st.spinner("Fetching injury reports from ESPN API..."):
         try:
-            msf_api_key = os.getenv('MYSPORTSFEEDS_API_KEY')
-            # CRITICAL: Must pass db_path to ensure data is stored correctly
-            client = MySportsFeedsClient(api_key=msf_api_key, db_path="dfs_optimizer.db")
+            from src.api.espn_api import ESPNAPIClient
             
-            # Fetch injuries (stores to database via _store_injuries)
-            injuries = client.fetch_injuries(
-                season=2025,
-                week=st.session_state.current_week,
-                use_cache=False  # Force fresh fetch from API
-            )
+            # Fetch from ESPN (no key required)
+            espn_client = ESPNAPIClient()
+            injuries = espn_client.fetch_injuries()
+            espn_client.close()
             
             if injuries:
                 # Filter out IR players (not relevant for weekly DFS)
@@ -444,7 +440,27 @@ def fetch_injury_reports():
                     if inj.get('injury_status', '').upper() not in ['IR', 'INJURED RESERVE']
                 ]
                 
-                # Convert to DataFrame
+                # Store to database using MySportsFeeds client's storage infrastructure
+                msf_api_key = os.getenv('MYSPORTSFEEDS_API_KEY')
+                if msf_api_key:
+                    msf_client = MySportsFeedsClient(api_key=msf_api_key, db_path="dfs_optimizer.db")
+                    for injury in filtered_injuries:
+                        msf_client._store_injury_report(
+                            season=2025,
+                            week=st.session_state.current_week,
+                            player_name=injury['player_name'],
+                            team=injury['team'],
+                            position=injury['position'],
+                            injury_status=injury['injury_status'],
+                            body_part=injury.get('body_part', ''),
+                            injury_description=injury.get('long_comment') or injury.get('short_comment', '')
+                        )
+                    msf_client.close()
+                
+                # Store rich ESPN data in session state for display
+                st.session_state.espn_injury_data = injuries  # Full ESPN data with context
+                
+                # Convert to DataFrame for basic display
                 df = pd.DataFrame(filtered_injuries)
                 
                 # Format for display
@@ -453,9 +469,9 @@ def fetch_injury_reports():
                     'Team': df['team'],
                     'Position': df.get('position', 'N/A'),
                     'Status': df['injury_status'],
-                    'Practice': df['practice_status'],
-                    'Injury': df['body_part'],  # Match column name with load_from_db
-                    'Updated': df['last_update'].apply(lambda x: x.strftime('%m/%d %I:%M %p') if pd.notna(x) else 'N/A')
+                    'Injury': df['body_part'],
+                    'Context': df['short_comment'].apply(lambda x: x[:80] + '...' if len(x) > 80 else x),
+                    'Affected': df['affected_players'].apply(lambda x: ', '.join(x) if x else '—')
                 })
                 
                 st.session_state.injury_reports_df = display_df
@@ -463,6 +479,8 @@ def fetch_injury_reports():
                 # Log for transparency
                 total_fetched = len(injuries)
                 filtered_out = total_fetched - len(filtered_injuries)
+                affected_count = len([inj for inj in filtered_injuries if inj.get('affected_players')])
+                
                 st.session_state.last_injury_update = datetime.now()
                 set_rate_limit('injury')
                 
@@ -470,18 +488,19 @@ def fetch_injury_reports():
                 if 'enriched_player_data' in st.session_state:
                     del st.session_state['enriched_player_data']
                 
-                # Success message with filtering info
-                msg = f"✅ Fetched {len(filtered_injuries)} weekly injury reports"
+                # Success message with stats
+                msg = f"✅ Fetched {len(filtered_injuries)} injury reports from ESPN"
                 if filtered_out > 0:
                     msg += f" ({filtered_out} IR players filtered out)"
                 st.success(msg)
                 
+                if affected_count > 0:
+                    st.caption(f"👥 {affected_count} injuries have identified affected players (backups, committee changes, etc.)")
+                
                 # Reload from database to ensure display is in sync
                 load_injury_reports_from_db()
             else:
-                st.error("❌ No injury data found. Check API key or week number.")
-            
-            client.close()
+                st.error("❌ No injury data found from ESPN")
             
         except Exception as e:
             st.error(f"❌ Error fetching injury reports: {str(e)}")
@@ -569,7 +588,7 @@ def display_vegas_lines_table(df):
 
 
 def display_injury_reports_table(df):
-    """Display injury reports in a formatted table with color coding (IR filtered out)."""
+    """Display injury reports with ESPN context and affected players (IR filtered out)."""
     # Add color coding based on status
     def color_status(val):
         if not val or not isinstance(val, str):
@@ -590,13 +609,13 @@ def display_injury_reports_table(df):
         use_container_width=True,
         hide_index=True,
         column_config={
-            'Player': st.column_config.TextColumn('Player', width='large'),
+            'Player': st.column_config.TextColumn('Player', width='medium'),
             'Team': st.column_config.TextColumn('Team', width='small'),
             'Position': st.column_config.TextColumn('Pos', width='small'),
-            'Status': st.column_config.TextColumn('Status', width='medium', help='Game status: Questionable, Doubtful, or Out for this week'),
-            'Practice': st.column_config.TextColumn('Practice', width='small'),
-            'Injury': st.column_config.TextColumn('Injury', width='large'),
-            'Updated': st.column_config.TextColumn('Updated', width='medium')
+            'Status': st.column_config.TextColumn('Status', width='small', help='Game status: Questionable, Doubtful, or Out'),
+            'Injury': st.column_config.TextColumn('Injury', width='small'),
+            'Context': st.column_config.TextColumn('Context', width='large', help='ESPN injury context (click player for full details)'),
+            'Affected': st.column_config.TextColumn('Affected Players', width='medium', help='Backups or players impacted by this injury')
         }
     )
     
@@ -605,16 +624,76 @@ def display_injury_reports_table(df):
     with col1:
         st.metric("Weekly Injuries", len(df))
     with col2:
-        # Match full status names from the API
         q_count = len(df[df['Status'].str.upper() == 'QUESTIONABLE'])
         st.metric("Questionable", q_count)
     with col3:
         d_count = len(df[df['Status'].str.upper() == 'DOUBTFUL'])
         st.metric("Doubtful", d_count)
     with col4:
-        # Only Out (IR already filtered)
         o_count = len(df[df['Status'].str.upper().isin(['OUT', 'O'])])
         st.metric("Out", o_count)
+    
+    # Expandable full context viewer
+    if 'espn_injury_data' in st.session_state:
+        st.markdown("---")
+        st.caption("💬 **Full ESPN Commentary** (select a player to view detailed analysis)")
+        
+        # Get all ESPN injuries
+        espn_data = st.session_state.espn_injury_data
+        
+        # Filter to active (non-IR) players
+        active_espn = [
+            inj for inj in espn_data 
+            if inj.get('injury_status', '').upper() not in ['IR', 'INJURED RESERVE']
+        ]
+        
+        # Create player selector
+        player_options = [f"{inj['player_name']} ({inj['team']} {inj['position']})" for inj in active_espn]
+        
+        if player_options:
+            selected = st.selectbox(
+                "Select player for full context",
+                options=['— Select a player —'] + player_options,
+                key='injury_detail_selector'
+            )
+            
+            if selected and selected != '— Select a player —':
+                # Find the selected player's data
+                player_name = selected.split(' (')[0]
+                player_data = next((inj for inj in active_espn if inj['player_name'] == player_name), None)
+                
+                if player_data:
+                    # Display full context in an info box
+                    with st.expander(f"📰 {player_name} — Full ESPN Analysis", expanded=True):
+                        col_a, col_b = st.columns([1, 1])
+                        
+                        with col_a:
+                            st.markdown(f"**Team:** {player_data['team']}")
+                            st.markdown(f"**Position:** {player_data['position']}")
+                            st.markdown(f"**Status:** {player_data['injury_status']}")
+                            st.markdown(f"**Injury:** {player_data.get('body_part', 'N/A')}")
+                        
+                        with col_b:
+                            affected = player_data.get('affected_players', [])
+                            if affected:
+                                st.markdown(f"**Affected Players:**")
+                                for ap in affected:
+                                    st.markdown(f"- {ap}")
+                            else:
+                                st.markdown("**Affected Players:** None identified")
+                        
+                        # Full long comment
+                        long_comment = player_data.get('long_comment', '')
+                        if long_comment:
+                            st.markdown("---")
+                            st.markdown("**📝 Full ESPN Commentary:**")
+                            st.markdown(long_comment)
+                        else:
+                            short_comment = player_data.get('short_comment', '')
+                            if short_comment:
+                                st.markdown("---")
+                                st.markdown("**📝 ESPN Commentary:**")
+                                st.markdown(short_comment)
 
 
 # ===== Rate Limiting Functions =====
