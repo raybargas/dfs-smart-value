@@ -793,7 +793,9 @@ Smart Value =
             if position_weights:
                 position_weights = {pos: weights for pos, weights in position_weights.items() if weights}
             
-            df = calculate_smart_value(df, profile='balanced', custom_weights=custom_weights, position_weights=position_weights, sub_weights=sub_weights)
+            # Get current week for Vegas lines lookup
+            current_week = st.session_state.get('current_week', 5)
+            df = calculate_smart_value(df, profile='balanced', custom_weights=custom_weights, position_weights=position_weights, sub_weights=sub_weights, week=current_week)
             st.session_state['smart_value_data'] = df
             st.session_state['smart_value_calculated'] = True
     else:

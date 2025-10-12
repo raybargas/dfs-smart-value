@@ -296,29 +296,90 @@ def calculate_risk_score(df: pd.DataFrame, weight: float, sub_weights: Optional[
     return df
 
 
-def calculate_matchup_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
+def calculate_matchup_score(df: pd.DataFrame, weight: float, week: int = 5) -> pd.DataFrame:
     """
-    Calculate MATCHUP score component (game environment quality).
+    Calculate MATCHUP score component (game environment quality) using Vegas lines.
     
-    Currently uses projection as a proxy since Vegas game totals need to be joined.
-    Future enhancement: Join Vegas lines by matchup to get actual game totals.
+    Uses actual Vegas data (game totals, ITT) to identify ceiling games:
+    - High game totals (50+) = shootout environment
+    - High ITT = team expected to score
+    - Combined score identifies best game stacks
     
     Args:
-        df: Player DataFrame
-        weight: Weight for this component (default 0.05)
+        df: Player DataFrame with 'team' column
+        weight: Weight for this component (default 0.20)
+        week: NFL week number for Vegas lines lookup
     
     Returns:
         DataFrame with 'matchup_score' column
     """
-    # For now, use a small bonus for high projections (proxy for game script)
-    # This is a placeholder until we integrate actual Vegas game totals
-    matchup_norm = min_max_scale_by_position(df, 'projection')
-    df['matchup_score'] = matchup_norm * weight * 0.5  # Reduce weight since it's a proxy
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from src.database_models import VegasLine
     
-    return df
+    try:
+        # Load Vegas lines from database
+        engine = create_engine('sqlite:///dfs_optimizer.db')
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        
+        vegas_lines = session.query(VegasLine).filter_by(week=week).all()
+        session.close()
+        
+        if not vegas_lines:
+            # Fallback: use projection as proxy if no Vegas data
+            matchup_norm = min_max_scale_by_position(df, 'projection')
+            df['matchup_score'] = matchup_norm * weight * 0.5
+            df['game_total'] = 0
+            df['team_itt'] = 0
+            return df
+        
+        # Build Vegas lookup: team -> {game_total, itt}
+        vegas_map = {}
+        for line in vegas_lines:
+            vegas_map[line.home_team] = {
+                'game_total': line.total if line.total else 45.0,  # Default to 45
+                'itt': line.home_itt if line.home_itt else 22.5
+            }
+            vegas_map[line.away_team] = {
+                'game_total': line.total if line.total else 45.0,
+                'itt': line.away_itt if line.away_itt else 22.5
+            }
+        
+        # Map Vegas data to players
+        df['game_total'] = df['team'].map(lambda t: vegas_map.get(t, {}).get('game_total', 45.0))
+        df['team_itt'] = df['team'].map(lambda t: vegas_map.get(t, {}).get('itt', 22.5))
+        
+        # Calculate matchup score using both game total and ITT
+        # Game total indicates shootout potential (50+ = ceiling game)
+        # ITT indicates team-specific scoring expectation
+        
+        # Normalize game total (range typically 38-56)
+        game_total_norm = (df['game_total'] - 38) / (56 - 38)
+        game_total_norm = game_total_norm.clip(0, 1)
+        
+        # Normalize ITT by position (different scoring expectations)
+        itt_norm = min_max_scale_by_position(df, 'team_itt')
+        
+        # Combined matchup score: 60% game total, 40% ITT
+        # High total = ceiling game for both teams
+        # High ITT = this specific team expected to score
+        matchup_raw = (game_total_norm * 0.6) + (itt_norm * 0.4)
+        df['matchup_score'] = matchup_raw * weight
+        
+        return df
+        
+    except Exception as e:
+        # Fallback on error
+        print(f"Warning: Could not load Vegas data for matchup score: {e}")
+        matchup_norm = min_max_scale_by_position(df, 'projection')
+        df['matchup_score'] = matchup_norm * weight * 0.5
+        df['game_total'] = 0
+        df['team_itt'] = 0
+        return df
 
 
-def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_weights: Optional[Dict[str, float]] = None, position_weights: Optional[Dict[str, Dict[str, float]]] = None, sub_weights: Optional[Dict[str, float]] = None) -> pd.DataFrame:
+def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_weights: Optional[Dict[str, float]] = None, position_weights: Optional[Dict[str, Dict[str, float]]] = None, sub_weights: Optional[Dict[str, float]] = None, week: int = 5) -> pd.DataFrame:
     """
     Calculate Smart Value Score using multi-factor weighted formula with optional position-specific overrides and sub-weight customization.
     
@@ -333,6 +394,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
                          Example: {'QB': {'base': 0.50, 'opportunity': 0.20}, 'RB': {'opportunity': 0.45}}
         sub_weights: Optional dict of sub-factor weights for fine-grained control.
                     Example: {'opp_target_share': 0.60, 'opp_snap_pct': 0.30, ...}
+        week: NFL week number for Vegas lines lookup (default: 5)
     
     Returns:
         DataFrame with added columns:
@@ -376,7 +438,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
             pos_df = calculate_opportunity_score(pos_df, pos_weights['opportunity'], sub_weights)
             pos_df = calculate_trends_score(pos_df, pos_weights['trends'], sub_weights)
             pos_df = calculate_risk_score(pos_df, pos_weights['risk'], sub_weights)
-            pos_df = calculate_matchup_score(pos_df, pos_weights['matchup'])
+            pos_df = calculate_matchup_score(pos_df, pos_weights['matchup'], week)
             
             # Update the main dataframe for this position
             for col in ['base_score', 'opp_score', 'trends_score', 'risk_score', 'matchup_score']:
@@ -387,7 +449,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df = calculate_opportunity_score(df, weights['opportunity'], sub_weights)
         df = calculate_trends_score(df, weights['trends'], sub_weights)
         df = calculate_risk_score(df, weights['risk'], sub_weights)
-        df = calculate_matchup_score(df, weights['matchup'])
+        df = calculate_matchup_score(df, weights['matchup'], week)
     
     # Sum all components (raw score)
     df['smart_value_raw'] = (
@@ -436,7 +498,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
             f"⚠️ Risk Adjust: {risk_val:+.1f} ({int(weights['risk']*100)}% weight)\n"
             f"  └─ Regression, Variance, Consistency\n\n"
             f"🎯 Matchup: {match_val:+.1f} ({int(weights['matchup']*100)}% weight)\n"
-            f"  └─ Game environment quality\n"
+            f"  └─ Game Total: {row.get('game_total', 0):.1f}, ITT: {row.get('team_itt', 0):.1f}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"Final Score: {row['smart_value']:.1f}/100\n\n"
             f"💡 0=Worst, 100=Best in this player pool"
