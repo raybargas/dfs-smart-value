@@ -128,7 +128,16 @@ def fetch_injury_reports(week: int, api_key: Optional[str] = None) -> bool:
         )
         
         if injuries:
+            # Count by status for visibility
+            status_counts = {}
+            for inj in injuries:
+                status = inj.get('injury_status', 'Unknown')
+                status_counts[status] = status_counts.get(status, 0) + 1
+            
+            status_str = ", ".join([f"{s}: {c}" for s, c in sorted(status_counts.items())])
             st.success(f"✅ Fetched {len(injuries)} injury reports from MySportsFeeds")
+            st.caption(f"📊 Breakdown: {status_str}")
+            st.caption("ℹ️ Note: Players without current teams (free agents) are automatically filtered out")
             return True
         else:
             st.info("ℹ️ No injury reports found (this may be normal if no players are currently injured)")

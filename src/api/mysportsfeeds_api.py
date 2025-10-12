@@ -252,7 +252,12 @@ class MySportsFeedsClient(BaseAPIClient):
         # MySportsFeeds v2.1 injuries endpoint format
         # response_data contains:
         # - 'players': [...] - array of currently injured players with currentInjury field
-        # - 'lastUpdatedOn': timestamp of when data was last updated
+        # - 'lastUpdatedOn': timestamp of when data was last updated by MySportsFeeds
+        
+        # Log API data freshness
+        api_last_updated = response_data.get('lastUpdatedOn', 'Unknown')
+        if api_last_updated != 'Unknown':
+            self.logger.info(f"MySportsFeeds injury data last updated: {api_last_updated}")
         
         # Get players array from the response
         players = response_data.get('players', [])
@@ -261,6 +266,8 @@ class MySportsFeedsClient(BaseAPIClient):
             # Fallback: try old format for backward compatibility
             references = response_data.get('references', {})
             players = references.get('playerReferences', [])
+        
+        self.logger.info(f"Processing {len(players)} total players from API response")
         
         # Iterate through ALL players and extract those with current injuries
         for full_player in players:
@@ -281,6 +288,12 @@ class MySportsFeedsClient(BaseAPIClient):
                 # Team abbreviation
                 team_info = full_player.get('currentTeam')
                 team = team_info.get('abbreviation', '') if team_info else ''
+                
+                # SKIP players without a current team (free agents, practice squad, etc.)
+                # These players are not relevant for DFS purposes
+                if not team:
+                    self.logger.info(f"Skipping {player_name} - no current team (free agent/released)")
+                    continue
                 
                 # Position
                 position = full_player.get('primaryPosition', '')
@@ -320,6 +333,13 @@ class MySportsFeedsClient(BaseAPIClient):
             except Exception as e:
                 self.logger.error(f"Error parsing injury for player: {e}")
                 continue
+        
+        # Log filtering summary
+        total_processed = len(players)
+        injuries_with_teams = len(parsed_injuries)
+        filtered_out = total_processed - injuries_with_teams
+        
+        self.logger.info(f"Injury parsing complete: {injuries_with_teams} players with teams, {filtered_out} filtered (no team)")
         
         return parsed_injuries
     
