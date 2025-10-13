@@ -276,23 +276,15 @@ def _generate_single_lineup(
     # 8a. QB SAFETY FLOOR: QB must have Smart Value ≥ 50 OR ownership ≥ 8%
     # Prevents Sam Darnold (0.8 pts) type busts
     if qbs:
-        qb_safety_met = []
         for qb in qbs:
-            # Create binary indicator: 1 if this QB meets safety criteria
-            qb_meets_safety = pulp.LpVariable(f"qb_safety_{qb.name.replace(' ', '_')}", cat='Binary')
-            
             # QB meets safety if: (smart_value >= 50) OR (ownership >= 8%)
             smart_value = qb.smart_value if hasattr(qb, 'smart_value') and qb.smart_value else 0
             ownership = qb.ownership if qb.ownership else 0
             
-            if smart_value >= 50 or ownership >= 8:
-                # This QB is safe - if selected, must meet safety
-                prob += qb_meets_safety >= player_vars[qb.name], f"QB_Safety_Check_{qb.name.replace(' ', '_')}"
-                qb_safety_met.append(qb_meets_safety)
-        
-        # At least one QB must meet safety criteria (and we only select 1 QB total)
-        if qb_safety_met:
-            prob += pulp.lpSum(qb_safety_met) >= 1, "QB_Safety_Floor"
+            # BLOCK unsafe QBs (neither condition met)
+            if smart_value < 50 and ownership < 8:
+                # Force this QB to NOT be selected (set to 0)
+                prob += player_vars[qb.name] == 0, f"Block_Unsafe_QB_{qb.name.replace(' ', '_')}"
     
     # 8b. BALANCED OWNERSHIP: Max 3 players under 5% ownership
     # Prevents 6+ ultra-contrarian plays that all bust together
