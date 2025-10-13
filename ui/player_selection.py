@@ -312,12 +312,12 @@ def render_player_selection():
             # Initialize session state for custom weights if not exists
             if 'smart_value_custom_weights' not in st.session_state:
                 st.session_state['smart_value_custom_weights'] = {
-                    'base': 0.15,
-                    'opportunity': 0.25,
-                    'trends': 0.15,
-                    'risk': 0.10,
+                    'base': 0.10,
+                    'opportunity': 0.30,
+                    'trends': 0.10,
+                    'risk': 0.05,
                     'matchup': 0.20,
-                    'leverage': 0.15  # NEW from Week 6 analysis
+                    'leverage': 0.25  # TOURNAMENT-OPTIMIZED from Week 6 winners
                 }
             
             st.markdown("#### 🎯 Main Category Weights")
@@ -461,14 +461,14 @@ def render_player_selection():
                 st.rerun()
             
             # Reset to default button
-            if st.button("↩️ Reset to Balanced", use_container_width=True):
+            if st.button("↩️ Reset to Tournament (Week 6 Winner)", use_container_width=True):
                 st.session_state['smart_value_custom_weights'] = {
-                    'base': 0.15,
-                    'opportunity': 0.25,
-                    'trends': 0.15,
-                    'risk': 0.10,
+                    'base': 0.10,
+                    'opportunity': 0.30,
+                    'trends': 0.10,
+                    'risk': 0.05,
                     'matchup': 0.20,
-                    'leverage': 0.15  # NEW from Week 6 analysis
+                    'leverage': 0.25  # TOURNAMENT-OPTIMIZED from Week 6 winners
                 }
                 # Clear cached data
                 if 'smart_value_calculated' in st.session_state:
