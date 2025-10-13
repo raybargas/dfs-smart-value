@@ -597,34 +597,43 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
     # Use POSITION-SPECIFIC min-max scaling so each position has its own 0-100 range
     # This prevents QBs from being compressed by RB/WR dominance
     # Rationale: You're comparing QBs to QBs, RBs to RBs (different roster slots)
-    def scale_position_group(group):
-        group_min = group['smart_value_raw'].min()
-        group_max = group['smart_value_raw'].max()
-        
-        if group_max > group_min:
-            return ((group['smart_value_raw'] - group_min) / (group_max - group_min)) * 100
-        else:
-            # If all scores in position are the same, set to 50
-            return 50.0
     
     if 'position' in df.columns:
+        # Store position-specific min/max for tooltip calculation
+        df['_pos_min'] = df.groupby('position')['smart_value_raw'].transform('min')
+        df['_pos_max'] = df.groupby('position')['smart_value_raw'].transform('max')
+        
+        # Calculate position-specific 0-100 scores
+        def scale_position_group(group):
+            group_min = group['smart_value_raw'].min()
+            group_max = group['smart_value_raw'].max()
+            
+            if group_max > group_min:
+                return ((group['smart_value_raw'] - group_min) / (group_max - group_min)) * 100
+            else:
+                # If all scores in position are the same, set to 50
+                return 50.0
+        
         df['smart_value'] = df.groupby('position', group_keys=False).apply(scale_position_group).reset_index(drop=True)
     else:
         # Fallback: global scaling if no position column
-        smart_min = df['smart_value_raw'].min()
-        smart_max = df['smart_value_raw'].max()
+        df['_pos_min'] = df['smart_value_raw'].min()
+        df['_pos_max'] = df['smart_value_raw'].max()
         
-        if smart_max > smart_min:
-            df['smart_value'] = ((df['smart_value_raw'] - smart_min) / (smart_max - smart_min)) * 100
+        if df['_pos_max'].iloc[0] > df['_pos_min'].iloc[0]:
+            df['smart_value'] = ((df['smart_value_raw'] - df['_pos_min']) / (df['_pos_max'] - df['_pos_min'])) * 100
         else:
             df['smart_value'] = 50.0
     
     # Build tooltip breakdown
     def build_tooltip(row):
         # Show component contributions as percentages of the final 0-100 score
-        # Scale the raw component scores proportionally
-        if smart_max > smart_min:
-            scale_factor = 100 / (smart_max - smart_min)
+        # Scale the raw component scores proportionally using position-specific min/max
+        pos_min = row['_pos_min']
+        pos_max = row['_pos_max']
+        
+        if pos_max > pos_min:
+            scale_factor = 100 / (pos_max - pos_min)
             base_val = row['base_score'] * scale_factor
             opp_val = row['opp_score'] * scale_factor
             trend_val = row['trends_score'] * scale_factor
@@ -670,6 +679,9 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         return tooltip
     
     df['smart_value_tooltip'] = df.apply(build_tooltip, axis=1)
+    
+    # Clean up helper columns
+    df = df.drop(columns=['_pos_min', '_pos_max'], errors='ignore')
     
     return df
 
