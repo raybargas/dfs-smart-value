@@ -258,17 +258,84 @@ def _generate_single_lineup(
                     if p.team in game_key and hasattr(p, 'opponent') and p.opponent in game_key
                 ]
                 
-                # If indicator = 1, then we must select 2-3 players from this game
-                # Constraint: 2 * indicator <= sum(players) <= 3 * indicator
-                prob += pulp.lpSum([player_vars[p.name] for p in game_players]) >= 2 * game_indicators[game_key], \
+                # If indicator = 1, then we must select 3+ players from this game (STRENGTHENED)
+                # Was 2+, now 3+ for tighter correlation (addresses Sam Darnold lineup issue)
+                prob += pulp.lpSum([player_vars[p.name] for p in game_players]) >= 3 * game_indicators[game_key], \
                        f"GameStack_Min_{game_key[0]}_{game_key[1]}"
                 
-                # Soft max (encourage 2-3, but allow more if optimal)
+                # Soft max (encourage 3-4, but allow more if optimal)
                 # No hard max constraint - let optimizer decide
             
             # Force at least ONE high-total game to be stacked
             prob += pulp.lpSum([game_indicators[game_key] for game_key in high_total_games]) >= 1, \
                    "At_Least_One_Game_Stack"
+    
+    # Constraint 8: INTELLIGENT DEFAULTS (Auto-safety without UI toggles)
+    # Based on Week 6 analysis: prevent all-contrarian lottery tickets
+    
+    # 8a. QB SAFETY FLOOR: QB must have Smart Value ≥ 50 OR ownership ≥ 8%
+    # Prevents Sam Darnold (0.8 pts) type busts
+    if qbs:
+        qb_safety_met = []
+        for qb in qbs:
+            # Create binary indicator: 1 if this QB meets safety criteria
+            qb_meets_safety = pulp.LpVariable(f"qb_safety_{qb.name.replace(' ', '_')}", cat='Binary')
+            
+            # QB meets safety if: (smart_value >= 50) OR (ownership >= 8%)
+            smart_value = qb.smart_value if hasattr(qb, 'smart_value') and qb.smart_value else 0
+            ownership = qb.ownership if qb.ownership else 0
+            
+            if smart_value >= 50 or ownership >= 8:
+                # This QB is safe - if selected, must meet safety
+                prob += qb_meets_safety >= player_vars[qb.name], f"QB_Safety_Check_{qb.name.replace(' ', '_')}"
+                qb_safety_met.append(qb_meets_safety)
+        
+        # At least one QB must meet safety criteria (and we only select 1 QB total)
+        if qb_safety_met:
+            prob += pulp.lpSum(qb_safety_met) >= 1, "QB_Safety_Floor"
+    
+    # 8b. BALANCED OWNERSHIP: Max 3 players under 5% ownership
+    # Prevents 6+ ultra-contrarian plays that all bust together
+    if 'ownership' in player_pool_df.columns:
+        low_own_players = [
+            p for p in players 
+            if p.ownership is not None and p.ownership < 5.0
+        ]
+        if low_own_players:
+            prob += pulp.lpSum([player_vars[p.name] for p in low_own_players]) <= 3, \
+                   "Max_3_Ultra_Contrarian"
+    
+    # 8c. CORE POSITION ANCHOR: At least 1 RB with ownership 15-30% AND Smart Value 70+
+    # Ensures one reliable RB to build around (not all dart throws)
+    anchor_rbs = [
+        p for p in rbs
+        if (p.ownership is not None and 15 <= p.ownership <= 30) and
+           (hasattr(p, 'smart_value') and p.smart_value and p.smart_value >= 70)
+    ]
+    if anchor_rbs:
+        prob += pulp.lpSum([player_vars[p.name] for p in anchor_rbs]) >= 1, \
+               "At_Least_1_Anchor_RB"
+    
+    # 8d. LINEUP COHESION BONUS: Add small objective bonus for same-game correlation
+    # This is a soft constraint via objective modification (not hard constraint)
+    # Award +0.5 points for each pair of players from the same game
+    if 'opponent' in player_pool_df.columns and optimization_objective == 'smart_value':
+        cohesion_bonus = 0
+        for i, p1 in enumerate(players):
+            if hasattr(p1, 'opponent') and p1.opponent:
+                for p2 in players[i+1:]:
+                    if hasattr(p2, 'opponent') and p2.opponent:
+                        # Check if from same game (same team OR opponents)
+                        if (p1.team == p2.team) or \
+                           (p1.team == p2.opponent) or \
+                           (p1.opponent == p2.team):
+                            # Add small bonus for selecting both
+                            cohesion_bonus += player_vars[p1.name] * player_vars[p2.name] * 0.5
+        
+        # This is non-linear, so we can't add directly to objective
+        # Instead, we'll approximate with a linear bonus based on team concentration
+        # (PuLP requires linear objectives)
+        # Skip for now - the game stack constraint handles this
     
     # Solve the LP problem using CBC solver (suppress output)
     status = prob.solve(pulp.PULP_CBC_CMD(msg=0))
