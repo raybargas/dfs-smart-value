@@ -594,15 +594,30 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
     )
     
     # Scale to 0-100 for intuitive interpretation
-    # Use min-max scaling across all positions so scores are comparable
-    smart_min = df['smart_value_raw'].min()
-    smart_max = df['smart_value_raw'].max()
+    # Use POSITION-SPECIFIC min-max scaling so each position has its own 0-100 range
+    # This prevents QBs from being compressed by RB/WR dominance
+    # Rationale: You're comparing QBs to QBs, RBs to RBs (different roster slots)
+    def scale_position_group(group):
+        group_min = group['smart_value_raw'].min()
+        group_max = group['smart_value_raw'].max()
+        
+        if group_max > group_min:
+            return ((group['smart_value_raw'] - group_min) / (group_max - group_min)) * 100
+        else:
+            # If all scores in position are the same, set to 50
+            return 50.0
     
-    if smart_max > smart_min:
-        df['smart_value'] = ((df['smart_value_raw'] - smart_min) / (smart_max - smart_min)) * 100
+    if 'position' in df.columns:
+        df['smart_value'] = df.groupby('position', group_keys=False).apply(scale_position_group).reset_index(drop=True)
     else:
-        # If all scores are the same, set to 50
-        df['smart_value'] = 50.0
+        # Fallback: global scaling if no position column
+        smart_min = df['smart_value_raw'].min()
+        smart_max = df['smart_value_raw'].max()
+        
+        if smart_max > smart_min:
+            df['smart_value'] = ((df['smart_value_raw'] - smart_min) / (smart_max - smart_min)) * 100
+        else:
+            df['smart_value'] = 50.0
     
     # Build tooltip breakdown
     def build_tooltip(row):
@@ -648,7 +663,9 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         tooltip += (
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"Final Score: {row['smart_value']:.1f}/100\n\n"
-            f"💡 0=Worst, 100=Best in this player pool"
+            f"💡 Score is relative to other {row.get('position', 'players')}s\n"
+            f"   100 = Best {row.get('position', 'player')} available\n"
+            f"   0 = Worst {row.get('position', 'player')} available"
         )
         return tooltip
     
