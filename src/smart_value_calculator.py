@@ -436,13 +436,17 @@ def calculate_leverage_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     
     df['leverage_score'] = leverage_raw * weight
     
-    # Apply TE position penalty (30% reduction)
+    # Apply TE position penalty (50% reduction)
     # TEs are TD-dependent, low-volume, and game-script-sensitive
     # They need a higher discount than RB/WR to reflect true reliability
-    # Based on Week 6 analysis: TE leverage wins are 0.5x less frequent than RB/WR
+    # Based on Week 6 + double TE analysis:
+    # - TE leverage wins are 0.5x less frequent than RB/WR
+    # - 9/11 lineups had double TE (massive over-leverage)
+    # - Top 100 Week 6: <10% had double TE
+    # - Increased penalty allows legitimate TE2 plays while preventing over-use
     if 'position' in df.columns:
         te_mask = df['position'] == 'TE'
-        df.loc[te_mask, 'leverage_score'] *= 0.70  # 30% penalty
+        df.loc[te_mask, 'leverage_score'] *= 0.50  # 50% penalty (was 30%)
     
     return df
 
