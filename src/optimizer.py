@@ -286,16 +286,27 @@ def _generate_single_lineup(
                 # Force this QB to NOT be selected (set to 0)
                 prob += player_vars[qb.name] == 0, f"Block_Unsafe_QB_{qb.name.replace(' ', '_')}"
     
-    # 8b. BALANCED OWNERSHIP: Max 3 players under 5% ownership
-    # Prevents 6+ ultra-contrarian plays that all bust together
+    # 8b. BALANCED OWNERSHIP: Max 2 players under 8% ownership (STRICTER)
+    # Week 6 analysis: Winners had 1-2 leverage plays, not 6
+    # Prevents too many ultra-contrarian lottery tickets
     if 'ownership' in player_pool_df.columns:
         low_own_players = [
             p for p in players 
-            if p.ownership is not None and p.ownership < 5.0
+            if p.ownership is not None and p.ownership < 8.0
         ]
         if low_own_players:
-            prob += pulp.lpSum([player_vars[p.name] for p in low_own_players]) <= 3, \
-                   "Max_3_Ultra_Contrarian"
+            prob += pulp.lpSum([player_vars[p.name] for p in low_own_players]) <= 2, \
+                   "Max_2_Low_Owned"
+        
+        # NEW: Require at least 2 chalk players (15%+ ownership)
+        # Ensures stable base - Week 6 winners had 2-3 chalk anchors
+        chalk_players = [
+            p for p in players
+            if p.ownership is not None and p.ownership >= 15.0
+        ]
+        if chalk_players:
+            prob += pulp.lpSum([player_vars[p.name] for p in chalk_players]) >= 2, \
+                   "At_Least_2_Chalk_Anchors"
     
     # 8c. CORE POSITION ANCHOR: At least 1 RB with ownership 15-30% AND Smart Value 70+
     # Ensures one reliable RB to build around (not all dart throws)
