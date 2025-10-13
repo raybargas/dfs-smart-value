@@ -316,26 +316,12 @@ def _generate_single_lineup(
         prob += pulp.lpSum([player_vars[p.name] for p in anchor_rbs]) >= 1, \
                "At_Least_1_Anchor_RB"
     
-    # 8d. LINEUP COHESION BONUS: Add small objective bonus for same-game correlation
-    # This is a soft constraint via objective modification (not hard constraint)
-    # Award +0.5 points for each pair of players from the same game
-    if 'opponent' in player_pool_df.columns and optimization_objective == 'smart_value':
-        cohesion_bonus = 0
-        for i, p1 in enumerate(players):
-            if hasattr(p1, 'opponent') and p1.opponent:
-                for p2 in players[i+1:]:
-                    if hasattr(p2, 'opponent') and p2.opponent:
-                        # Check if from same game (same team OR opponents)
-                        if (p1.team == p2.team) or \
-                           (p1.team == p2.opponent) or \
-                           (p1.opponent == p2.team):
-                            # Add small bonus for selecting both
-                            cohesion_bonus += player_vars[p1.name] * player_vars[p2.name] * 0.5
-        
-        # This is non-linear, so we can't add directly to objective
-        # Instead, we'll approximate with a linear bonus based on team concentration
-        # (PuLP requires linear objectives)
-        # Skip for now - the game stack constraint handles this
+    # 8d. LINEUP COHESION: Already handled by game stack constraint (#3)
+    # Note: Cannot add soft cohesion bonus to objective because multiplying
+    # two binary variables (player_vars[p1] * player_vars[p2]) creates non-linear
+    # expressions which PuLP cannot handle (requires quadratic programming).
+    # The strengthened game stack constraint (3+ from same game) enforces
+    # cohesion sufficiently.
     
     # Solve the LP problem using CBC solver (suppress output)
     status = prob.solve(pulp.PULP_CBC_CMD(msg=0))
