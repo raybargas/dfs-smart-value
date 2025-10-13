@@ -1067,6 +1067,9 @@ Smart Value =
             'Reg_Tooltip': row['regression_tooltip'] if 'regression_tooltip' in row else '',
             'Team': row['team'],
             'Opp': row['opponent'] if 'opponent' in row and pd.notna(row['opponent']) else "-",
+            # Vegas data
+            'Game Total': row.get('game_total', 0),
+            'ITT': row.get('team_itt', 0),
             # Season stats (5-week data)
             'Trend': format_trend_display(row.get('season_trend', 0)),
             'Cons': format_consistency_display(row.get('season_cons', 0)),
@@ -1232,6 +1235,27 @@ Smart Value =
                         menuTabs=menu_tabs,
                         width=90,
                         headerTooltip="OPPONENT - The team this player is facing this week. '@' symbol = away game (e.g., '@BUF' = playing at Buffalo). No '@' = home game. Use this to identify favorable/unfavorable matchups, stack game environments, and avoid tough defensive matchups.")
+    
+    # === VEGAS DATA COLUMNS ===
+    gb.configure_column("Game Total", 
+                        header_name="Total",
+                        type=["numericColumn"],
+                        valueFormatter="value ? value.toFixed(1) : '-'",
+                        filter="agNumberColumnFilter",
+                        filterParams=filter_config,
+                        menuTabs=menu_tabs,
+                        width=85,
+                        headerTooltip="VEGAS GAME TOTAL - Combined projected points for both teams (e.g., 50.5 = high-scoring game). 50+ = Shootout (target these for ceiling). 45-50 = Above average. 40-45 = Average. <40 = Low-scoring (avoid for GPP). Strategy: Game total is the #1 predictor of fantasy scoring. Stack players from high-total games for max ceiling.")
+    
+    gb.configure_column("ITT", 
+                        header_name="ITT",
+                        type=["numericColumn"],
+                        valueFormatter="value ? value.toFixed(1) : '-'",
+                        filter="agNumberColumnFilter",
+                        filterParams=filter_config,
+                        menuTabs=menu_tabs,
+                        width=75,
+                        headerTooltip="IMPLIED TEAM TOTAL - Vegas projected points for THIS team only (e.g., 27.5 = expected to score 27.5 pts). 28+ = Elite offensive environment. 24-28 = Good. 20-24 = Average. <20 = Avoid. Strategy: ITT identifies which SIDE of a high total to target. A 50-point total could be 28-22 (target the 28 side) or 25-25 (both sides viable).")
     
     # === SEASON STATS COLUMNS (5-Week Analysis) ===
     gb.configure_column("Trend", 

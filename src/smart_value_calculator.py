@@ -413,10 +413,10 @@ def calculate_leverage_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     ceiling_norm = min_max_scale_by_position(df, 'ceiling_ratio')
     
     # Calculate ownership discount (lower own = higher score)
-    # Use log scale to smooth the discount (1% own = 10x boost, 30% own = 0.5x)
+    # Reduced aggression: 3x cap instead of 10x to prevent ultra-contrarian TE dominance
     df['ownership_pct'] = df['ownership'].clip(lower=1.0)  # Min 1% to avoid divide by zero
-    df['own_discount'] = 100 / df['ownership_pct']  # Linear discount
-    df['own_discount'] = df['own_discount'].clip(upper=10.0)  # Cap at 10x for sub-1% own
+    df['own_discount'] = 30 / df['ownership_pct']  # Reduced from 100 → 30
+    df['own_discount'] = df['own_discount'].clip(upper=3.0)  # Cap at 3x (was 10x)
     
     # Normalize ownership discount
     own_norm = (df['own_discount'] - df['own_discount'].min()) / (df['own_discount'].max() - df['own_discount'].min() + 0.001)
@@ -434,6 +434,14 @@ def calculate_leverage_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     leverage_raw = (ceiling_norm * 0.4) + (own_norm * 0.4) + (game_total_norm * 0.2)
     
     df['leverage_score'] = leverage_raw * weight
+    
+    # Apply TE position penalty (30% reduction)
+    # TEs are TD-dependent, low-volume, and game-script-sensitive
+    # They need a higher discount than RB/WR to reflect true reliability
+    # Based on Week 6 analysis: TE leverage wins are 0.5x less frequent than RB/WR
+    if 'position' in df.columns:
+        te_mask = df['position'] == 'TE'
+        df.loc[te_mask, 'leverage_score'] *= 0.70  # 30% penalty
     
     return df
 
