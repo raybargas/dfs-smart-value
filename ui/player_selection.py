@@ -312,11 +312,12 @@ def render_player_selection():
             # Initialize session state for custom weights if not exists
             if 'smart_value_custom_weights' not in st.session_state:
                 st.session_state['smart_value_custom_weights'] = {
-                    'base': 0.25,
+                    'base': 0.15,
                     'opportunity': 0.25,
-                    'trends': 0.20,
-                    'risk': 0.15,
-                    'matchup': 0.15
+                    'trends': 0.15,
+                    'risk': 0.10,
+                    'matchup': 0.20,
+                    'leverage': 0.15  # NEW from Week 6 analysis
                 }
             
             st.markdown("#### 🎯 Main Category Weights")
@@ -392,8 +393,22 @@ def render_player_selection():
             with col2:
                 st.metric("", f"{matchup_weight*100:.0f}%", label_visibility="collapsed")
             
+            # Leverage (NEW from Week 6 analysis)
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                leverage_weight = st.slider(
+                    "💎 Leverage (NEW!)",
+                    min_value=0.0, max_value=1.0,
+                    value=st.session_state['smart_value_custom_weights'].get('leverage', 0.15),
+                    step=0.05,
+                    key='leverage_weight_slider',
+                    help="🔥 Ceiling potential + low ownership = tournament gold! Based on Week 6 winners."
+                )
+            with col2:
+                st.metric("", f"{leverage_weight*100:.0f}%", label_visibility="collapsed")
+            
             # Calculate total and show status
-            total = base_weight + opp_weight + trends_weight + risk_weight + matchup_weight
+            total = base_weight + opp_weight + trends_weight + risk_weight + matchup_weight + leverage_weight
             
             # Auto-normalize weights if they don't sum to 100%
             needs_normalization = abs(total - 1.0) > 0.001
@@ -408,6 +423,7 @@ def render_player_selection():
                     st.caption(f"• Trends: {trends_weight*100:.1f}% → {(trends_weight/total)*100:.1f}%")
                     st.caption(f"• Risk: {risk_weight*100:.1f}% → {(risk_weight/total)*100:.1f}%")
                     st.caption(f"• Matchup: {matchup_weight*100:.1f}% → {(matchup_weight/total)*100:.1f}%")
+                    st.caption(f"• 💎 Leverage: {leverage_weight*100:.1f}% → {(leverage_weight/total)*100:.1f}%")
             else:
                 st.success(f"✅ Weights sum to **{total*100:.0f}%**")
             
@@ -419,7 +435,8 @@ def render_player_selection():
                     'opportunity': opp_weight / total,
                     'trends': trends_weight / total,
                     'risk': risk_weight / total,
-                    'matchup': matchup_weight / total
+                    'matchup': matchup_weight / total,
+                    'leverage': leverage_weight / total
                 }
             else:
                 new_weights = {
@@ -427,7 +444,8 @@ def render_player_selection():
                     'opportunity': opp_weight,
                     'trends': trends_weight,
                     'risk': risk_weight,
-                    'matchup': matchup_weight
+                    'matchup': matchup_weight,
+                    'leverage': leverage_weight
                 }
             
             # Apply & Recalculate button
@@ -445,11 +463,12 @@ def render_player_selection():
             # Reset to default button
             if st.button("↩️ Reset to Balanced", use_container_width=True):
                 st.session_state['smart_value_custom_weights'] = {
-                    'base': 0.25,
+                    'base': 0.15,
                     'opportunity': 0.25,
-                    'trends': 0.20,
-                    'risk': 0.15,
-                    'matchup': 0.15
+                    'trends': 0.15,
+                    'risk': 0.10,
+                    'matchup': 0.20,
+                    'leverage': 0.15  # NEW from Week 6 analysis
                 }
                 # Clear cached data
                 if 'smart_value_calculated' in st.session_state:
@@ -910,7 +929,7 @@ Smart Value =
                 st.success(f"✅ Selected {selected_count} players with Smart Value ≥ {smart_threshold}")
                 
                 # CRITICAL: Rerun to update AgGrid with new selections
-                st.rerun()
+            st.rerun()
             else:
                 st.warning("⚠️ Please move the slider above 0 to select players")
     
@@ -1463,10 +1482,10 @@ Smart Value =
         # Apply same validation as top navigation button
         if is_valid:
             if st.button("▶️ Continue to Optimization", type="primary", use_container_width=True, key="continue_btn2"):
-                # Store selections for next page
-                st.session_state['player_selections'] = selections
-                st.session_state['page'] = 'optimization'
-                st.rerun()
+        # Store selections for next page
+        st.session_state['player_selections'] = selections
+        st.session_state['page'] = 'optimization'
+        st.rerun()
         else:
             # Disabled button with tooltip
             st.button(

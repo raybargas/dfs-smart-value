@@ -24,25 +24,28 @@ from typing import Dict, Optional
 # Tournament strategy: embrace variance, prioritize ceiling, game environment over consistency
 WEIGHT_PROFILES = {
     'balanced': {
-        'base': 0.20,          # Ceiling matters more than pure value
-        'opportunity': 0.30,   # Volume/usage = ceiling potential
-        'trends': 0.20,        # Momentum and role trends
+        'base': 0.15,          # Reduced to make room for leverage
+        'opportunity': 0.25,   # Volume/usage = ceiling potential
+        'trends': 0.15,        # Momentum and role trends
         'risk': 0.10,          # Moderate variance consideration
-        'matchup': 0.20        # Game environment matters
+        'matchup': 0.20,       # Game environment matters
+        'leverage': 0.15       # NEW: Ceiling + low ownership = GPP gold
     },
     'cash': {
         'base': 0.45,          # Safety first in cash games
         'opportunity': 0.25,
         'trends': 0.10,
         'risk': 0.15,
-        'matchup': 0.05
+        'matchup': 0.05,
+        'leverage': 0.00       # No leverage in cash - want consistency
     },
     'gpp': {
-        'base': 0.20,          # Tournament optimized (same as balanced now)
-        'opportunity': 0.30,   # High volume = ceiling outcomes
-        'trends': 0.20,        # Momentum and trends
-        'risk': 0.10,          # Moderate variance consideration
-        'matchup': 0.20        # Game environment
+        'base': 0.10,          # Reduced - ceiling > value in GPP
+        'opportunity': 0.25,   # High volume = ceiling outcomes
+        'trends': 0.15,        # Momentum and trends
+        'risk': 0.05,          # Minimal - embrace variance
+        'matchup': 0.20,       # Game environment
+        'leverage': 0.25       # MAX leverage for pure GPP
     }
 }
 
@@ -379,17 +382,129 @@ def calculate_matchup_score(df: pd.DataFrame, weight: float, week: int = 5) -> p
         return df
 
 
+def calculate_leverage_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
+    """
+    Calculate LEVERAGE score component (ceiling + low ownership = tournament gold).
+    
+    Based on Week 6 winning analysis:
+    - De'Von Achane: 34.0 pts at 4.7% own = massive leverage
+    - George Pickens: 34.8 pts at 10.6% own = ceiling at reasonable own
+    - Puka Nacua: 4.8 pts at 30.8% own = chalk bust
+    
+    Formula: (Ceiling Ratio) × (Ownership Discount) × (Matchup Quality)
+    
+    Where:
+    - Ceiling Ratio = season_ceiling / projection (upside factor)
+    - Ownership Discount = 1 / (ownership% / 100) (contrarian boost)
+    - Matchup Quality = game_total normalization (ceiling game indicator)
+    
+    Args:
+        df: Player DataFrame with season_ceiling, projection, ownership, game_total
+        weight: Weight for this component (default 0.15 balanced, 0.25 GPP)
+    
+    Returns:
+        DataFrame with 'leverage_score' column
+    """
+    # Calculate ceiling ratio (how much upside vs projection)
+    df['ceiling_ratio'] = df['season_ceiling'] / df['projection'].replace(0, 1)
+    df['ceiling_ratio'] = df['ceiling_ratio'].clip(upper=3.0)  # Cap at 3x to avoid outliers
+    
+    # Normalize ceiling ratio by position (different expectations)
+    ceiling_norm = min_max_scale_by_position(df, 'ceiling_ratio')
+    
+    # Calculate ownership discount (lower own = higher score)
+    # Use log scale to smooth the discount (1% own = 10x boost, 30% own = 0.5x)
+    df['ownership_pct'] = df['ownership'].clip(lower=1.0)  # Min 1% to avoid divide by zero
+    df['own_discount'] = 100 / df['ownership_pct']  # Linear discount
+    df['own_discount'] = df['own_discount'].clip(upper=10.0)  # Cap at 10x for sub-1% own
+    
+    # Normalize ownership discount
+    own_norm = (df['own_discount'] - df['own_discount'].min()) / (df['own_discount'].max() - df['own_discount'].min() + 0.001)
+    
+    # Use matchup quality (game total) as multiplier
+    # High game totals (50+) indicate ceiling environments
+    if 'game_total' in df.columns:
+        game_total_norm = (df['game_total'] - 38) / (56 - 38)
+        game_total_norm = game_total_norm.clip(0, 1)
+    else:
+        game_total_norm = 0.5  # Neutral if no data
+    
+    # Combined leverage score
+    # 40% ceiling ratio, 40% ownership discount, 20% game total
+    leverage_raw = (ceiling_norm * 0.4) + (own_norm * 0.4) + (game_total_norm * 0.2)
+    
+    df['leverage_score'] = leverage_raw * weight
+    
+    return df
+
+
+def calculate_anti_chalk_penalty(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply ANTI-CHALK penalty to high-owned players in bad matchups.
+    
+    Based on Week 6 busts:
+    - Puka Nacua: 30.8% own, 4.8 pts in low-scoring game = BUST
+    - Emeka Egbuka: 26.1% own, 4.4 pts = BUST
+    - Javonte Williams: 25.7% own, 8.4 pts in bad offense = BUST
+    
+    Criteria for chalk penalty:
+    - Ownership > 25%
+    - Game total < 45 (low-scoring environment)
+    
+    Penalty: -15 to -20 Smart Value points
+    
+    Args:
+        df: Player DataFrame with ownership, game_total columns
+    
+    Returns:
+        DataFrame with 'chalk_penalty' column (negative values)
+    """
+    df['chalk_penalty'] = 0.0
+    
+    if 'ownership' not in df.columns or 'game_total' not in df.columns:
+        return df
+    
+    # Identify chalk players in bad spots
+    high_own = df['ownership'] > 25
+    bad_matchup = df['game_total'] < 45
+    
+    chalk_trap = high_own & bad_matchup
+    
+    # Progressive penalty based on ownership level
+    # 25-30% own = -15 pts, 30-40% own = -20 pts, 40%+ own = -25 pts
+    penalty_amounts = []
+    for idx, row in df.iterrows():
+        if chalk_trap[idx]:
+            own = row['ownership']
+            if own >= 40:
+                penalty_amounts.append(-25)
+            elif own >= 30:
+                penalty_amounts.append(-20)
+            else:
+                penalty_amounts.append(-15)
+        else:
+            penalty_amounts.append(0)
+    
+    df['chalk_penalty'] = penalty_amounts
+    
+    return df
+
+
 def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_weights: Optional[Dict[str, float]] = None, position_weights: Optional[Dict[str, Dict[str, float]]] = None, sub_weights: Optional[Dict[str, float]] = None, week: int = 5) -> pd.DataFrame:
     """
     Calculate Smart Value Score using multi-factor weighted formula with optional position-specific overrides and sub-weight customization.
     
-    Formula: Smart Value = BASE + OPPORTUNITY + TRENDS + RISK + MATCHUP
+    Formula: Smart Value = BASE + OPPORTUNITY + TRENDS + RISK + MATCHUP + LEVERAGE - CHALK_PENALTY
+    
+    NEW (Week 6 Analysis):
+    - LEVERAGE: Rewards ceiling potential + low ownership (De'Von Achane effect)
+    - CHALK_PENALTY: Punishes high ownership in bad matchups (Puka Nacua trap)
     
     Args:
         df: Player DataFrame with required columns (projection, salary, position, etc.)
         profile: Weight profile to use ('balanced', 'cash', 'gpp', 'custom')
         custom_weights: Optional dict of custom weights. If provided, overrides profile.
-                       Should contain: 'base', 'opportunity', 'trends', 'risk', 'matchup'
+                       Should contain: 'base', 'opportunity', 'trends', 'risk', 'matchup', 'leverage'
         position_weights: Optional dict mapping position to weight overrides.
                          Example: {'QB': {'base': 0.50, 'opportunity': 0.20}, 'RB': {'opportunity': 0.45}}
         sub_weights: Optional dict of sub-factor weights for fine-grained control.
@@ -398,8 +513,10 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
     
     Returns:
         DataFrame with added columns:
-        - smart_value: Final score
+        - smart_value: Final score (0-100 scale)
         - smart_value_tooltip: Breakdown explanation
+        - leverage_score: Tournament leverage component
+        - chalk_penalty: Anti-chalk adjustment
         - Individual component scores for debugging
     """
     # Use custom weights if provided, otherwise use profile
@@ -421,6 +538,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df['trends_score'] = 0.0
         df['risk_score'] = 0.0
         df['matchup_score'] = 0.0
+        df['leverage_score'] = 0.0
         
         for position in df['position'].unique():
             pos_mask = df['position'] == position
@@ -439,9 +557,10 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
             pos_df = calculate_trends_score(pos_df, pos_weights['trends'], sub_weights)
             pos_df = calculate_risk_score(pos_df, pos_weights['risk'], sub_weights)
             pos_df = calculate_matchup_score(pos_df, pos_weights['matchup'], week)
+            pos_df = calculate_leverage_score(pos_df, pos_weights.get('leverage', 0.15))
             
             # Update the main dataframe for this position
-            for col in ['base_score', 'opp_score', 'trends_score', 'risk_score', 'matchup_score']:
+            for col in ['base_score', 'opp_score', 'trends_score', 'risk_score', 'matchup_score', 'leverage_score']:
                 df.loc[pos_mask, col] = pos_df[col]
     else:
         # Calculate uniformly across all positions
@@ -450,6 +569,10 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df = calculate_trends_score(df, weights['trends'], sub_weights)
         df = calculate_risk_score(df, weights['risk'], sub_weights)
         df = calculate_matchup_score(df, weights['matchup'], week)
+        df = calculate_leverage_score(df, weights.get('leverage', 0.15))
+    
+    # Apply anti-chalk penalty (independent of position)
+    df = calculate_anti_chalk_penalty(df)
     
     # Sum all components (raw score)
     df['smart_value_raw'] = (
@@ -457,7 +580,9 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df['opp_score'] +
         df['trends_score'] +
         df['risk_score'] +
-        df['matchup_score']
+        df['matchup_score'] +
+        df['leverage_score'] +
+        df['chalk_penalty']  # Negative values reduce score
     )
     
     # Scale to 0-100 for intuitive interpretation
@@ -482,8 +607,10 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
             trend_val = row['trends_score'] * scale_factor
             risk_val = row['risk_score'] * scale_factor
             match_val = row['matchup_score'] * scale_factor
+            leverage_val = row['leverage_score'] * scale_factor
+            chalk_penalty_val = row['chalk_penalty'] * scale_factor
         else:
-            base_val = opp_val = trend_val = risk_val = match_val = 0
+            base_val = opp_val = trend_val = risk_val = match_val = leverage_val = chalk_penalty_val = 0
         
         tooltip = (
             f"Smart Value: {row['smart_value']:.1f}/100\n"
@@ -498,7 +625,19 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
             f"⚠️ Risk Adjust: {risk_val:+.1f} ({int(weights['risk']*100)}% weight)\n"
             f"  └─ Regression, Variance, Consistency\n\n"
             f"🎯 Matchup: {match_val:+.1f} ({int(weights['matchup']*100)}% weight)\n"
-            f"  └─ Game Total: {row.get('game_total', 0):.1f}, ITT: {row.get('team_itt', 0):.1f}\n"
+            f"  └─ Game Total: {row.get('game_total', 0):.1f}, ITT: {row.get('team_itt', 0):.1f}\n\n"
+            f"💎 Leverage: {leverage_val:+.1f} ({int(weights.get('leverage', 0)*100)}% weight)\n"
+            f"  └─ Ceiling: {row.get('season_ceiling', 0):.1f}, Own: {row.get('ownership', 0):.1f}%\n"
+        )
+        
+        # Add chalk penalty if applicable
+        if chalk_penalty_val < 0:
+            tooltip += (
+                f"\n❌ Chalk Penalty: {chalk_penalty_val:.1f}\n"
+                f"  └─ High own ({row.get('ownership', 0):.1f}%) + Bad matchup\n"
+            )
+        
+        tooltip += (
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"Final Score: {row['smart_value']:.1f}/100\n\n"
             f"💡 0=Worst, 100=Best in this player pool"

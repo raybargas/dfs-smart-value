@@ -226,6 +226,50 @@ def _generate_single_lineup(
                     player_vars[p.name] for p in same_team_pass_catchers
                 ]) >= player_vars[qb.name], f"Stack_QB_{qb.name.replace(' ', '_')}"
     
+    # Constraint 7: GAME STACK (NEW from Week 6 analysis)
+    # Force 2-3 players from at least one high-scoring game (50+ total)
+    # This mimics the winning pattern: Josh Jacobs + Jaxon Smith-Njigba (64% of top 100)
+    if stacking_enabled and 'opponent' in player_pool_df.columns:
+        # Identify games and their totals
+        game_totals = {}
+        for p in players:
+            if hasattr(p, 'opponent') and p.opponent and hasattr(p, 'game_total'):
+                # Create game key (sorted team pair to avoid duplicates)
+                game_key = tuple(sorted([p.team, p.opponent]))
+                if game_key not in game_totals:
+                    game_totals[game_key] = p.game_total if hasattr(p, 'game_total') else 0
+        
+        # Identify high-scoring games (50+ total = ceiling environment)
+        high_total_games = {k: v for k, v in game_totals.items() if v >= 48}
+        
+        if high_total_games:
+            # For at least ONE high-total game, we must have 2-3 players
+            # Create binary indicator for each game
+            game_indicators = {}
+            for game_key in high_total_games:
+                game_indicators[game_key] = pulp.LpVariable(
+                    f"game_stack_{game_key[0]}_{game_key[1]}", 
+                    cat='Binary'
+                )
+                
+                # Get all players from this game
+                game_players = [
+                    p for p in players 
+                    if p.team in game_key and hasattr(p, 'opponent') and p.opponent in game_key
+                ]
+                
+                # If indicator = 1, then we must select 2-3 players from this game
+                # Constraint: 2 * indicator <= sum(players) <= 3 * indicator
+                prob += pulp.lpSum([player_vars[p.name] for p in game_players]) >= 2 * game_indicators[game_key], \
+                       f"GameStack_Min_{game_key[0]}_{game_key[1]}"
+                
+                # Soft max (encourage 2-3, but allow more if optimal)
+                # No hard max constraint - let optimizer decide
+            
+            # Force at least ONE high-total game to be stacked
+            prob += pulp.lpSum([game_indicators[game_key] for game_key in high_total_games]) >= 1, \
+                   "At_Least_One_Game_Stack"
+    
     # Solve the LP problem using CBC solver (suppress output)
     status = prob.solve(pulp.PULP_CBC_CMD(msg=0))
     
@@ -286,6 +330,11 @@ def _dataframe_to_players(df: pd.DataFrame) -> List[Player]:
         if 'smart_value' in row.index and pd.notna(row['smart_value']):
             smart_value = float(row['smart_value'])
         
+        # Handle optional game_total field (for game stacking)
+        game_total = None
+        if 'game_total' in row.index and pd.notna(row['game_total']):
+            game_total = float(row['game_total'])
+        
         player = Player(
             name=row['name'],
             position=row['position'],
@@ -298,6 +347,10 @@ def _dataframe_to_players(df: pd.DataFrame) -> List[Player]:
             selection=selection_state,
             smart_value=smart_value
         )
+        
+        # Add game_total as an attribute if available
+        if game_total is not None:
+            player.game_total = game_total
         players.append(player)
     
     return players
