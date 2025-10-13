@@ -22,14 +22,15 @@ from typing import Dict, Optional
 # Weight Profiles
 # NOTE: Default 'balanced' profile is now TOURNAMENT-OPTIMIZED based on Week 6 winners
 # Analyzed 317K entries - these weights match what actually won
+# UPDATED: Reduced leverage penalty to allow chalk plays (lineup was too contrarian)
 WEIGHT_PROFILES = {
     'balanced': {
         'base': 0.10,          # ↓ Pure value doesn't win GPPs
         'opportunity': 0.30,   # ↑ Volume = ceiling (JSN, Pickens dominated)
         'trends': 0.10,        # ↓ Consistency matters less in tournaments
         'risk': 0.05,          # ↓ EMBRACE variance (De'Von Achane effect)
-        'matchup': 0.20,       # → Game environment (Vegas-powered)
-        'leverage': 0.25       # ↑↑ THE KEY (low own + ceiling = +31 leverage wins)
+        'matchup': 0.30,       # ↑ Game environment = MOST predictive (was 0.20)
+        'leverage': 0.15       # ↓ Differentiation matters but balanced (was 0.25)
     },
     'cash': {
         'base': 0.50,          # ↑ Ultra-safe for cash games

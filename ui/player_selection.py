@@ -316,8 +316,8 @@ def render_player_selection():
                     'opportunity': 0.30,
                     'trends': 0.10,
                     'risk': 0.05,
-                    'matchup': 0.20,
-                    'leverage': 0.25  # TOURNAMENT-OPTIMIZED from Week 6 winners
+                    'matchup': 0.30,  # INCREASED: Game environment = most predictive
+                    'leverage': 0.15  # REDUCED: Allows chalk plays (was 0.25)
                 }
             
             st.markdown("#### 🎯 Main Category Weights")
@@ -467,8 +467,8 @@ def render_player_selection():
                     'opportunity': 0.30,
                     'trends': 0.10,
                     'risk': 0.05,
-                    'matchup': 0.20,
-                    'leverage': 0.25  # TOURNAMENT-OPTIMIZED from Week 6 winners
+                    'matchup': 0.30,  # INCREASED: Game environment = most predictive
+                    'leverage': 0.15  # REDUCED: Allows chalk plays (was 0.25)
                 }
                 # Clear cached data
                 if 'smart_value_calculated' in st.session_state:
