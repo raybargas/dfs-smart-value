@@ -1129,12 +1129,13 @@ Smart Value =
     
     gb.configure_column("Pos", 
                         header_name="Pos",
-                        filter="agSetColumnFilter",  # Multi-select filter
+                        filter="agTextColumnFilter",  # Text filter (works in Community edition)
                         filterParams={
                             "buttons": ["reset", "apply"],
                             "closeOnApply": True,
-                            "suppressMiniFilter": False,  # Enable search box in filter
-                            "excelMode": "windows"  # Better multi-select UX
+                            "debounceMs": 200,
+                            "filterOptions": ["contains", "equals", "startsWith", "endsWith"],
+                            "defaultOption": "equals"
                         },
                         menuTabs=menu_tabs,
                         width=80,
@@ -1199,12 +1200,11 @@ Smart Value =
     
     gb.configure_column("Lvg", 
                         header_name="Lvg",
-                        filter="agSetColumnFilter",
+                        filter="agTextColumnFilter",
                         filterParams={
                             "buttons": ["reset", "apply"],
                             "closeOnApply": True,
-                            "suppressMiniFilter": False,
-                            "excelMode": "windows"
+                            "debounceMs": 200
                         },
                         menuTabs=menu_tabs,
                         width=70,
@@ -1214,12 +1214,11 @@ Smart Value =
     
     gb.configure_column("Reg", 
                         header_name="Reg",
-                        filter="agSetColumnFilter",
+                        filter="agTextColumnFilter",
                         filterParams={
                             "buttons": ["reset", "apply"],
                             "closeOnApply": True,
-                            "suppressMiniFilter": False,
-                            "excelMode": "windows"
+                            "debounceMs": 200
                         },
                         menuTabs=menu_tabs,
                         width=65,
@@ -1236,12 +1235,13 @@ Smart Value =
     
     gb.configure_column("Team", 
                         header_name="Team",
-                        filter="agSetColumnFilter",
+                        filter="agTextColumnFilter",
                         filterParams={
                             "buttons": ["reset", "apply"],
                             "closeOnApply": True,
-                            "suppressMiniFilter": False,
-                            "excelMode": "windows"
+                            "debounceMs": 200,
+                            "filterOptions": ["contains", "equals", "startsWith"],
+                            "defaultOption": "contains"
                         },
                         menuTabs=menu_tabs,
                         width=90)
