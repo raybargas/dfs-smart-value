@@ -299,11 +299,9 @@ def render_player_selection():
     </style>
     """, unsafe_allow_html=True)
     
-    with st.sidebar:
-        st.markdown("---")
-        st.markdown("### ⚙️ Smart Value Configuration")
-        
-        with st.expander("📊 Adjust Weights & Factors", expanded=False):
+    # Smart Value Configuration - moved to main area for responsive layout
+    st.markdown("---")
+    with st.expander("⚙️ Smart Value Configuration - Adjust Weights & Factors", expanded=False):
             st.markdown("""
             **Control every factor** that contributes to the Smart Value score.
             Main category weights must sum to 1.0 (100%).
@@ -1340,7 +1338,9 @@ Smart Value =
     gb.configure_grid_options(
         domLayout='normal',
         enableRangeSelection=True,
-        suppressRowClickSelection=True
+        suppressRowClickSelection=True,
+        enableFilter=True,  # Enable filtering
+        floatingFilter=False  # Show filter icon in headers (not floating filters)
     )
     
     # Set default sort by Value (descending)
