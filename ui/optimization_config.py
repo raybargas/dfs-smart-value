@@ -125,13 +125,18 @@ def render_optimization_config():
         # Mode selector
         filter_strategy = st.radio(
             "Filter Strategy",
-            options=['simple', 'positional'],
+            options=['simple', 'positional', 'portfolio'],
             format_func=lambda x: {
-                'simple': '🎯 Simple (One threshold for all)',
-                'positional': '📊 Positional (Custom per position)'
+                'simple': '🎯 Simple (One threshold)',
+                'positional': '📊 Positional (Per position)',
+                'portfolio': '💼 Portfolio (Lineup average) ⭐'
             }[x],
             horizontal=True,
-            help="Simple = one threshold, Positional = customize by position",
+            help="""
+            - Simple: One threshold for all positions
+            - Positional: Custom threshold per position
+            - Portfolio: Lineup average threshold (most flexible)
+            """,
             key="filter_strategy"
         )
         
@@ -216,10 +221,47 @@ def render_optimization_config():
                     st.markdown('</div>', unsafe_allow_html=True)
             
             min_smart_value = None  # Not used in positional mode
+            portfolio_avg = None
+            
+        else:  # portfolio mode
+            st.markdown("""
+            **Portfolio Average Mode** allows individual "chalk" players with lower Smart Value 
+            if balanced by high Smart Value plays elsewhere.
+            
+            Example: A 30 SV stud + eight 75 SV players = 70 average ✅
+            """)
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                portfolio_avg = st.slider(
+                    "Minimum Lineup Average Smart Value",
+                    min_value=30,
+                    max_value=90,
+                    value=60,
+                    step=5,
+                    help="The 9-player lineup's average Smart Value must meet this threshold",
+                    key="portfolio_avg_sv"
+                )
+            with col2:
+                st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
+                st.metric("", f"{portfolio_avg}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Quality indicator
+            if portfolio_avg >= 70:
+                st.info("🎯 **Elite Lineup** - High average quality required")
+            elif portfolio_avg >= 55:
+                st.success("✅ **Quality Lineup** - Balanced approach")
+            else:
+                st.warning("⚡ **Flexible** - Allows mixing chalk with value")
+            
+            min_smart_value = None
+            positional_floors = None
     
     st.session_state['temp_config']['filter_strategy'] = filter_strategy
     st.session_state['temp_config']['min_smart_value'] = min_smart_value
     st.session_state['temp_config']['positional_floors'] = positional_floors
+    st.session_state['temp_config']['portfolio_avg_smart_value'] = portfolio_avg if filter_strategy == 'portfolio' else None
     
     # Stacking Strategy (for GPP tournament play)
     st.markdown("### 🔗 Stacking Strategy")
@@ -326,9 +368,10 @@ def render_optimization_config():
                     'uniqueness_pct': uniqueness_pct / 100,  # Convert to decimal
                     'max_ownership_enabled': max_ownership_enabled,
                     'max_ownership_pct': max_ownership_pct / 100 if max_ownership_pct else None,
-                    'filter_strategy': filter_strategy,  # NEW: 'simple' or 'positional'
+                    'filter_strategy': filter_strategy,  # 'simple', 'positional', or 'portfolio'
                     'min_smart_value': min_smart_value,  # For simple mode
                     'positional_floors': positional_floors,  # For positional mode
+                    'portfolio_avg_smart_value': portfolio_avg if filter_strategy == 'portfolio' else None,  # For portfolio mode
                     'stacking_enabled': stacking_enabled,
                     'estimated_time': validation_result['estimated_time'],
                     'validation_status': validation_result['status'],

@@ -165,6 +165,7 @@ def render_results():
         filter_strategy = metadata.get('filter_strategy', 'simple')
         min_sv = metadata.get('min_smart_value', 0)
         pos_floors = metadata.get('positional_floors', None)
+        portfolio_avg = metadata.get('portfolio_avg_smart_value', None)
         
         if filter_strategy == 'simple' and min_sv > 0:
             st.success(f"""
@@ -189,6 +190,31 @@ def render_results():
             ✅ Flexible thresholds per position  
             ✅ Higher standards for key positions  
             ✅ More options for value positions
+            """)
+        elif filter_strategy == 'portfolio' and portfolio_avg:
+            # Calculate actual average for first lineup
+            actual_avg = None
+            if len(lineups) > 0:
+                lineup_smart_values = [
+                    getattr(p, 'smart_value', 0) 
+                    for p in lineups[0].players 
+                    if hasattr(p, 'smart_value')
+                ]
+                if lineup_smart_values:
+                    actual_avg = sum(lineup_smart_values) / len(lineup_smart_values)
+            
+            avg_text = f"Required: **{portfolio_avg:.0f}** | Actual: **{actual_avg:.1f}**" if actual_avg else f"Required: **{portfolio_avg:.0f}**"
+            
+            st.success(f"""
+            **💼 Smart Value Portfolio Constraint Applied**
+            
+            Lineup average Smart Value: {avg_text}
+            
+            This allows maximum flexibility:
+            ✅ Can include "chalk" studs (low SV) if balanced  
+            ✅ Prioritizes overall lineup quality  
+            ✅ Prevents all-contrarian or all-chalk lineups  
+            ✅ Optimal for blending projections + strategy
             """)
         
         if metadata.get('max_ownership_enabled'):

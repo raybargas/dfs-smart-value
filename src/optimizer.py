@@ -20,7 +20,8 @@ def generate_lineups(
     uniqueness_pct: float,
     max_ownership_enabled: bool = False,
     max_ownership_pct: float = None,
-    stacking_enabled: bool = True
+    stacking_enabled: bool = True,
+    portfolio_avg_smart_value: float = None
 ) -> Tuple[List[Lineup], Optional[str]]:
     """
     Generate N unique DraftKings-valid lineups using linear programming.
@@ -80,7 +81,8 @@ def generate_lineups(
             max_ownership_enabled=max_ownership_enabled,
             max_ownership_pct=max_ownership_pct,
             lineup_number=i + 1,
-            stacking_enabled=stacking_enabled
+            stacking_enabled=stacking_enabled,
+            portfolio_avg_smart_value=portfolio_avg_smart_value
         )
         
         if error:
@@ -99,7 +101,8 @@ def _generate_single_lineup(
     max_ownership_enabled: bool,
     max_ownership_pct: float,
     lineup_number: int,
-    stacking_enabled: bool = True
+    stacking_enabled: bool = True,
+    portfolio_avg_smart_value: float = None
 ) -> Tuple[Optional[Lineup], Optional[str]]:
     """
     Generate a single lineup using PuLP linear programming.
@@ -181,6 +184,20 @@ def _generate_single_lineup(
     # Constraint 2b: Limit TEs to maximum 2 (prevents TE overload)
     # This ensures FLEX slot prioritizes RB/WR unless TE has exceptional value
     prob += pulp.lpSum([player_vars[p.name] for p in tes]) <= 2, "Max_2_TE"
+    
+    # Constraint 2c: Portfolio Average Smart Value (if enabled)
+    # This allows individual players below threshold if lineup average is acceptable
+    # Example: Can include a chalky stud with SV=30 if balanced by SV=80+ players
+    if portfolio_avg_smart_value is not None:
+        # Check if all players have smart_value attribute
+        players_with_sv = [p for p in players if hasattr(p, 'smart_value') and p.smart_value is not None]
+        
+        if len(players_with_sv) == len(players):
+            # All players have Smart Value - can apply constraint
+            prob += pulp.lpSum([
+                player_vars[p.name] * p.smart_value for p in players
+            ]) >= portfolio_avg_smart_value * 9, "Portfolio_Average_Smart_Value"
+        # If some players missing Smart Value, skip constraint (already filtered in UI)
     
     # Constraint 3: Locked players (MUST be in every lineup)
     locked_players = [p for p in players if p.selection == PlayerSelection.LOCKED]
@@ -333,7 +350,14 @@ def _generate_single_lineup(
     
     # Check if optimal solution found
     if status != pulp.LpStatusOptimal:
-        error_msg = _interpret_infeasibility(status, lineup_number)
+        error_msg = _interpret_infeasibility(
+            status, 
+            lineup_number, 
+            portfolio_avg_smart_value=portfolio_avg_smart_value,
+            max_ownership_enabled=max_ownership_enabled,
+            max_ownership_pct=max_ownership_pct,
+            locked_count=len(locked_players)
+        )
         return None, error_msg
     
     # Extract solution: get selected players
@@ -488,23 +512,52 @@ def _build_lineup_from_players(players: List[Player], lineup_number: int) -> Lin
     )
 
 
-def _interpret_infeasibility(status: int, lineup_number: int) -> str:
+def _interpret_infeasibility(
+    status: int, 
+    lineup_number: int,
+    portfolio_avg_smart_value: float = None,
+    max_ownership_enabled: bool = False,
+    max_ownership_pct: float = None,
+    locked_count: int = 0
+) -> str:
     """
-    Interpret LP solver status code and return user-friendly error message.
+    Interpret LP solver status code and return user-friendly error message with suggestions.
     
     Args:
         status: PuLP status code from prob.solve()
         lineup_number: The lineup number that failed
+        portfolio_avg_smart_value: Portfolio average constraint value (if used)
+        max_ownership_enabled: Whether ownership filter is enabled
+        max_ownership_pct: Maximum ownership percentage (if enabled)
+        locked_count: Number of locked players
     
     Returns:
-        Human-readable error message explaining the failure
+        Human-readable error message explaining the failure with actionable suggestions
     """
-    if status == pulp.LpStatusInfeasible:
-        return "No valid lineup exists with current constraints"
-    elif status == pulp.LpStatusUnbounded:
-        return "Problem is unbounded (should not occur)"
-    elif status == pulp.LpStatusNotSolved:
-        return "Solver failed to complete"
-    else:
-        return f"Optimization failed with status {status}"
+    base_messages = {
+        pulp.LpStatusInfeasible: "Constraints are too strict - no valid lineup exists",
+        pulp.LpStatusUnbounded: "Problem is unbounded (internal error)",
+        pulp.LpStatusNotSolved: "Solver failed to run",
+    }
+    
+    error_msg = base_messages.get(status, f"Unknown status: {status}")
+    
+    # Provide helpful suggestions
+    suggestions = []
+    
+    if portfolio_avg_smart_value:
+        suggestions.append(f"Lower the Portfolio Average Smart Value (currently {portfolio_avg_smart_value:.0f})")
+    
+    if max_ownership_enabled and max_ownership_pct:
+        suggestions.append(f"Increase Max Ownership (currently {max_ownership_pct*100:.0f}%)")
+    
+    if locked_count > 0:
+        suggestions.append(f"Unlock some players (currently {locked_count} locked)")
+    
+    # Always suggest adjusting filters
+    suggestions.append("Lower your Smart Value filter thresholds")
+    
+    suggestion_text = " OR ".join(suggestions) if suggestions else "Try adjusting your constraints"
+    
+    return f"{error_msg}. Try: {suggestion_text}"
 

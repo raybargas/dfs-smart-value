@@ -56,8 +56,10 @@ def render_lineup_generation():
     filter_strategy = config.get('filter_strategy', 'simple')
     min_smart_value = config.get('min_smart_value', 0)
     positional_floors = config.get('positional_floors', None)
+    portfolio_avg_sv = config.get('portfolio_avg_smart_value', None)
     
-    if 'smart_value' in player_pool_df.columns:
+    # Pre-filtering for simple/positional modes (portfolio uses LP constraint)
+    if filter_strategy in ['simple', 'positional'] and 'smart_value' in player_pool_df.columns:
         original_count = len(player_pool_df)
         
         if filter_strategy == 'simple' and min_smart_value > 0:
@@ -91,6 +93,10 @@ def render_lineup_generation():
                         st.rerun()
                     return
     
+    # For portfolio mode, show info (constraint applied in optimizer)
+    elif filter_strategy == 'portfolio' and portfolio_avg_sv:
+        st.caption(f"📊 Portfolio constraint: Lineup average Smart Value ≥ {portfolio_avg_sv}")
+    
     # ULTRA-COMPACT Loading message
     st.markdown(f"""
     <div style="text-align: center; padding: 1rem 0; margin-bottom: 1rem;">
@@ -112,7 +118,8 @@ def render_lineup_generation():
             uniqueness_pct=config['uniqueness_pct'],
             max_ownership_enabled=config.get('max_ownership_enabled', False),
             max_ownership_pct=config.get('max_ownership_pct', None),
-            stacking_enabled=config.get('stacking_enabled', True)  # Default ON for GPPs
+            stacking_enabled=config.get('stacking_enabled', True),  # Default ON for GPPs
+            portfolio_avg_smart_value=portfolio_avg_sv  # For portfolio mode
         )
         
         generation_time = time.time() - start_time
@@ -126,9 +133,10 @@ def render_lineup_generation():
         'error_message': error,
         'uniqueness_pct': config['uniqueness_pct'],
         'player_pool_size': len(player_pool_df),  # After filtering
-        'filter_strategy': config.get('filter_strategy', 'simple'),  # NEW
+        'filter_strategy': config.get('filter_strategy', 'simple'),
         'min_smart_value': config.get('min_smart_value', 0),  # For simple mode
         'positional_floors': config.get('positional_floors', None),  # For positional mode
+        'portfolio_avg_smart_value': config.get('portfolio_avg_smart_value', None),  # For portfolio mode
         'max_ownership_enabled': config.get('max_ownership_enabled', False),
         'max_ownership_pct': config.get('max_ownership_pct', None)
     }
