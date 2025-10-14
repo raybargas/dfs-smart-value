@@ -159,6 +159,12 @@ def _generate_single_lineup(
         player_vars[p.name] * p.salary for p in players
     ]) <= 50000, "Salary_Cap"
     
+    # Constraint 1b: Minimum salary usage (must use at least 96% of cap = $48,000)
+    # This prevents leaving money on the table and forces optimizer to find better players
+    prob += pulp.lpSum([
+        player_vars[p.name] * p.salary for p in players
+    ]) >= 48000, "Minimum_Salary_Usage"
+    
     # Separate players by position for position constraints
     qbs = [p for p in players if p.position == 'QB']
     rbs = [p for p in players if p.position == 'RB']
@@ -179,6 +185,10 @@ def _generate_single_lineup(
     
     # Total players must be exactly 9
     prob += pulp.lpSum([player_vars[p.name] for p in players]) == 9, "Total_9_Players"
+    
+    # Constraint 2b: Limit TEs to maximum 2 (prevents TE overload)
+    # This ensures FLEX slot prioritizes RB/WR unless TE has exceptional value
+    prob += pulp.lpSum([player_vars[p.name] for p in tes]) <= 2, "Max_2_TE"
     
     # Constraint 3: Locked players (MUST be in every lineup)
     locked_players = [p for p in players if p.selection == PlayerSelection.LOCKED]
