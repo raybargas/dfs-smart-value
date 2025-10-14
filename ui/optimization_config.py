@@ -103,48 +103,50 @@ def render_optimization_config():
     
     st.session_state['temp_config']['uniqueness_pct'] = uniqueness_pct
     
-    # Optimization Objective Selector
-    st.markdown("### Optimization Strategy")
+    # Smart Value Quality Filter
+    st.markdown("### 🧠 Smart Value Filter")
     
     # Check if Smart Value is available
     has_smart_value = 'smart_value' in pool_df.columns and pool_df['smart_value'].notna().any()
     
-    optimization_objective = st.radio(
-        "What should the optimizer maximize?",
-        options=['projection', 'smart_value'],
-        format_func=lambda x: {
-            'projection': '📊 Projected Points (Traditional)',
-            'smart_value': '🧠 Smart Value Score (Advanced)'
-        }[x],
-        index=1 if has_smart_value else 0,  # Default to Smart Value if available
-        help="Choose what the optimizer maximizes when building lineups",
-        key="optimization_objective"
-    )
-    
-    if optimization_objective == 'projection':
-        st.info("""
-        **Traditional Approach:** Maximizes raw projected fantasy points.
-        
-        ✅ Simple and straightforward  
-        ✅ Directly targets highest scoring potential  
-        ⚠️ Ignores value, trends, and risk factors
-        """)
+    if not has_smart_value:
+        st.warning("⚠️ Smart Value scores not available. Go back to Player Selection to calculate Smart Value. Skipping filter.")
+        min_smart_value = 0
     else:
-        if not has_smart_value:
-            st.error("⚠️ Smart Value scores not available. Go back to Player Selection to calculate Smart Value.")
-            optimization_objective = 'projection'  # Fallback
+        st.markdown("""
+        Smart Value combines opportunity, matchup, trends, and leverage into a 0-100 score.  
+        Setting a minimum ensures you only build lineups from high-quality plays.
+        
+        **Optimizer maximizes projected points** among players meeting this threshold.
+        """)
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            min_smart_value = st.slider(
+                "Minimum Smart Value",
+                min_value=0,
+                max_value=100,
+                value=40,  # Default: Block bottom 40%
+                step=5,
+                help="Only consider players with Smart Value ≥ this threshold. Lower = more players available, Higher = stricter quality filter",
+                key="min_smart_value"
+            )
+        with col2:
+            st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
+            st.metric("", f"{min_smart_value}")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Quality tier indicator
+        if min_smart_value >= 70:
+            st.info("🎯 **Elite Plays Only** - Very strict filter, may limit lineup diversity")
+        elif min_smart_value >= 50:
+            st.success("✅ **Quality Plays** - Balanced filter for solid lineups")
+        elif min_smart_value >= 30:
+            st.warning("⚡ **Flexible** - Allows more options, including riskier plays")
         else:
-            st.success("""
-            **Advanced Approach:** Maximizes your custom Smart Value score.
-            
-            ✅ Incorporates your configured weights (Base, Opportunity, Trends, Risk, Matchup)  
-            ✅ Accounts for value, momentum, regression, and game environment  
-            ✅ Position-specific customization applied  
-            ✅ Uses your sub-weight configurations  
-            🎯 **This uses YOUR custom optimization formula!**
-            """)
+            st.caption("🔓 **Wide Open** - Minimal filtering")
     
-    st.session_state['temp_config']['optimization_objective'] = optimization_objective
+    st.session_state['temp_config']['min_smart_value'] = min_smart_value
     
     # Stacking Strategy (for GPP tournament play)
     st.markdown("### 🔗 Stacking Strategy")
@@ -251,7 +253,8 @@ def render_optimization_config():
                     'uniqueness_pct': uniqueness_pct / 100,  # Convert to decimal
                     'max_ownership_enabled': max_ownership_enabled,
                     'max_ownership_pct': max_ownership_pct / 100 if max_ownership_pct else None,
-                    'optimization_objective': optimization_objective,
+                    'min_smart_value': min_smart_value,  # NEW: Smart Value floor filter
+                    'stacking_enabled': stacking_enabled,  # For lineup_generation.py
                     'estimated_time': validation_result['estimated_time'],
                     'validation_status': validation_result['status'],
                     'validation_message': validation_result['message']

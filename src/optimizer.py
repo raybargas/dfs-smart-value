@@ -20,7 +20,6 @@ def generate_lineups(
     uniqueness_pct: float,
     max_ownership_enabled: bool = False,
     max_ownership_pct: float = None,
-    optimization_objective: str = 'projection',
     stacking_enabled: bool = True
 ) -> Tuple[List[Lineup], Optional[str]]:
     """
@@ -28,8 +27,12 @@ def generate_lineups(
     
     This function generates lineups sequentially, adding uniqueness constraints
     after each successful lineup to ensure diversity. The optimization uses
-    PuLP with CBC solver to maximize the selected objective (projection or smart_value)
-    while respecting all DraftKings contest rules.
+    PuLP with CBC solver to maximize projected fantasy points while respecting
+    all DraftKings contest rules.
+    
+    Note: Smart Value should be used to filter the player pool BEFORE calling this
+    function, not as an optimization objective (position-specific scaling makes it
+    incompatible with cross-position LP optimization).
     
     Args:
         player_pool_df: DataFrame with player data (filtered pool from Component 2)
@@ -41,9 +44,6 @@ def generate_lineups(
         max_ownership_enabled: Whether to apply ownership constraint
         max_ownership_pct: Maximum ownership percentage (0-1.0) if enabled
             Example: 0.30 means no player can exceed 30% projected ownership
-        optimization_objective: What to maximize ('projection' or 'smart_value')
-            'projection': Maximize raw projected points (traditional approach)
-            'smart_value': Maximize Smart Value score (custom weighted approach)
         stacking_enabled: Whether to enforce QB + WR/TE same team constraint (default True)
             True: Force QB + at least 1 WR/TE from same team (GPP strategy)
             False: Pure optimization without team correlation requirements
@@ -80,7 +80,6 @@ def generate_lineups(
             max_ownership_enabled=max_ownership_enabled,
             max_ownership_pct=max_ownership_pct,
             lineup_number=i + 1,
-            optimization_objective=optimization_objective,
             stacking_enabled=stacking_enabled
         )
         
@@ -100,15 +99,14 @@ def _generate_single_lineup(
     max_ownership_enabled: bool,
     max_ownership_pct: float,
     lineup_number: int,
-    optimization_objective: str = 'projection',
     stacking_enabled: bool = True
 ) -> Tuple[Optional[Lineup], Optional[str]]:
     """
     Generate a single lineup using PuLP linear programming.
     
     This function formulates and solves a linear programming problem to maximize
-    the selected objective (projection or smart_value) subject to salary cap,
-    position requirements, ownership (if enabled), and uniqueness constraints.
+    projected fantasy points subject to salary cap, position requirements, 
+    ownership (if enabled), and uniqueness constraints.
     
     Args:
         player_pool_df: DataFrame with all available players
@@ -117,7 +115,6 @@ def _generate_single_lineup(
         max_ownership_enabled: Whether to apply ownership constraint
         max_ownership_pct: Maximum ownership (0-1.0) if enabled
         lineup_number: Lineup ID for this lineup
-        optimization_objective: What to maximize ('projection' or 'smart_value')
         stacking_enabled: Whether to enforce QB + WR/TE same team constraint
     
     Returns:
@@ -141,18 +138,13 @@ def _generate_single_lineup(
         for player in players
     }
     
-    # Objective function: Maximize selected objective (projection or smart_value)
-    if optimization_objective == 'smart_value':
-        # Use Smart Value score (multi-factor weighted value)
-        prob += pulp.lpSum([
-            player_vars[p.name] * (p.smart_value if hasattr(p, 'smart_value') and p.smart_value is not None else p.projection)
-            for p in players
-        ]), "Total_Smart_Value"
-    else:
-        # Default: Use raw projection
-        prob += pulp.lpSum([
-            player_vars[p.name] * p.projection for p in players
-        ]), "Total_Projection"
+    # Objective function: Maximize projected fantasy points
+    # Note: Smart Value should be used to FILTER the player pool before calling this function,
+    # not as an optimization objective (position-specific scaling makes it incompatible 
+    # with cross-position LP optimization)
+    prob += pulp.lpSum([
+        player_vars[p.name] * p.projection for p in players
+    ]), "Total_Projection"
     
     # Constraint 1: Salary cap ($50,000)
     prob += pulp.lpSum([

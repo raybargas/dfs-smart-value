@@ -52,6 +52,29 @@ def render_lineup_generation():
     config = st.session_state['optimization_config']
     player_pool_df = st.session_state['player_pool']
     
+    # Step 3: Apply Smart Value filter (if enabled)
+    min_smart_value = config.get('min_smart_value', 0)
+    
+    if min_smart_value > 0 and 'smart_value' in player_pool_df.columns:
+        original_count = len(player_pool_df)
+        player_pool_df = player_pool_df[player_pool_df['smart_value'] >= min_smart_value].copy()
+        filtered_count = len(player_pool_df)
+        
+        st.caption(f"📊 Pool filtered: {original_count} → {filtered_count} players (Smart Value ≥ {min_smart_value})")
+        
+        # Validate we still have enough players per position
+        position_counts = player_pool_df.groupby('position').size()
+        min_required = {'QB': 1, 'RB': 2, 'WR': 3, 'TE': 1, 'DST': 1}
+        
+        for pos, min_count in min_required.items():
+            actual_count = position_counts.get(pos, 0)
+            if actual_count < min_count:
+                st.error(f"⚠️ Not enough {pos}s after filtering (need {min_count}, have {actual_count}). Lower your Smart Value threshold.")
+                if st.button("⬅️ Back to Configuration"):
+                    st.session_state['page'] = 'optimization'
+                    st.rerun()
+                return
+    
     # ULTRA-COMPACT Loading message
     st.markdown(f"""
     <div style="text-align: center; padding: 1rem 0; margin-bottom: 1rem;">
@@ -73,7 +96,6 @@ def render_lineup_generation():
             uniqueness_pct=config['uniqueness_pct'],
             max_ownership_enabled=config.get('max_ownership_enabled', False),
             max_ownership_pct=config.get('max_ownership_pct', None),
-            optimization_objective=config.get('optimization_objective', 'projection'),
             stacking_enabled=config.get('stacking_enabled', True)  # Default ON for GPPs
         )
         
@@ -87,10 +109,10 @@ def render_lineup_generation():
         'generation_time_seconds': generation_time,
         'error_message': error,
         'uniqueness_pct': config['uniqueness_pct'],
-        'player_pool_size': len(player_pool_df),
+        'player_pool_size': len(player_pool_df),  # After filtering
+        'min_smart_value': config.get('min_smart_value', 0),  # NEW
         'max_ownership_enabled': config.get('max_ownership_enabled', False),
-        'max_ownership_pct': config.get('max_ownership_pct', None),
-        'optimization_objective': config.get('optimization_objective', 'projection')
+        'max_ownership_pct': config.get('max_ownership_pct', None)
     }
     
     # Step 6: Handle results (success vs partial failure)

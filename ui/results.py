@@ -153,16 +153,28 @@ def render_results():
             """)
     else:
         st.info("""
-        **📊 Traditional Projection Optimization**
+        **📊 Projection-Based Optimization**
         
-        These lineups were built using the **traditional approach**: maximizing raw projected fantasy points.
-        
-        **The optimizer considered:**
-        - 🎯 **Projected Points**: Highest scoring potential
-        - 💰 **Salary Cap**: $50,000 DraftKings constraint
-        - 👥 **Position Requirements**: 1 QB, 2+ RB, 3+ WR, 1+ TE, 1 DST, 1 FLEX
+        Lineups maximize **total projected fantasy points** while respecting:
+        - 💰 **Salary Cap**: $48K-$50K (96-100% usage required)
+        - 👥 **Position Requirements**: 1 QB, 2+ RB, 3+ WR, 1+ TE, 1 DST, 1 FLEX (max 2 TEs)
         - 🔄 **Uniqueness**: {int(metadata['uniqueness_pct']*100)}% lineup diversity
         """)
+        
+        # Show Smart Value filter if applied
+        min_sv = metadata.get('min_smart_value', 0)
+        if min_sv > 0:
+            st.success(f"""
+            **🧠 Smart Value Filter Applied**
+            
+            Only players with Smart Value ≥ **{min_sv}** were considered.
+            
+            This ensures lineups are built from high-quality plays with:
+            ✅ Strong opportunity metrics (volume, usage)  
+            ✅ Favorable matchups and game environments  
+            ✅ Positive momentum and trends  
+            ✅ Ownership leverage for tournaments
+            """)
         
         if metadata.get('max_ownership_enabled'):
             st.info(f"✅ **Ownership Filter**: Limited to players ≤ {int(metadata.get('max_ownership_pct', 0)*100)}% projected ownership")
