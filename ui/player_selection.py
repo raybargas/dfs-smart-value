@@ -1130,7 +1130,12 @@ Smart Value =
     gb.configure_column("Pos", 
                         header_name="Pos",
                         filter="agSetColumnFilter",  # Multi-select filter
-                        filterParams=filter_config,
+                        filterParams={
+                            "buttons": ["reset", "apply"],
+                            "closeOnApply": True,
+                            "suppressMiniFilter": False,  # Enable search box in filter
+                            "excelMode": "windows"  # Better multi-select UX
+                        },
                         menuTabs=menu_tabs,
                         width=80,
                         pinned='left')
@@ -1195,7 +1200,12 @@ Smart Value =
     gb.configure_column("Lvg", 
                         header_name="Lvg",
                         filter="agSetColumnFilter",
-                        filterParams=filter_config,
+                        filterParams={
+                            "buttons": ["reset", "apply"],
+                            "closeOnApply": True,
+                            "suppressMiniFilter": False,
+                            "excelMode": "windows"
+                        },
                         menuTabs=menu_tabs,
                         width=70,
                         cellStyle={'textAlign': 'center', 'fontSize': '1.2rem'},
@@ -1205,7 +1215,12 @@ Smart Value =
     gb.configure_column("Reg", 
                         header_name="Reg",
                         filter="agSetColumnFilter",
-                        filterParams=filter_config,
+                        filterParams={
+                            "buttons": ["reset", "apply"],
+                            "closeOnApply": True,
+                            "suppressMiniFilter": False,
+                            "excelMode": "windows"
+                        },
                         menuTabs=menu_tabs,
                         width=65,
                         cellStyle={'textAlign': 'center', 'fontSize': '1.2rem'},
@@ -1222,7 +1237,12 @@ Smart Value =
     gb.configure_column("Team", 
                         header_name="Team",
                         filter="agSetColumnFilter",
-                        filterParams=filter_config,
+                        filterParams={
+                            "buttons": ["reset", "apply"],
+                            "closeOnApply": True,
+                            "suppressMiniFilter": False,
+                            "excelMode": "windows"
+                        },
                         menuTabs=menu_tabs,
                         width=90)
     
