@@ -308,14 +308,34 @@ def render_player_selection():
             """)
             
             # Initialize session state for custom weights if not exists
-            if 'smart_value_custom_weights' not in st.session_state:
+            # FORCE RESET FLAG: Delete this section after first run to prevent overwriting user prefs
+            if 'weights_migrated_v2' not in st.session_state:
                 st.session_state['smart_value_custom_weights'] = {
-                    'base': 0.10,
+                    'base': 0.15,  # UPDATED: Value matters more (was 0.10)
                     'opportunity': 0.30,
                     'trends': 0.10,
                     'risk': 0.05,
                     'matchup': 0.30,  # INCREASED: Game environment = most predictive
-                    'leverage': 0.15  # REDUCED: Allows chalk plays (was 0.25)
+                    'leverage': 0.10  # UPDATED: Reduced contrarian bias + Sweet Spot multiplier (was 0.15)
+                }
+                # Delete old widget keys to force slider reset
+                widget_keys = ['base_weight_slider', 'opp_weight_slider', 'trends_weight_slider', 
+                              'risk_weight_slider', 'matchup_weight_slider', 'leverage_weight_slider']
+                for key in widget_keys:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                
+                st.session_state['weights_migrated_v2'] = True
+                st.rerun()
+            
+            if 'smart_value_custom_weights' not in st.session_state:
+                st.session_state['smart_value_custom_weights'] = {
+                    'base': 0.15,  # UPDATED: Value matters more (was 0.10)
+                    'opportunity': 0.30,
+                    'trends': 0.10,
+                    'risk': 0.05,
+                    'matchup': 0.30,  # INCREASED: Game environment = most predictive
+                    'leverage': 0.10  # UPDATED: Reduced contrarian bias + Sweet Spot multiplier (was 0.15)
                 }
             
             st.markdown("#### 🎯 Main Category Weights")
@@ -459,20 +479,28 @@ def render_player_selection():
                 st.rerun()
             
             # Reset to default button
-            if st.button("↩️ Reset to Tournament (Week 6 Winner)", use_container_width=True):
+            if st.button("↩️ Reset to Balanced (Updated)", use_container_width=True):
                 st.session_state['smart_value_custom_weights'] = {
-                    'base': 0.10,
+                    'base': 0.15,  # UPDATED: Value matters more
                     'opportunity': 0.30,
                     'trends': 0.10,
                     'risk': 0.05,
                     'matchup': 0.30,  # INCREASED: Game environment = most predictive
-                    'leverage': 0.15  # REDUCED: Allows chalk plays (was 0.25)
+                    'leverage': 0.10  # UPDATED: Less contrarian bias + Sweet Spot multiplier
                 }
                 # Clear cached data
                 if 'smart_value_calculated' in st.session_state:
                     del st.session_state['smart_value_calculated']
                 if 'smart_value_data' in st.session_state:
                     del st.session_state['smart_value_data']
+                
+                # CRITICAL: Delete widget keys so sliders reset to new values
+                widget_keys = ['base_weight_slider', 'opp_weight_slider', 'trends_weight_slider', 
+                              'risk_weight_slider', 'matchup_weight_slider', 'leverage_weight_slider']
+                for key in widget_keys:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                
                 st.rerun()
             
             # Advanced sub-weight configuration
@@ -785,11 +813,21 @@ Smart Value =
             df = add_opponents_to_dataframe(df, opponent_map)
     
     # Enrich with 5-week season stats (Trend, Consistency, Momentum, Variance)
-    if 'season_stats_enriched' not in st.session_state:
+    # FORCE RECALCULATION: Check if we need to migrate to new ceiling calculation
+    force_recalc = 'ceiling_migrated_v2' not in st.session_state
+    
+    if 'season_stats_enriched' not in st.session_state or force_recalc:
         with st.spinner("📈 Analyzing 5-week season trends..."):
             df = analyze_season_stats(df, excel_path="2025 Stats thru week 5.xlsx")
             st.session_state['season_stats_data'] = df
             st.session_state['season_stats_enriched'] = True
+            st.session_state['ceiling_migrated_v2'] = True
+            
+            # Clear Smart Value cache to force recalc with new ceilings
+            if 'smart_value_calculated' in st.session_state:
+                del st.session_state['smart_value_calculated']
+            if 'smart_value_data' in st.session_state:
+                del st.session_state['smart_value_data']
     else:
         # Use cached season stats data
         df = st.session_state['season_stats_data'].copy()

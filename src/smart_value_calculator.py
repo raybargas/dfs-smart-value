@@ -25,12 +25,12 @@ from typing import Dict, Optional
 # UPDATED: Reduced leverage penalty to allow chalk plays (lineup was too contrarian)
 WEIGHT_PROFILES = {
     'balanced': {
-        'base': 0.10,          # ↓ Pure value doesn't win GPPs
+        'base': 0.15,          # ↑ Value matters - projection/salary efficiency (was 0.10)
         'opportunity': 0.30,   # ↑ Volume = ceiling (JSN, Pickens dominated)
         'trends': 0.10,        # ↓ Consistency matters less in tournaments
         'risk': 0.05,          # ↓ EMBRACE variance (De'Von Achane effect)
         'matchup': 0.30,       # ↑ Game environment = MOST predictive (was 0.20)
-        'leverage': 0.15       # ↓ Differentiation matters but balanced (was 0.25)
+        'leverage': 0.10       # ↓↓ REDUCED from 0.15 - Sweet Spot multiplier handles contrarian (was 0.25 → 0.15 → 0.10)
     },
     'cash': {
         'base': 0.50,          # ↑ Ultra-safe for cash games
@@ -413,11 +413,29 @@ def calculate_leverage_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     # Normalize ceiling ratio by position (different expectations)
     ceiling_norm = min_max_scale_by_position(df, 'ceiling_ratio')
     
-    # Calculate ownership discount (lower own = higher score)
-    # Reduced aggression: 3x cap instead of 10x to prevent ultra-contrarian TE dominance
+    # Calculate ownership discount using SWEET SPOT approach
+    # Philosophy: "Smart contrarian, not cute contrarian"
+    # Rewards 8-15% owned (optimal leverage zone), doesn't penalize good chalk
+    # 
+    # Ownership Tiers:
+    #   < 8%:  2.5x - Ultra-contrarian (risky dart throws, slight penalty)
+    #   8-15%: 3.0x - OPTIMAL leverage zone (best risk/reward)
+    #   15-25%: 2.0x - Popular but still good leverage
+    #   25%+:  1.0x - Chalk plays (neutral, no penalty or bonus)
     df['ownership_pct'] = df['ownership'].clip(lower=1.0)  # Min 1% to avoid divide by zero
-    df['own_discount'] = 30 / df['ownership_pct']  # Reduced from 100 → 30
-    df['own_discount'] = df['own_discount'].clip(upper=3.0)  # Cap at 3x (was 10x)
+    
+    def sweet_spot_discount(own):
+        """Calculate ownership discount with sweet spot bias"""
+        if 8.0 <= own <= 15.0:
+            return 3.0  # Optimal leverage zone
+        elif own < 8.0:
+            return 2.5  # Ultra-contrarian (slightly discouraged)
+        elif own <= 25.0:
+            return 2.0  # Popular but acceptable
+        else:
+            return 1.0  # Chalk (neutral)
+    
+    df['own_discount'] = df['ownership_pct'].apply(sweet_spot_discount)
     
     # Normalize ownership discount
     own_norm = (df['own_discount'] - df['own_discount'].min()) / (df['own_discount'].max() - df['own_discount'].min() + 0.001)
