@@ -59,7 +59,7 @@ ABBR_VARIATIONS = {
 
 
 def build_opponent_lookup(
-    week: int = 5,
+    week: int = 6,
     db_path: str = "dfs_optimizer.db"
 ) -> Dict[str, str]:
     """

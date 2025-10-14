@@ -300,7 +300,7 @@ def calculate_risk_score(df: pd.DataFrame, weight: float, sub_weights: Optional[
     return df
 
 
-def calculate_matchup_score(df: pd.DataFrame, weight: float, week: int = 5) -> pd.DataFrame:
+def calculate_matchup_score(df: pd.DataFrame, weight: float, week: int = 6) -> pd.DataFrame:
     """
     Calculate MATCHUP score component (game environment quality) using Vegas lines.
     
@@ -503,7 +503,7 @@ def calculate_anti_chalk_penalty(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_weights: Optional[Dict[str, float]] = None, position_weights: Optional[Dict[str, Dict[str, float]]] = None, sub_weights: Optional[Dict[str, float]] = None, week: int = 5) -> pd.DataFrame:
+def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_weights: Optional[Dict[str, float]] = None, position_weights: Optional[Dict[str, Dict[str, float]]] = None, sub_weights: Optional[Dict[str, float]] = None, week: int = 6) -> pd.DataFrame:
     """
     Calculate Smart Value Score using multi-factor weighted formula with optional position-specific overrides and sub-weight customization.
     
@@ -522,7 +522,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
                          Example: {'QB': {'base': 0.50, 'opportunity': 0.20}, 'RB': {'opportunity': 0.45}}
         sub_weights: Optional dict of sub-factor weights for fine-grained control.
                     Example: {'opp_target_share': 0.60, 'opp_snap_pct': 0.30, ...}
-        week: NFL week number for Vegas lines lookup (default: 5)
+        week: NFL week number for Vegas lines lookup (default: 6)
     
     Returns:
         DataFrame with added columns:

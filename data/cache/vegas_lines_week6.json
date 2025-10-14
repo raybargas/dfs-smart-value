@@ -1,0 +1,161 @@
+{
+  "week": 6,
+  "cached_at": "2025-10-14T13:31:32.726060",
+  "record_count": 14,
+  "data": [
+    {
+      "game_id": "e34812ee7fbf13bd75e4298bccfbdd10",
+      "home_team": "New York Jets",
+      "away_team": "Denver Broncos",
+      "home_spread": 7.5,
+      "away_spread": -7.5,
+      "total": 43.5,
+      "home_itt": 18.0,
+      "away_itt": 25.5,
+      "fetched_at": "2025-10-11T11:09:11.414053"
+    },
+    {
+      "game_id": "e5dd1fed586cfc0ec2d7c06f2a02c37a",
+      "home_team": "Jacksonville Jaguars",
+      "away_team": "Seattle Seahawks",
+      "home_spread": 1.5,
+      "away_spread": -1.5,
+      "total": 47.5,
+      "home_itt": 23.0,
+      "away_itt": 24.5,
+      "fetched_at": "2025-10-11T11:09:11.415832"
+    },
+    {
+      "game_id": "f2c642e1f95555424b9a9a4f03733b42",
+      "home_team": "New Orleans Saints",
+      "away_team": "New England Patriots",
+      "home_spread": 3.5,
+      "away_spread": -3.5,
+      "total": 45.5,
+      "home_itt": 21.0,
+      "away_itt": 24.5,
+      "fetched_at": "2025-10-11T11:09:11.416254"
+    },
+    {
+      "game_id": "dfa87b0532de1389297103c2e3195347",
+      "home_team": "Indianapolis Colts",
+      "away_team": "Arizona Cardinals",
+      "home_spread": -7.0,
+      "away_spread": 7.0,
+      "total": 47.5,
+      "home_itt": 27.2,
+      "away_itt": 20.2,
+      "fetched_at": "2025-10-11T11:09:11.416601"
+    },
+    {
+      "game_id": "b235bc78609644cb28492cc1d6ad69fd",
+      "home_team": "Baltimore Ravens",
+      "away_team": "Los Angeles Rams",
+      "home_spread": 7.0,
+      "away_spread": -7.0,
+      "total": 44.5,
+      "home_itt": 18.8,
+      "away_itt": 25.8,
+      "fetched_at": "2025-10-11T11:09:11.416926"
+    },
+    {
+      "game_id": "dd3a14fa1529e79bd338a7bfd71d5b3a",
+      "home_team": "Carolina Panthers",
+      "away_team": "Dallas Cowboys",
+      "home_spread": 3.0,
+      "away_spread": -3.0,
+      "total": 49.5,
+      "home_itt": 23.2,
+      "away_itt": 26.2,
+      "fetched_at": "2025-10-11T11:09:11.417246"
+    },
+    {
+      "game_id": "a11bbccb332241029ebaeb519b93b776",
+      "home_team": "Pittsburgh Steelers",
+      "away_team": "Cleveland Browns",
+      "home_spread": -5.5,
+      "away_spread": 5.5,
+      "total": 37.5,
+      "home_itt": 21.5,
+      "away_itt": 16.0,
+      "fetched_at": "2025-10-11T11:09:11.417565"
+    },
+    {
+      "game_id": "a7211a87bbd5fb2ee473eb9c93ee2e68",
+      "home_team": "Miami Dolphins",
+      "away_team": "Los Angeles Chargers",
+      "home_spread": 4.5,
+      "away_spread": -4.5,
+      "total": 43.5,
+      "home_itt": 19.5,
+      "away_itt": 24.0,
+      "fetched_at": "2025-10-11T11:09:11.417879"
+    },
+    {
+      "game_id": "4963bff460a5f26cab46a8e5ea6db148",
+      "home_team": "Las Vegas Raiders",
+      "away_team": "Tennessee Titans",
+      "home_spread": -4.5,
+      "away_spread": 4.5,
+      "total": 41.5,
+      "home_itt": 23.0,
+      "away_itt": 18.5,
+      "fetched_at": "2025-10-11T11:09:11.418303"
+    },
+    {
+      "game_id": "0c85b0939650e29689bb2651b33522eb",
+      "home_team": "Green Bay Packers",
+      "away_team": "Cincinnati Bengals",
+      "home_spread": -14.5,
+      "away_spread": 14.5,
+      "total": 44.5,
+      "home_itt": 29.5,
+      "away_itt": 15.0,
+      "fetched_at": "2025-10-11T11:09:11.418827"
+    },
+    {
+      "game_id": "9e705d669039f2ca8364f408b7792a8a",
+      "home_team": "Tampa Bay Buccaneers",
+      "away_team": "San Francisco 49ers",
+      "home_spread": -3.5,
+      "away_spread": 3.5,
+      "total": 47.5,
+      "home_itt": 25.5,
+      "away_itt": 22.0,
+      "fetched_at": "2025-10-11T11:09:11.419349"
+    },
+    {
+      "game_id": "82e432d5d8bc0b5a6cbe0c324de90de3",
+      "home_team": "Kansas City Chiefs",
+      "away_team": "Detroit Lions",
+      "home_spread": -2.5,
+      "away_spread": 2.5,
+      "total": 52.5,
+      "home_itt": 27.5,
+      "away_itt": 25.0,
+      "fetched_at": "2025-10-11T11:09:11.419642"
+    },
+    {
+      "game_id": "33e0adf378d2856ffe5f8452e7d5512d",
+      "home_team": "Atlanta Falcons",
+      "away_team": "Buffalo Bills",
+      "home_spread": 4.5,
+      "away_spread": -4.5,
+      "total": 49.5,
+      "home_itt": 22.5,
+      "away_itt": 27.0,
+      "fetched_at": "2025-10-11T11:09:11.419881"
+    },
+    {
+      "game_id": "38366aa83a3eb6cef71a1134c4fceb2c",
+      "home_team": "Washington Commanders",
+      "away_team": "Chicago Bears",
+      "home_spread": -4.5,
+      "away_spread": 4.5,
+      "total": 49.5,
+      "home_itt": 27.0,
+      "away_itt": 22.5,
+      "fetched_at": "2025-10-11T11:09:11.420123"
+    }
+  ]
+}

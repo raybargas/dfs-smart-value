@@ -56,7 +56,7 @@ def calculate_dk_fantasy_points(stats: Dict) -> float:
 
 def get_prior_week_performance(
     player_name: str,
-    week: int = 5,
+    week: int = 6,
     db_path: str = "dfs_optimizer.db"
 ) -> Optional[Dict]:
     """
@@ -124,7 +124,7 @@ def get_prior_week_performance(
 
 def get_high_scorers_from_prior_week(
     threshold: float = 20.0,
-    week: int = 5,
+    week: int = 6,
     db_path: str = "dfs_optimizer.db"
 ) -> List[Dict]:
     """
@@ -196,7 +196,7 @@ def get_high_scorers_from_prior_week(
 
 def check_regression_risk(
     player_name: str,
-    week: int = 5,
+    week: int = 6,
     threshold: float = 20.0,
     db_path: str = "dfs_optimizer.db"
 ) -> Tuple[bool, Optional[float], Optional[Dict]]:

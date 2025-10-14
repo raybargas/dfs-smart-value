@@ -95,12 +95,12 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
         # Regression analysis
         player_name = row['name']
         try:
-            is_at_risk, points, stats = check_regression_risk(player_name, week=5, threshold=20.0, db_path="dfs_optimizer.db")
+            is_at_risk, points, stats = check_regression_risk(player_name, week=6, threshold=20.0, db_path="dfs_optimizer.db")
             
             if is_at_risk and stats:
                 regression_risks.append('⚠️')
                 # Build detailed tooltip
-                tooltip_parts = [f"Week 5: {points:.1f} DK pts"]
+                tooltip_parts = [f"Week 6: {points:.1f} DK pts"]
                 if stats['pass_yards'] > 0:
                     tooltip_parts.append(f"Pass: {stats['pass_yards']} yds, {stats['pass_td']} TD")
                     if stats['pass_int'] > 0:
@@ -114,7 +114,7 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
             elif points is not None and stats:
                 regression_risks.append('✓')
                 # Build tooltip for safe players
-                tooltip_parts = [f"Week 5: {points:.1f} DK pts"]
+                tooltip_parts = [f"Week 6: {points:.1f} DK pts"]
                 if stats['pass_yards'] > 0:
                     tooltip_parts.append(f"Pass: {stats['pass_yards']} yds, {stats['pass_td']} TD")
                 if stats['rush_yards'] > 0:
@@ -125,7 +125,7 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
                 regression_tooltips.append(" | ".join(tooltip_parts))
             else:
                 regression_risks.append('')
-                regression_tooltips.append("No Week 5 data available")
+                regression_tooltips.append("No Week 6 data available")
             
             prior_week_points.append(points if points is not None else 0)
         except Exception as e:
@@ -156,7 +156,7 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def get_injury_data(week: int = 5) -> Dict[str, Dict[str, Any]]:
+def get_injury_data(week: int = 6) -> Dict[str, Dict[str, Any]]:
     """
     Fetch injury data from database for the given week.
     
@@ -203,7 +203,7 @@ def get_injury_data(week: int = 5) -> Dict[str, Dict[str, Any]]:
         return {}
 
 
-def add_injury_flags_to_dataframe(df: pd.DataFrame, week: int = 5) -> pd.DataFrame:
+def add_injury_flags_to_dataframe(df: pd.DataFrame, week: int = 6) -> pd.DataFrame:
     """
     Add injury flags to player names and create injury tooltips.
     
@@ -813,7 +813,7 @@ Smart Value =
                 position_weights = {pos: weights for pos, weights in position_weights.items() if weights}
             
             # Get current week for Vegas lines lookup
-            current_week = st.session_state.get('current_week', 5)
+            current_week = st.session_state.get('current_week', 6)
             df = calculate_smart_value(df, profile='balanced', custom_weights=custom_weights, position_weights=position_weights, sub_weights=sub_weights, week=current_week)
             st.session_state['smart_value_data'] = df
             st.session_state['smart_value_calculated'] = True
@@ -826,7 +826,7 @@ Smart Value =
             df = add_opponents_to_dataframe(df, opponent_map)
     
     # Add injury flags to player names
-    current_week = st.session_state.get('current_week', 5)
+    current_week = st.session_state.get('current_week', 6)
     df = add_injury_flags_to_dataframe(df, week=current_week)
     
     # Verify required columns exist before storing

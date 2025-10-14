@@ -46,8 +46,10 @@ def get_available_data_weeks():
         Dictionary with 'vegas' and 'injury' keys containing lists of available weeks
     """
     try:
+        import os
         from sqlalchemy import func
-        session = create_session()
+        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dfs_optimizer.db")
+        session = create_session(db_path)
         
         # Get weeks with Vegas data
         vegas_weeks = session.query(VegasLine.week).distinct().all()
@@ -96,7 +98,7 @@ def show():
     if 'last_injury_update' not in st.session_state:
         st.session_state.last_injury_update = None
     if 'current_week' not in st.session_state:
-        st.session_state.current_week = get_current_nfl_week()
+        st.session_state.current_week = 6  # Set to Week 6 for testing
     
     # Auto-load data on first visit (silently)
     if 'narrative_data_auto_loaded' not in st.session_state:
@@ -162,22 +164,29 @@ def show():
     
     with col1:
         previous_week = st.session_state.current_week
-        st.session_state.current_week = st.number_input(
+        new_week = st.number_input(
             "Week",
             min_value=1,
             max_value=18,
             value=st.session_state.current_week,
             help="NFL week",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key="week_selector"
         )
-        if st.session_state.current_week != previous_week:
+        # Update session state from widget value
+        if new_week != previous_week:
+            st.session_state.current_week = new_week
             load_vegas_lines_from_db()
             load_injury_reports_from_db()
+            st.rerun()
     
     with col2:
         available_weeks = get_available_data_weeks()
         if available_weeks['vegas'] or available_weeks['injury']:
             st.caption(f"📊 Vegas: Wk {available_weeks['vegas']} | Injury: Wk {available_weeks['injury']}")
+        else:
+            # Show current session week for debugging
+            st.caption(f"🔧 Session Week: {st.session_state.current_week}")
     
     with col3:
         # Combine success messages inline
@@ -209,7 +218,10 @@ def render_vegas_lines_section():
     st.markdown("### 🎰 Vegas Lines")
     st.caption("Team scoring expectations from betting markets")
     
-    col1, col2, col3 = st.columns([2, 2, 2])
+    # DEBUG: Show current session state week
+    st.caption(f"🔧 Debug: Session week = {st.session_state.current_week}")
+    
+    col1, col2, col3, col_reset = st.columns([1.5, 1.5, 1.5, 1])
     
     with col1:
         # Check API key
@@ -246,6 +258,13 @@ def render_vegas_lines_section():
         if is_rate_limited('vegas'):
             remaining = get_rate_limit_remaining('vegas')
             st.caption(f"⏱️ Refresh available in {remaining}")
+    
+    with col_reset:
+        # Force reset to Week 6 button
+        if st.button("🔄 Reset Week 6", help="Force reset to Week 6"):
+            st.session_state.current_week = 6
+            st.info(f"✅ Reset session to Week 6")
+            load_vegas_lines_from_db()
     
     # Display data table
     if st.session_state.vegas_lines_df is not None and not st.session_state.vegas_lines_df.empty:
@@ -389,8 +408,19 @@ def load_vegas_lines_from_db():
     """Load Vegas lines from database cache."""
     with st.spinner("Loading cached Vegas lines from database..."):
         try:
-            session = create_session()
-            lines = session.query(VegasLine).filter_by(week=st.session_state.current_week).all()
+            # Debug: Log the week being queried
+            query_week = st.session_state.current_week
+            
+            # Use absolute path to database
+            import os
+            db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dfs_optimizer.db")
+            st.info(f"🔍 Querying Week {query_week} from: {db_path}")
+            st.info(f"📁 DB exists: {os.path.exists(db_path)}")
+            
+            session = create_session(db_path)
+            lines = session.query(VegasLine).filter_by(week=query_week).all()
+            
+            st.info(f"📊 Query returned {len(lines)} games")
             
             if lines:
                 # Convert to DataFrame
@@ -414,7 +444,32 @@ def load_vegas_lines_from_db():
                 
                 st.success(f"✅ Loaded {len(lines)} games from database cache")
             else:
-                st.warning(f"⚠️ No cached data found for Week {st.session_state.current_week}")
+                # Try loading from JSON cache file as fallback
+                import json
+                cache_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cache", f"vegas_lines_week{query_week}.json")
+                
+                if os.path.exists(cache_file):
+                    with open(cache_file, 'r') as f:
+                        cache_data = json.load(f)
+                    
+                    # Convert cache to DataFrame
+                    data = []
+                    for game in cache_data['data']:
+                        data.append({
+                            'Game': f"{game['away_team']} @ {game['home_team']}",
+                            'Home Team': game['home_team'],
+                            'Away Team': game['away_team'],
+                            'Spread': f"{game['home_spread']:+.1f}" if game['home_spread'] else 'N/A',
+                            'Total': f"{game['total']:.1f}" if game['total'] else 'N/A',
+                            'Home ITT': f"{game['home_itt']:.1f}" if game['home_itt'] else 'N/A',
+                            'Away ITT': f"{game['away_itt']:.1f}" if game['away_itt'] else 'N/A'
+                        })
+                    
+                    st.session_state.vegas_lines_df = pd.DataFrame(data)
+                    st.session_state.last_vegas_update = datetime.fromisoformat(cache_data['cached_at'])
+                    st.success(f"✅ Loaded {len(data)} games from cache file (Week {query_week})")
+                else:
+                    st.warning(f"⚠️ No cached data found for Week {query_week}")
             
             session.close()
             
@@ -537,7 +592,9 @@ def load_injury_reports_from_db():
     """Load injury reports from database cache."""
     with st.spinner("Loading cached injury reports from database..."):
         try:
-            session = create_session()
+            import os
+            db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dfs_optimizer.db")
+            session = create_session(db_path)
             reports = session.query(InjuryReport).filter_by(week=st.session_state.current_week).all()
             
             if reports:
