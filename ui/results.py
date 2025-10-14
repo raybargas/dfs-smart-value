@@ -162,10 +162,13 @@ def render_results():
         """)
         
         # Show Smart Value filter if applied
+        filter_strategy = metadata.get('filter_strategy', 'simple')
         min_sv = metadata.get('min_smart_value', 0)
-        if min_sv > 0:
+        pos_floors = metadata.get('positional_floors', None)
+        
+        if filter_strategy == 'simple' and min_sv > 0:
             st.success(f"""
-            **🧠 Smart Value Filter Applied**
+            **🧠 Smart Value Filter Applied (Simple)**
             
             Only players with Smart Value ≥ **{min_sv}** were considered.
             
@@ -174,6 +177,18 @@ def render_results():
             ✅ Favorable matchups and game environments  
             ✅ Positive momentum and trends  
             ✅ Ownership leverage for tournaments
+            """)
+        elif filter_strategy == 'positional' and pos_floors:
+            floors_text = ", ".join([f"{pos}: {val}" for pos, val in pos_floors.items()])
+            st.success(f"""
+            **🧠 Smart Value Filter Applied (Positional)**
+            
+            Position-specific thresholds: **{floors_text}**
+            
+            This ensures each position meets custom quality standards:
+            ✅ Flexible thresholds per position  
+            ✅ Higher standards for key positions  
+            ✅ More options for value positions
             """)
         
         if metadata.get('max_ownership_enabled'):

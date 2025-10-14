@@ -53,27 +53,43 @@ def render_lineup_generation():
     player_pool_df = st.session_state['player_pool']
     
     # Step 3: Apply Smart Value filter (if enabled)
+    filter_strategy = config.get('filter_strategy', 'simple')
     min_smart_value = config.get('min_smart_value', 0)
+    positional_floors = config.get('positional_floors', None)
     
-    if min_smart_value > 0 and 'smart_value' in player_pool_df.columns:
+    if 'smart_value' in player_pool_df.columns:
         original_count = len(player_pool_df)
-        player_pool_df = player_pool_df[player_pool_df['smart_value'] >= min_smart_value].copy()
-        filtered_count = len(player_pool_df)
         
-        st.caption(f"📊 Pool filtered: {original_count} → {filtered_count} players (Smart Value ≥ {min_smart_value})")
+        if filter_strategy == 'simple' and min_smart_value > 0:
+            # Global filter
+            player_pool_df = player_pool_df[player_pool_df['smart_value'] >= min_smart_value].copy()
+            st.caption(f"📊 Pool filtered: {original_count} → {len(player_pool_df)} players (Smart Value ≥ {min_smart_value})")
+            
+        elif filter_strategy == 'positional' and positional_floors:
+            # Position-specific filter
+            def meets_threshold(row):
+                threshold = positional_floors.get(row['position'], 0)
+                return row['smart_value'] >= threshold
+            
+            player_pool_df = player_pool_df[player_pool_df.apply(meets_threshold, axis=1)].copy()
+            
+            # Show position-wise filtering
+            filter_summary = ", ".join([f"{pos}≥{val}" for pos, val in positional_floors.items()])
+            st.caption(f"📊 Pool filtered: {original_count} → {len(player_pool_df)} players ({filter_summary})")
         
         # Validate we still have enough players per position
-        position_counts = player_pool_df.groupby('position').size()
-        min_required = {'QB': 1, 'RB': 2, 'WR': 3, 'TE': 1, 'DST': 1}
-        
-        for pos, min_count in min_required.items():
-            actual_count = position_counts.get(pos, 0)
-            if actual_count < min_count:
-                st.error(f"⚠️ Not enough {pos}s after filtering (need {min_count}, have {actual_count}). Lower your Smart Value threshold.")
-                if st.button("⬅️ Back to Configuration"):
-                    st.session_state['page'] = 'optimization'
-                    st.rerun()
-                return
+        if len(player_pool_df) < original_count:  # Only validate if filtering was applied
+            position_counts = player_pool_df.groupby('position').size()
+            min_required = {'QB': 1, 'RB': 2, 'WR': 3, 'TE': 1, 'DST': 1}
+            
+            for pos, min_count in min_required.items():
+                actual_count = position_counts.get(pos, 0)
+                if actual_count < min_count:
+                    st.error(f"⚠️ Not enough {pos}s after filtering (need {min_count}, have {actual_count}). Lower your Smart Value threshold.")
+                    if st.button("⬅️ Back to Configuration"):
+                        st.session_state['page'] = 'optimization'
+                        st.rerun()
+                    return
     
     # ULTRA-COMPACT Loading message
     st.markdown(f"""
@@ -110,7 +126,9 @@ def render_lineup_generation():
         'error_message': error,
         'uniqueness_pct': config['uniqueness_pct'],
         'player_pool_size': len(player_pool_df),  # After filtering
-        'min_smart_value': config.get('min_smart_value', 0),  # NEW
+        'filter_strategy': config.get('filter_strategy', 'simple'),  # NEW
+        'min_smart_value': config.get('min_smart_value', 0),  # For simple mode
+        'positional_floors': config.get('positional_floors', None),  # For positional mode
         'max_ownership_enabled': config.get('max_ownership_enabled', False),
         'max_ownership_pct': config.get('max_ownership_pct', None)
     }

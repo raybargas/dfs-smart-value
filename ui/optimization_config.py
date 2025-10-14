@@ -112,6 +112,8 @@ def render_optimization_config():
     if not has_smart_value:
         st.warning("⚠️ Smart Value scores not available. Go back to Player Selection to calculate Smart Value. Skipping filter.")
         min_smart_value = 0
+        filter_strategy = 'simple'
+        positional_floors = None
     else:
         st.markdown("""
         Smart Value combines opportunity, matchup, trends, and leverage into a 0-100 score.  
@@ -120,33 +122,104 @@ def render_optimization_config():
         **Optimizer maximizes projected points** among players meeting this threshold.
         """)
         
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            min_smart_value = st.slider(
-                "Minimum Smart Value",
-                min_value=0,
-                max_value=100,
-                value=40,  # Default: Block bottom 40%
-                step=5,
-                help="Only consider players with Smart Value ≥ this threshold. Lower = more players available, Higher = stricter quality filter",
-                key="min_smart_value"
-            )
-        with col2:
-            st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
-            st.metric("", f"{min_smart_value}")
-            st.markdown('</div>', unsafe_allow_html=True)
+        # Mode selector
+        filter_strategy = st.radio(
+            "Filter Strategy",
+            options=['simple', 'positional'],
+            format_func=lambda x: {
+                'simple': '🎯 Simple (One threshold for all)',
+                'positional': '📊 Positional (Custom per position)'
+            }[x],
+            horizontal=True,
+            help="Simple = one threshold, Positional = customize by position",
+            key="filter_strategy"
+        )
         
-        # Quality tier indicator
-        if min_smart_value >= 70:
-            st.info("🎯 **Elite Plays Only** - Very strict filter, may limit lineup diversity")
-        elif min_smart_value >= 50:
-            st.success("✅ **Quality Plays** - Balanced filter for solid lineups")
-        elif min_smart_value >= 30:
-            st.warning("⚡ **Flexible** - Allows more options, including riskier plays")
-        else:
-            st.caption("🔓 **Wide Open** - Minimal filtering")
+        if filter_strategy == 'simple':
+            # Existing global slider
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                min_smart_value = st.slider(
+                    "Minimum Smart Value",
+                    min_value=0,
+                    max_value=100,
+                    value=40,  # Default: Block bottom 40%
+                    step=5,
+                    help="Only consider players with Smart Value ≥ this threshold",
+                    key="min_smart_value"
+                )
+            with col2:
+                st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
+                st.metric("", f"{min_smart_value}")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Quality tier indicator
+            if min_smart_value >= 70:
+                st.info("🎯 **Elite Plays Only** - Very strict filter")
+            elif min_smart_value >= 50:
+                st.success("✅ **Quality Plays** - Balanced filter")
+            elif min_smart_value >= 30:
+                st.warning("⚡ **Flexible** - Allows riskier plays")
+            else:
+                st.caption("🔓 **Wide Open** - Minimal filtering")
+            
+            positional_floors = None
+            
+        else:  # positional mode
+            st.caption("Set minimum Smart Value by position:")
+            
+            # Preset buttons
+            col1, col2, col3 = st.columns(3)
+            
+            presets = {
+                'conservative': {'QB': 60, 'RB': 55, 'WR': 50, 'TE': 50, 'DST': 40},
+                'balanced': {'QB': 50, 'RB': 45, 'WR': 40, 'TE': 40, 'DST': 30},
+                'aggressive': {'QB': 40, 'RB': 35, 'WR': 30, 'TE': 30, 'DST': 20}
+            }
+            
+            with col1:
+                if st.button("🛡️ Conservative", use_container_width=True):
+                    st.session_state['positional_preset'] = 'conservative'
+                    st.rerun()
+            with col2:
+                if st.button("⚖️ Balanced", use_container_width=True):
+                    st.session_state['positional_preset'] = 'balanced'
+                    st.rerun()
+            with col3:
+                if st.button("⚡ Aggressive", use_container_width=True):
+                    st.session_state['positional_preset'] = 'aggressive'
+                    st.rerun()
+            
+            # Get preset values if selected
+            preset_name = st.session_state.get('positional_preset', 'balanced')
+            preset_values = presets[preset_name]
+            
+            st.caption(f"Current preset: **{preset_name.title()}**")
+            
+            # Individual position sliders
+            positional_floors = {}
+            
+            for pos in ['QB', 'RB', 'WR', 'TE', 'DST']:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    positional_floors[pos] = st.slider(
+                        f"{pos} Minimum",
+                        min_value=0,
+                        max_value=100,
+                        value=preset_values[pos],
+                        step=5,
+                        key=f"min_sv_{pos}"
+                    )
+                with col2:
+                    st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
+                    st.metric("", f"{positional_floors[pos]}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+            
+            min_smart_value = None  # Not used in positional mode
     
+    st.session_state['temp_config']['filter_strategy'] = filter_strategy
     st.session_state['temp_config']['min_smart_value'] = min_smart_value
+    st.session_state['temp_config']['positional_floors'] = positional_floors
     
     # Stacking Strategy (for GPP tournament play)
     st.markdown("### 🔗 Stacking Strategy")
@@ -253,8 +326,10 @@ def render_optimization_config():
                     'uniqueness_pct': uniqueness_pct / 100,  # Convert to decimal
                     'max_ownership_enabled': max_ownership_enabled,
                     'max_ownership_pct': max_ownership_pct / 100 if max_ownership_pct else None,
-                    'min_smart_value': min_smart_value,  # NEW: Smart Value floor filter
-                    'stacking_enabled': stacking_enabled,  # For lineup_generation.py
+                    'filter_strategy': filter_strategy,  # NEW: 'simple' or 'positional'
+                    'min_smart_value': min_smart_value,  # For simple mode
+                    'positional_floors': positional_floors,  # For positional mode
+                    'stacking_enabled': stacking_enabled,
                     'estimated_time': validation_result['estimated_time'],
                     'validation_status': validation_result['status'],
                     'validation_message': validation_result['message']
