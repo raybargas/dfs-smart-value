@@ -169,8 +169,9 @@ def render_optimization_config():
                 st.caption("🔓 **Wide Open** - Minimal filtering")
             
             positional_floors = None
+            portfolio_avg = None
             
-        else:  # positional mode
+        elif filter_strategy == 'positional':
             st.caption("Set minimum Smart Value by position:")
             
             # Preset buttons
@@ -223,7 +224,7 @@ def render_optimization_config():
             min_smart_value = None  # Not used in positional mode
             portfolio_avg = None
             
-        else:  # portfolio mode
+        elif filter_strategy == 'portfolio':
             st.markdown("""
             **Portfolio Average Mode** allows individual "chalk" players with lower Smart Value 
             if balanced by high Smart Value plays elsewhere.
