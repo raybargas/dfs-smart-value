@@ -488,6 +488,10 @@ def render_player_selection():
                     del st.session_state['smart_value_data']
                 if 'enriched_player_data' in st.session_state:
                     del st.session_state['enriched_player_data']
+                if 'dfs_metrics_calculated' in st.session_state:
+                    del st.session_state['dfs_metrics_calculated']
+                if 'dfs_metrics_data' in st.session_state:
+                    del st.session_state['dfs_metrics_data']
                 st.success("✅ Configuration applied!")
                 st.rerun()
             
@@ -508,6 +512,10 @@ def render_player_selection():
                     del st.session_state['smart_value_data']
                 if 'enriched_player_data' in st.session_state:
                     del st.session_state['enriched_player_data']
+                if 'dfs_metrics_calculated' in st.session_state:
+                    del st.session_state['dfs_metrics_calculated']
+                if 'dfs_metrics_data' in st.session_state:
+                    del st.session_state['dfs_metrics_data']
                 
                 # CRITICAL: Delete widget keys so sliders reset to new values
                 widget_keys = ['base_weight_slider', 'opp_weight_slider', 'trends_weight_slider', 
