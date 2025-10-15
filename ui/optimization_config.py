@@ -625,7 +625,12 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
     if 'smart_value' not in pool_df.columns or pool_df['smart_value'].isna().all():
         return  # Skip if no Smart Value data
     
-    # Filter out players below hard floor (55)
+    # Ensure smart_value_global exists (for backwards compatibility)
+    if 'smart_value_global' not in pool_df.columns:
+        # If not present, use position smart value as fallback
+        pool_df['smart_value_global'] = pool_df['smart_value']
+    
+    # Filter out players below hard floor (55) using Position Smart Value
     valid_pool = pool_df[pool_df['smart_value'] >= 55].copy()
     
     if len(valid_pool) == 0:
@@ -637,12 +642,22 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
         st.markdown("""
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
             <p style="color: white; margin: 0; font-size: 0.95rem; line-height: 1.6;">
-            Based on <strong>Smart Value analysis</strong>, here are today's strongest plays across different categories.
+            Based on <strong>Global Smart Value analysis</strong>, here are today's strongest plays across different categories.
+            Global SV ranks players <strong>across all positions</strong> to identify true tournament-winning plays.
             These recommendations combine <strong>value</strong>, <strong>opportunity</strong>, <strong>leverage</strong>, 
             <strong>matchup quality</strong>, and <strong>game script intelligence</strong>.
             </p>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Add explainer about dual scoring
+        st.info("""
+        💡 **Understanding Smart Value Scores:**
+        - **Position SV** (used for filters): Compares players within their position (best QB, best RB, etc.)
+        - **Global SV** (used for rankings below): Compares players across all positions (actual elite plays)
+        
+        Example: A TE might have 90 Position SV (best TE) but only 45 Global SV (not elite overall)
+        """)
         
         # Create tabs for different play categories
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -654,15 +669,16 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
         ])
         
         with tab1:
-            st.markdown("#### 💎 Elite Plays (Smart Value 75+)")
-            st.caption("The cream of the crop - strong across all categories")
+            st.markdown("#### 💎 Elite Plays (Global Smart Value 75+)")
+            st.caption("True tournament-winning plays ranked across all positions")
             
-            elite_plays = valid_pool[valid_pool['smart_value'] >= 75].nlargest(8, 'smart_value')
+            elite_plays = valid_pool[valid_pool['smart_value_global'] >= 75].nlargest(8, 'smart_value_global')
             
             if len(elite_plays) > 0:
                 for idx, (_, player) in enumerate(elite_plays.iterrows(), 1):
                     # Get key metrics
-                    sv = player.get('smart_value', 0)
+                    sv_global = player.get('smart_value_global', 0)
+                    sv_position = player.get('smart_value', 0)
                     value_ratio = player.get('value_ratio', player['projection'] / (player['salary'] / 1000))
                     own = player.get('ownership', 0)
                     proj = player['projection']
@@ -693,8 +709,9 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
                                 </span>
                             </div>
                             <div style="text-align: right;">
-                                <div style="font-size: 1.2rem; font-weight: bold; color: #10b981;">{sv:.0f}</div>
-                                <div style="font-size: 0.75rem; color: #9ca3af;">Smart Value</div>
+                                <div style="font-size: 1.2rem; font-weight: bold; color: #10b981;">{sv_global:.0f}</div>
+                                <div style="font-size: 0.75rem; color: #9ca3af;">Global SV</div>
+                                <div style="font-size: 0.7rem; color: #6b7280; margin-top: 0.25rem;">(Pos: {sv_position:.0f})</div>
                             </div>
                         </div>
                         <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #333;">
@@ -708,21 +725,22 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
                     </div>
                     """, unsafe_allow_html=True)
             else:
-                st.info("No players above Smart Value 75 in current pool")
+                st.info("No players above Global Smart Value 75 in current pool")
         
         with tab2:
             st.markdown("#### ⚡ Leverage Gems (Low Ownership + High Ceiling)")
             st.caption("GPP tournament plays with differentiation potential")
             
-            # Find leverage plays: low ownership (< 15%) + high Smart Value (65+)
+            # Find leverage plays: low ownership (< 15%) + high Global Smart Value (65+)
             leverage_plays = valid_pool[
                 (valid_pool.get('ownership', 100) < 15) & 
-                (valid_pool['smart_value'] >= 65)
-            ].nlargest(6, 'smart_value')
+                (valid_pool['smart_value_global'] >= 65)
+            ].nlargest(6, 'smart_value_global')
             
             if len(leverage_plays) > 0:
                 for _, player in leverage_plays.iterrows():
-                    sv = player.get('smart_value', 0)
+                    sv_global = player.get('smart_value_global', 0)
+                    sv_position = player.get('smart_value', 0)
                     own = player.get('ownership', 0)
                     value_ratio = player.get('value_ratio', player['projection'] / (player['salary'] / 1000))
                     proj = player['projection']
@@ -738,7 +756,7 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
                                     {player['position']} • ${player['salary']:,}
                                 </span>
                                 <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #d1d5db;">
-                                    💡 <strong>{own:.1f}% owned</strong> • {ceiling_ratio:.1f}x ceiling multiplier • SV: {sv:.0f}
+                                    💡 <strong>{own:.1f}% owned</strong> • {ceiling_ratio:.1f}x ceiling multiplier • Global SV: {sv_global:.0f} (Pos: {sv_position:.0f})
                                 </div>
                             </div>
                         </div>
@@ -747,7 +765,7 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
                 
                 st.success("💡 **GPP Strategy**: These low-owned plays offer differentiation with strong underlying metrics")
             else:
-                st.info("No clear leverage plays found (looking for <15% own + 65+ Smart Value)")
+                st.info("No clear leverage plays found (looking for <15% own + 65+ Global SV)")
         
         with tab3:
             st.markdown("#### 📊 Top Play by Position")
@@ -794,13 +812,14 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
             # 1. Low owned (< 10%) with high ceiling
             # 2. OR mid-tier value with extreme ceiling
             gpp_diff = valid_pool[
-                ((valid_pool.get('ownership', 100) < 10) & (valid_pool['smart_value'] >= 60)) |
-                ((valid_pool.get('value_ratio', 0) >= 3.0) & (valid_pool.get('smart_value', 0) >= 70))
-            ].nlargest(8, 'smart_value')
+                ((valid_pool.get('ownership', 100) < 10) & (valid_pool['smart_value_global'] >= 60)) |
+                ((valid_pool.get('value_ratio', 0) >= 3.0) & (valid_pool.get('smart_value_global', 0) >= 70))
+            ].nlargest(8, 'smart_value_global')
             
             if len(gpp_diff) > 0:
                 for _, player in gpp_diff.iterrows():
-                    sv = player.get('smart_value', 0)
+                    sv_global = player.get('smart_value_global', 0)
+                    sv_position = player.get('smart_value', 0)
                     own = player.get('ownership', 0)
                     proj = player['projection']
                     ceiling = player.get('season_ceiling', proj * 1.5)
@@ -818,7 +837,7 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
                     <div style="padding: 0.75rem; background: #2d1b4e; border-radius: 6px; margin-bottom: 0.5rem;">
                         <strong>{diff_type}</strong> • {player['name']} ({player['position']})  
                         <div style="color: #c4b5fd; font-size: 0.85rem; margin-top: 0.25rem;">
-                            {own:.1f}% own • {proj:.1f}→{ceiling:.1f} pts range • SV: {sv:.0f}
+                            {own:.1f}% own • {proj:.1f}→{ceiling:.1f} pts range • Global SV: {sv_global:.0f} (Pos: {sv_position:.0f})
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -906,6 +925,14 @@ def display_player_pool_details(pool_df: pd.DataFrame):
         display_cols = ['name', 'position', 'team', 'salary', 'projection']
         col_names = ['Player', 'Pos', 'Team', 'Salary', 'Proj']
         
+        # Add Smart Value columns if they exist
+        if 'smart_value_global' in pool_df.columns:
+            display_cols.extend(['smart_value_global', 'smart_value'])
+            col_names.extend(['Global SV', 'Pos SV'])
+        elif 'smart_value' in pool_df.columns:
+            display_cols.append('smart_value')
+            col_names.append('SV')
+        
         # Add narrative intelligence columns if they exist
         if 'itt' in pool_df.columns:
             display_cols.append('itt')
@@ -937,6 +964,12 @@ def display_player_pool_details(pool_df: pd.DataFrame):
         if 'salary' in display_df.columns:
             display_df['salary'] = display_df['salary'].apply(lambda x: f"${x:,.0f}")
         
+        # Format Smart Value columns to 0 decimals (already 0-100)
+        if 'smart_value_global' in display_df.columns:
+            display_df['smart_value_global'] = display_df['smart_value_global'].apply(lambda x: f"{x:.0f}" if pd.notna(x) else "N/A")
+        if 'smart_value' in display_df.columns:
+            display_df['smart_value'] = display_df['smart_value'].apply(lambda x: f"{x:.0f}" if pd.notna(x) else "N/A")
+        
         # Format ITT to 1 decimal
         if 'itt' in display_df.columns:
             display_df['itt'] = display_df['itt'].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "N/A")
@@ -966,7 +999,15 @@ def display_player_pool_details(pool_df: pd.DataFrame):
         )
         
         # Add helpful notes
-        st.caption("💡 **ITT** = Implied Team Total (Vegas projected points) | **Injury** statuses: Questionable (Q), Out (O), Doubtful (D)")
+        if 'smart_value_global' in pool_df.columns:
+            st.caption("""
+            💡 **Global SV** = Smart Value across all positions (true ranking) | 
+            **Pos SV** = Smart Value within position (best at their position) | 
+            **ITT** = Implied Team Total (Vegas projected points) | 
+            **Injury** statuses: Questionable (Q), Out (O), Doubtful (D)
+            """)
+        else:
+            st.caption("💡 **ITT** = Implied Team Total (Vegas projected points) | **Injury** statuses: Questionable (Q), Out (O), Doubtful (D)")
 
 
 def display_constraints_summary(pool_df: pd.DataFrame, lineup_count: int, uniqueness_pct: int, 

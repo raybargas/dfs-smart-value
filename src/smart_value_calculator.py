@@ -761,6 +761,12 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df['chalk_penalty']  # Negative values reduce score
     )
     
+    # PHASE 4.5: Calculate BOTH Position-Specific AND Global Smart Value
+    # 
+    # Smart Value serves two different purposes:
+    # 1. POSITION Smart Value: For filtering/comparison within position (current system)
+    # 2. GLOBAL Smart Value: For cross-position ranking/narrative (new system)
+    
     # Scale to 0-100 for intuitive interpretation
     # Use POSITION-SPECIFIC min-max scaling so each position has its own 0-100 range
     # This prevents QBs from being compressed by RB/WR dominance
@@ -793,6 +799,22 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         else:
             df['smart_value'] = 50.0
     
+    # PHASE 4.5: Calculate GLOBAL Smart Value (cross-position comparison)
+    # This normalizes across ALL positions for narrative/ranking purposes
+    # Use cases: Elite Plays, cross-position comparisons, tournament strategy
+    
+    global_min = df['smart_value_raw'].min()
+    global_max = df['smart_value_raw'].max()
+    
+    if global_max > global_min:
+        df['smart_value_global'] = ((df['smart_value_raw'] - global_min) / (global_max - global_min)) * 100
+    else:
+        df['smart_value_global'] = 50.0
+    
+    # Round both scores for cleaner display
+    df['smart_value'] = df['smart_value'].round(1)
+    df['smart_value_global'] = df['smart_value_global'].round(1)
+    
     # Build tooltip breakdown
     def build_tooltip(row):
         # Show component contributions as percentages of the final 0-100 score
@@ -813,7 +835,11 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
             base_val = opp_val = trend_val = risk_val = match_val = leverage_val = chalk_penalty_val = 0
         
         tooltip = (
-            f"Smart Value: {row['smart_value']:.1f}/100\n"
+            f"Position Smart Value: {row['smart_value']:.1f}/100\n"
+            f"Global Smart Value: {row['smart_value_global']:.1f}/100\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 Position SV: Best {row.get('position', 'player')} in pool\n"
+            f"💡 Global SV: Best overall (cross-position)\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"Component Breakdown:\n\n"
             f"💰 Base Value: +{base_val:.1f} ({int(weights['base']*100)}% weight)\n"
