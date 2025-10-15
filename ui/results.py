@@ -152,7 +152,9 @@ def render_results():
     
     # Check if this is a historical week analysis
     current_week = st.session_state.get('current_week', None)
-    is_historical = current_week is not None and current_week < get_current_nfl_week()
+    # For now, treat any week as historical since we're in offseason
+    # TODO: Update this logic when NFL season starts
+    is_historical = current_week is not None
     
     # Load historical scores if analyzing past week
     historical_scores = None
