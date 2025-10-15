@@ -156,10 +156,16 @@ def render_results():
     # TODO: Update this logic when NFL season starts
     is_historical = current_week is not None
     
+    # Debug info
+    st.write(f"🔧 Debug: current_week={current_week}, is_historical={is_historical}")
+    
     # Load historical scores if analyzing past week
     historical_scores = None
     if is_historical:
         historical_scores = load_historical_player_scores(current_week)
+        st.write(f"🔧 Debug: historical_scores loaded: {historical_scores is not None}")
+        if historical_scores:
+            st.write(f"🔧 Debug: {len(historical_scores)} players in historical data")
     
     # ULTRA-COMPACT Header: Single line
     st.markdown("""
