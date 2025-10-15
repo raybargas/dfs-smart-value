@@ -1120,14 +1120,33 @@ Smart Value =
             else:
                 combined_tooltip = injury_tooltip
         
+        # Check for regression risk (80/20 rule)
+        has_regression_risk = bool(row.get('regression_risk', ''))  # Convert checkmark to boolean
+        regression_tooltip = row.get('regression_tooltip', '')
+        
+        # Build player name tooltip (injury + warnings + regression)
+        player_tooltip = row['name']
+        tooltip_parts = []
+        if injury_tooltip:
+            tooltip_parts.append(injury_tooltip)
+        if regression_tooltip:
+            tooltip_parts.append(regression_tooltip)
+        if warning_tooltip:
+            tooltip_parts.append(warning_tooltip)
+        
+        if tooltip_parts:
+            player_tooltip = " | ".join(tooltip_parts)
+        
         # Prepare player data with DFS metrics + Season stats + Warning flags + Injury flags
         player_data = {
             '_index': idx,  # Hidden column to track original index
             '_warning_flag': has_warning,  # Hidden flag for row styling
             '_warning_tooltip': combined_tooltip,  # Combined tooltip (injury + warnings)
+            '_regression_risk': has_regression_risk,  # Hidden boolean for cell styling
             'Pool': is_in_pool,
             'Lock': is_locked,
             'Player': row['name'],
+            'Player_Tooltip': player_tooltip,  # Combined tooltip for player name
             'Pos': row['position'],
             'Salary': row['salary'],
             'Proj': row['projection'],
@@ -1139,8 +1158,6 @@ Smart Value =
             'Rank': f"{row['position']}{int(row['pos_rank'])}" if 'pos_rank' in row else "-",
             'Lvg': row['leverage'] if 'leverage' in row else 0,
             'Lvg_Tooltip': row['leverage_tooltip'] if 'leverage_tooltip' in row else '',
-            'Reg': row['regression_risk'] if 'regression_risk' in row else '',
-            'Reg_Tooltip': row['regression_tooltip'] if 'regression_tooltip' in row else '',
             'Team': row['team'],
             'Opp': row['opponent'] if 'opponent' in row and pd.notna(row['opponent']) else "-",
             # Vegas data
@@ -1166,10 +1183,30 @@ Smart Value =
     # Configure AgGrid
     gb = GridOptionsBuilder.from_dataframe(grid_df)
     
+    # Custom cell renderer for Player column to color names red if regression risk
+    player_cell_renderer = JsCode("""
+    class PlayerCellRenderer {
+        init(params) {
+            this.eGui = document.createElement('div');
+            this.eGui.innerText = params.value;
+            // Check if player has regression risk (80/20 rule)
+            if (params.data._regression_risk) {
+                this.eGui.style.color = 'red';
+                this.eGui.style.fontWeight = '600';
+            }
+        }
+        getGui() {
+            return this.eGui;
+        }
+    }
+    """)
+    
     # Configure columns
     gb.configure_column("_index", hide=True)  # Hide the index tracking column
     gb.configure_column("_warning_flag", hide=True)  # Hide warning flag (used for row styling)
     gb.configure_column("_warning_tooltip", hide=True)  # Hide warning tooltip
+    gb.configure_column("_regression_risk", hide=True)  # Hide regression risk boolean
+    gb.configure_column("Player_Tooltip", hide=True)  # Hide player tooltip (used by cellRenderer)
     
     gb.configure_column("Pool", 
                         header_name="Pool",
@@ -1203,7 +1240,9 @@ Smart Value =
                         menuTabs=menu_tabs,
                         width=200,
                         pinned='left',
-                        tooltipField='_warning_tooltip')
+                        cellRenderer=player_cell_renderer,
+                        tooltipField='Player_Tooltip',
+                        headerTooltip="PLAYER NAME - Red text indicates 80/20 REGRESSION RISK (scored 20+ fantasy points last week). Hover for details on injury status, regression risk, and warnings.")
     
     gb.configure_column("Pos", 
                         header_name="Pos",
@@ -1292,23 +1331,8 @@ Smart Value =
                         tooltipField="Lvg_Tooltip",
                         headerTooltip="LEVERAGE SCORE - Calculated as Value ÷ Ownership% (e.g., 3.0 pts/$1K ÷ 10% own = 0.30 leverage). Higher scores = better tournament opportunity. FORMULA: A 0.50+ leverage score means excellent GPP upside (low-owned + good value). 0.30-0.50 = solid leverage. <0.30 = chalk or poor value. Strategy: Target high leverage (0.40+) for GPP differentiation. Sort by this column to find the best contrarian plays with value.")
     
-    gb.configure_column("Reg", 
-                        header_name="Reg",
-                        filter="agTextColumnFilter",
-                        filterParams={
-                            "buttons": ["reset", "apply"],
-                            "closeOnApply": True,
-                            "debounceMs": 200
-                        },
-                        menuTabs=menu_tabs,
-                        width=65,
-                        cellStyle={'textAlign': 'center', 'fontSize': '1.2rem', 'color': '#f59e0b'},
-                        tooltipField="Reg_Tooltip",
-                        headerTooltip="80/20 REGRESSION RISK - Based on historical data: 80% of players who scored 20+ fantasy points last week will regress (score less) this week. ✓ CHECKMARK = Player scored 20+ last week, HIGH REGRESSION RISK - use caution, lower exposure, fade in cash games. BLANK = No risk (scored <20 last week) or no prior week data. Strategy: Fade ✓ players in cash games. In GPPs, they can be contrarian if ownership is inflated due to recency bias. Hover over checkmark for detailed Week 6 stats.")
-    
     # Hide tooltip columns (they're just data sources for tooltips)
     gb.configure_column("Lvg_Tooltip", hide=True)
-    gb.configure_column("Reg_Tooltip", hide=True)
     gb.configure_column("Cons_Tooltip", hide=True)
     gb.configure_column("Mom_Tooltip", hide=True)
     gb.configure_column("Smart_Value_Tooltip", hide=True)
