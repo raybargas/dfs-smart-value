@@ -266,7 +266,7 @@ def _generate_single_lineup(
     
     # Constraint 6: Stacking (if enabled)
     if stacking_enabled:
-        # For each QB, ensure at least 1 WR/TE from same team is selected
+        # Forward constraint: For each QB, ensure at least 1 WR/TE from same team is selected
         for qb in qbs:
             qb_team = qb.team
             
@@ -282,6 +282,26 @@ def _generate_single_lineup(
                 prob += pulp.lpSum([
                     player_vars[p.name] for p in same_team_pass_catchers
                 ]) >= player_vars[qb.name], f"Stack_QB_{qb.name.replace(' ', '_')}"
+        
+        # Reverse constraint: If 2+ pass catchers from same team, QB must be included
+        # Group pass catchers by team
+        team_pass_catchers = {}
+        for player in wrs + tes:
+            if player.team not in team_pass_catchers:
+                team_pass_catchers[player.team] = []
+            team_pass_catchers[player.team].append(player)
+        
+        for team, pass_catchers in team_pass_catchers.items():
+            if len(pass_catchers) >= 2:  # Only apply if team has 2+ pass catchers
+                # Find QB from same team
+                team_qb = next((qb for qb in qbs if qb.team == team), None)
+                
+                if team_qb:
+                    # If 2+ pass catchers from this team are selected, QB must be selected
+                    # Create constraint: sum(pass_catchers) >= 2 * player_vars[team_qb.name]
+                    # This means: if 2+ pass catchers selected, QB must be selected (1)
+                    # If 0-1 pass catchers selected, QB can be 0 or 1
+                    prob += pulp.lpSum([player_vars[p.name] for p in pass_catchers]) >= 2 * player_vars[team_qb.name], f"Stack_Reverse_{team}"
     
     # Constraint 7: GAME STACK (NEW from Week 6 analysis)
     # Force 2-3 players from at least one high-scoring game (50+ total)
