@@ -446,38 +446,61 @@ def render_player_selection():
                         else:
                             st.error("Profile not found")
             
-            with col3:
-                if st.button("💾 Save Profile", use_container_width=True):
-                    if selected_profile:
-                        # Collect all current configuration
-                        current_config = {
-                            'main_weights': st.session_state.get('smart_value_custom_weights', DEFAULT_WEIGHTS),
-                            'sub_weights': st.session_state.get('smart_value_sub_weights', DEFAULT_SUB_WEIGHTS),
-                            'position_weights': st.session_state.get('position_specific_weights', DEFAULT_POSITION_WEIGHTS),
-                            'thresholds': {
-                                'smart_threshold': st.session_state.get('smart_threshold', 60),
-                                'ownership_threshold': st.session_state.get('ownership_threshold', 25),
-                                'salary_threshold': st.session_state.get('salary_threshold', 8000),
-                                'projection_threshold': st.session_state.get('projection_threshold', 15)
-                            }
+        with col3:
+            if st.button("💾 Save Profile", use_container_width=True):
+                if selected_profile:
+                    # Get current slider values (not session state)
+                    base_weight = st.session_state.get('base_weight_slider', 15)
+                    opp_weight = st.session_state.get('opp_weight_slider', 25)
+                    trends_weight = st.session_state.get('trends_weight_slider', 10)
+                    risk_weight = st.session_state.get('risk_weight_slider', 5)
+                    matchup_weight = st.session_state.get('matchup_weight_slider', 25)
+                    leverage_weight = st.session_state.get('leverage_weight_slider', 20)
+                    regression_weight = st.session_state.get('regression_weight_slider', 5)
+                    
+                    # Calculate total and normalize
+                    total = base_weight + opp_weight + trends_weight + risk_weight + matchup_weight + leverage_weight + regression_weight
+                    
+                    # Collect all current configuration with normalized weights
+                    current_config = {
+                        'main_weights': {
+                            'base': base_weight / total if total > 0 else 0.15,
+                            'opportunity': opp_weight / total if total > 0 else 0.25,
+                            'trends': trends_weight / total if total > 0 else 0.10,
+                            'risk': risk_weight / total if total > 0 else 0.05,
+                            'matchup': matchup_weight / total if total > 0 else 0.25,
+                            'leverage': leverage_weight / total if total > 0 else 0.20,
+                            'regression': regression_weight / total if total > 0 else 0.05
+                        },
+                        'sub_weights': st.session_state.get('smart_value_sub_weights', DEFAULT_SUB_WEIGHTS),
+                        'position_weights': st.session_state.get('position_specific_weights', DEFAULT_POSITION_WEIGHTS),
+                        'thresholds': {
+                            'smart_threshold': st.session_state.get('smart_threshold', 60),
+                            'ownership_threshold': st.session_state.get('ownership_threshold', 25),
+                            'salary_threshold': st.session_state.get('salary_threshold', 8000),
+                            'projection_threshold': st.session_state.get('projection_threshold', 15)
                         }
-                        
-                        # Debug info
-                        st.write("Debug - Current config:")
-                        st.write(f"Main weights: {current_config['main_weights']}")
-                        st.write(f"Sub weights: {current_config['sub_weights']}")
-                        st.write(f"Thresholds: {current_config['thresholds']}")
-                        
-                        if validate_config(current_config):
-                            if save_profile_config(selected_profile, current_config):
-                                st.session_state.current_profile = selected_profile
-                                st.success(f"✅ Saved {selected_display} successfully!")
-                            else:
-                                st.error("❌ Failed to save profile")
+                    }
+                    
+                    # Debug info
+                    st.write("Debug - Current config:")
+                    st.write(f"Slider values: Base={base_weight}%, Opp={opp_weight}%, Total={total}%")
+                    st.write(f"Normalized weights: {current_config['main_weights']}")
+                    st.write(f"Sub weights: {current_config['sub_weights']}")
+                    st.write(f"Thresholds: {current_config['thresholds']}")
+                    
+                    if validate_config(current_config):
+                        if save_profile_config(selected_profile, current_config):
+                            # Also update session state with the saved values
+                            st.session_state['smart_value_custom_weights'] = current_config['main_weights']
+                            st.session_state.current_profile = selected_profile
+                            st.success(f"✅ Saved {selected_display} successfully!")
                         else:
-                            st.error("❌ Configuration validation failed")
+                            st.error("❌ Failed to save profile")
                     else:
-                        st.error("❌ No profile selected")
+                        st.error("❌ Configuration validation failed")
+                else:
+                    st.error("❌ No profile selected")
             
             # Show current profile
             st.caption(f"Current: {get_profile_display_name(st.session_state.current_profile)}")
