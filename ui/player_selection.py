@@ -95,13 +95,14 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
         # Regression analysis
         player_name = row['name']
         try:
-            is_at_risk, points, stats = check_regression_risk(player_name, week=6, threshold=20.0, db_path="dfs_optimizer.db")
+            # Check PRIOR week data (Week 5 is prior to Week 6)
+            is_at_risk, points, stats = check_regression_risk(player_name, week=5, threshold=20.0, db_path="dfs_optimizer.db")
             
             if is_at_risk and stats:
                 regression_risks.append('✓')  # Checkmark indicates regression risk
                 # Build detailed tooltip
                 tooltip_parts = [f"⚠️ 80/20 REGRESSION RISK"]
-                tooltip_parts.append(f"Week 6: {points:.1f} DK pts (20+ threshold)")
+                tooltip_parts.append(f"Week 5: {points:.1f} DK pts (20+ threshold)")
                 if stats['pass_yards'] > 0:
                     tooltip_parts.append(f"Pass: {stats['pass_yards']} yds, {stats['pass_td']} TD")
                     if stats['pass_int'] > 0:
@@ -116,7 +117,7 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
                 regression_risks.append('')  # No checkmark = no risk or no data
                 if points is not None and stats:
                     # Build tooltip for safe players
-                    tooltip_parts = [f"Week 6: {points:.1f} DK pts"]
+                    tooltip_parts = [f"Week 5: {points:.1f} DK pts"]
                     if stats['pass_yards'] > 0:
                         tooltip_parts.append(f"Pass: {stats['pass_yards']} yds, {stats['pass_td']} TD")
                     if stats['rush_yards'] > 0:
@@ -126,7 +127,7 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
                     tooltip_parts.append("No regression risk (scored <20 pts)")
                     regression_tooltips.append(" | ".join(tooltip_parts))
                 else:
-                    regression_tooltips.append("No Week 6 data available")
+                    regression_tooltips.append("No Week 5 data available")
             
             prior_week_points.append(points if points is not None else 0)
         except Exception as e:
