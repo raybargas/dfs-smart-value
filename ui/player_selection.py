@@ -927,7 +927,7 @@ Smart Value =
     col1, col2, col3, col4 = st.columns([2.5, 1, 1, 1.5])
     
     with col1:
-        st.caption("🎯 Smart Value Threshold")
+        st.caption("🎯 Position Smart Value Threshold")
         
         # Use form to prevent slider from triggering reruns
         with st.form(key="threshold_form", clear_on_submit=False):
@@ -937,7 +937,7 @@ Smart Value =
                 max_value=100,
                 value=st.session_state.get('last_threshold', 0),
                 step=5,
-                help="Move slider to set threshold, then click button to apply",
+                help="Filters by Position SV (best within position). Move slider to set threshold, then click button to apply",
                 label_visibility="collapsed"
             )
             
@@ -966,7 +966,7 @@ Smart Value =
                 
                 # Show success message
                 selected_count = sum(1 for s in st.session_state['selections'].values() if s != PlayerSelection.NORMAL.value)
-                st.success(f"✅ Selected {selected_count} players with Smart Value ≥ {smart_threshold}")
+                st.success(f"✅ Selected {selected_count} players with Position SV ≥ {smart_threshold}")
                 
                 # CRITICAL: Rerun to update AgGrid with new selections
                 st.rerun()
@@ -1098,7 +1098,8 @@ Smart Value =
             'Proj': row['projection'],
             'Own%': row['ownership'] if 'ownership' in row and pd.notna(row['ownership']) else 0,
             'Value': row['value'] if 'value' in row else 0,
-            'Smart Value': row['smart_value'] if 'smart_value' in row else row.get('value', 0),
+            'Global SV': row['smart_value_global'] if 'smart_value_global' in row else row.get('smart_value', 0),
+            'Pos SV': row['smart_value'] if 'smart_value' in row else row.get('value', 0),
             'Smart_Value_Tooltip': row.get('smart_value_tooltip', 'Smart Value calculation pending'),
             'Rank': f"{row['position']}{int(row['pos_rank'])}" if 'pos_rank' in row else "-",
             'Lvg': row['leverage_tier'] if 'leverage_tier' in row else '•',
@@ -1209,14 +1210,32 @@ Smart Value =
     # Hide "Value" column - replaced by Smart Value
     gb.configure_column("Value", hide=True)
     
-    gb.configure_column("Smart Value", 
-                        header_name="Smart Value",
+    # PHASE 4.5: Dual Smart Value Columns
+    gb.configure_column("Global SV", 
+                        header_name="Global SV",
                         type=["numericColumn"],
                         valueFormatter="value ? value.toFixed(0) : ''",  # Show as whole number (0-100 scale)
                         filter="agNumberColumnFilter",
                         filterParams=filter_config,
                         menuTabs=menu_tabs,
-                        width=120,
+                        width=110,
+                        cellStyle={
+                            'fontWeight': 'bold',
+                            'textAlign': 'center',
+                            'backgroundColor': '#1a3d5c',  # Dark blue background
+                            'color': '#60a5fa'  # Light blue text
+                        },
+                        tooltipField="Smart_Value_Tooltip",
+                        headerTooltip="GLOBAL SMART VALUE 🌐 - Ranks players ACROSS ALL POSITIONS. Shows true tournament-winning plays. A QB with 90 Global SV is comparable to an RB with 90 Global SV. Use this for cross-position decisions and identifying actual elite plays. High-projection positions (QB/RB/WR) will naturally score higher. Low-impact plays (6-13 pt projections) will score lower even if they're the best at their position.")
+    
+    gb.configure_column("Pos SV", 
+                        header_name="Pos SV",
+                        type=["numericColumn"],
+                        valueFormatter="value ? value.toFixed(0) : ''",  # Show as whole number (0-100 scale)
+                        filter="agNumberColumnFilter",
+                        filterParams=filter_config,
+                        menuTabs=menu_tabs,
+                        width=100,
                         cellStyle={
                             'fontWeight': 'bold',
                             'textAlign': 'center',
@@ -1224,7 +1243,7 @@ Smart Value =
                             'color': '#4ade80'  # Light green text
                         },
                         tooltipField="Smart_Value_Tooltip",
-                        headerTooltip="SMART VALUE SCORE 🧠 - Advanced multi-factor score combining: Base Value (40%), Opportunity metrics (30%), 5-week Trends (15%), Risk factors (10%), Matchup quality (5%). This goes BEYOND simple projection/salary to find truly undervalued plays by incorporating volume, momentum, regression risk, and game environment. Higher = Better overall DFS value. HOVER OVER ANY CELL to see detailed breakdown! Sort by this column to find the smartest plays that the market might be missing.")
+                        headerTooltip="POSITION SMART VALUE 📊 - Ranks players WITHIN THEIR POSITION. Shows best QB, best RB, best TE, etc. Used for filters and positional constraints. A TE with 90 Pos SV is the best TE available, but might only have 45 Global SV (not elite overall). Use this for position-specific decisions like 'Do I want the #1 TE or #3 TE?'")
     
     # Hide "Rank" column - no longer needed with Smart Value
     gb.configure_column("Rank", hide=True)
