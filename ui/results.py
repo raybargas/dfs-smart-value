@@ -555,7 +555,7 @@ def render_results():
             st.markdown(f"- **Under-performed:** {under_performed}/{len(actual_scores)} lineups ({under_performed/len(actual_scores)*100:.1f}%)")
             
             # Contest context
-            st.markdown("**Contest Context (Week 6 DraftKings):**")
+            st.markdown(f"**Contest Context (Week {current_week} DraftKings):**")
             st.markdown("- **Winning Score:** ~229 pts")
             st.markdown("- **Top 10 Cutoff:** ~213 pts") 
             st.markdown("- **Min Cash:** ~140-145 pts")

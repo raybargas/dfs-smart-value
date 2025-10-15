@@ -191,7 +191,7 @@ def show():
     
     with col1:
         # Show current analysis week
-        current_week = st.session_state.get('current_week', 7)
+        current_week = st.session_state.get('current_week', get_current_nfl_week())
         st.markdown(f"**Week {current_week}**")
     
     with col2:
@@ -602,7 +602,7 @@ def load_injury_reports_from_db():
             import os
             db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dfs_optimizer.db")
             session = create_session(db_path)
-            current_week = st.session_state.get('current_week', 7)
+            current_week = st.session_state.get('current_week', get_current_nfl_week())
             reports = session.query(InjuryReport).filter_by(week=current_week).all()
             
             if reports:

@@ -15,6 +15,26 @@ from src.database_models import create_session, VegasLine, InjuryReport
 from src.data_cache import get_cache_status, list_cached_weeks
 
 
+def get_current_nfl_week() -> int:
+    """
+    Calculate current NFL week based on date.
+    NFL 2025 season starts September 4, 2025 (Week 1 Thursday).
+    
+    Returns:
+        Current NFL week (1-18)
+    """
+    # NFL 2025 season start date (Week 1 Thursday)
+    season_start = datetime(2025, 9, 4)
+    current_date = datetime.now()
+    
+    # Calculate weeks since start
+    days_since_start = (current_date - season_start).days
+    week = (days_since_start // 7) + 1
+    
+    # Clamp to valid range (1-18)
+    return max(1, min(18, week))
+
+
 def render_historical_mode_selector():
     """
     Render the historical mode selector and week management interface.
@@ -30,7 +50,7 @@ def render_historical_mode_selector():
     if 'historical_mode' not in st.session_state:
         st.session_state.historical_mode = False
     if 'selected_historical_week' not in st.session_state:
-        st.session_state.selected_historical_week = 6
+        st.session_state.selected_historical_week = get_current_nfl_week() - 1
     
     st.markdown("### 🕰️ Historical Analysis Mode")
     st.caption("Run roster builds using past week's data for testing and analysis")
@@ -239,7 +259,7 @@ def save_current_week_to_cache():
     try:
         from src.data_cache import save_vegas_lines_to_cache, save_injury_reports_to_cache
         
-        current_week = st.session_state.get('current_week', 6)
+        current_week = st.session_state.get('current_week', get_current_nfl_week())
         
         with st.spinner(f"Saving Week {current_week} to cache..."):
             vegas_saved = save_vegas_lines_to_cache(current_week)
@@ -288,17 +308,17 @@ def get_current_analysis_week() -> int:
         Week number for analysis (historical week if in historical mode, current week otherwise)
     """
     if st.session_state.get('historical_mode', False):
-        return st.session_state.get('selected_historical_week', 6)
+        return st.session_state.get('selected_historical_week', get_current_nfl_week() - 1)
     else:
-        return st.session_state.get('current_week', 6)
+        return st.session_state.get('current_week', get_current_nfl_week())
 
 
 def render_historical_mode_indicator():
     """Render a compact indicator showing current analysis mode."""
     
     if st.session_state.get('historical_mode', False):
-        week = st.session_state.get('selected_historical_week', 6)
+        week = st.session_state.get('selected_historical_week', get_current_nfl_week() - 1)
         st.markdown(f"🕰️ **Historical Mode**: Analyzing Week {week}")
     else:
-        week = st.session_state.get('current_week', 6)
+        week = st.session_state.get('current_week', get_current_nfl_week())
         st.markdown(f"📅 **Current Mode**: Analyzing Week {week}")
