@@ -50,6 +50,9 @@ def render_optimization_config():
     pool_df = get_player_pool()
     display_pool_summary(pool_df)
     
+    # 3.4. Best Plays Narrative (Phase 4: Smart Value Storytelling)
+    display_best_plays_narrative(pool_df)
+    
     # 3.5. Detailed Player Pool View (with Narrative Intelligence)
     display_player_pool_details(pool_df)
     
@@ -609,6 +612,283 @@ def display_pool_summary(pool_df: pd.DataFrame):
         st.markdown("</div>", unsafe_allow_html=True)
     
     st.markdown("</div>", unsafe_allow_html=True)
+
+
+def display_best_plays_narrative(pool_df: pd.DataFrame):
+    """
+    Display narrative analysis of best plays based on Smart Value and metrics.
+    
+    Phase 4: Storytelling feature that highlights top plays by category with
+    meaningful explanations of why they're strong based on the metrics we track.
+    """
+    # Only show if Smart Value is calculated
+    if 'smart_value' not in pool_df.columns or pool_df['smart_value'].isna().all():
+        return  # Skip if no Smart Value data
+    
+    # Filter out players below hard floor (55)
+    valid_pool = pool_df[pool_df['smart_value'] >= 55].copy()
+    
+    if len(valid_pool) == 0:
+        return  # No valid plays to highlight
+    
+    st.markdown("### 🎯 Today's Best Plays")
+    
+    with st.expander("📖 **Smart Value Narrative: Top Plays by Category**", expanded=True):
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+            <p style="color: white; margin: 0; font-size: 0.95rem; line-height: 1.6;">
+            Based on <strong>Smart Value analysis</strong>, here are today's strongest plays across different categories.
+            These recommendations combine <strong>value</strong>, <strong>opportunity</strong>, <strong>leverage</strong>, 
+            <strong>matchup quality</strong>, and <strong>game script intelligence</strong>.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Create tabs for different play categories
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "💎 Elite Plays", 
+            "⚡ Leverage Gems", 
+            "📊 By Position", 
+            "🎲 GPP Differentiators",
+            "🏆 Value Studs"
+        ])
+        
+        with tab1:
+            st.markdown("#### 💎 Elite Plays (Smart Value 75+)")
+            st.caption("The cream of the crop - strong across all categories")
+            
+            elite_plays = valid_pool[valid_pool['smart_value'] >= 75].nlargest(8, 'smart_value')
+            
+            if len(elite_plays) > 0:
+                for idx, (_, player) in enumerate(elite_plays.iterrows(), 1):
+                    # Get key metrics
+                    sv = player.get('smart_value', 0)
+                    value_ratio = player.get('value_ratio', player['projection'] / (player['salary'] / 1000))
+                    own = player.get('ownership', 0)
+                    proj = player['projection']
+                    ceiling = player.get('season_ceiling', proj * 1.5)
+                    
+                    # Determine what makes this play special
+                    strengths = []
+                    if value_ratio >= 3.5:
+                        strengths.append("🔥 **Elite Value**")
+                    if own <= 15:
+                        strengths.append("⚡ **Low Ownership**")
+                    elif own >= 30:
+                        strengths.append("👥 **Justified Chalk**")
+                    if ceiling / proj >= 2.0:
+                        strengths.append("💥 **Explosive Ceiling**")
+                    if player.get('itt', 0) >= 25:
+                        strengths.append("🎯 **High Game Environment**")
+                    
+                    strength_text = " • ".join(strengths) if strengths else "Well-rounded across all metrics"
+                    
+                    st.markdown(f"""
+                    <div style="background: #1e1e3a; padding: 1rem; border-radius: 8px; margin-bottom: 0.75rem; border-left: 4px solid #10b981;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="flex: 1;">
+                                <strong style="font-size: 1.1rem; color: #10b981;">#{idx} {player['name']}</strong>
+                                <span style="color: #9ca3af; margin-left: 0.5rem;">
+                                    {player['position']} • {player['team']} • ${player['salary']:,}
+                                </span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 1.2rem; font-weight: bold; color: #10b981;">{sv:.0f}</div>
+                                <div style="font-size: 0.75rem; color: #9ca3af;">Smart Value</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #333;">
+                            <div style="color: #d1d5db; font-size: 0.9rem; margin-bottom: 0.25rem;">
+                                📊 {proj:.1f} proj • 💰 {value_ratio:.2f} pts/$1K • 📈 {ceiling:.1f} ceiling • 👥 {own:.1f}% own
+                            </div>
+                            <div style="color: #a78bfa; font-size: 0.85rem;">
+                                {strength_text}
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No players above Smart Value 75 in current pool")
+        
+        with tab2:
+            st.markdown("#### ⚡ Leverage Gems (Low Ownership + High Ceiling)")
+            st.caption("GPP tournament plays with differentiation potential")
+            
+            # Find leverage plays: low ownership (< 15%) + high Smart Value (65+)
+            leverage_plays = valid_pool[
+                (valid_pool.get('ownership', 100) < 15) & 
+                (valid_pool['smart_value'] >= 65)
+            ].nlargest(6, 'smart_value')
+            
+            if len(leverage_plays) > 0:
+                for _, player in leverage_plays.iterrows():
+                    sv = player.get('smart_value', 0)
+                    own = player.get('ownership', 0)
+                    value_ratio = player.get('value_ratio', player['projection'] / (player['salary'] / 1000))
+                    proj = player['projection']
+                    ceiling = player.get('season_ceiling', proj * 1.5)
+                    ceiling_ratio = ceiling / proj if proj > 0 else 1.5
+                    
+                    st.markdown(f"""
+                    <div style="background: #1e1e3a; padding: 0.875rem; border-radius: 8px; margin-bottom: 0.5rem; border-left: 4px solid #8b5cf6;">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <strong style="color: #8b5cf6;">{player['name']}</strong>
+                                <span style="color: #9ca3af; margin-left: 0.5rem; font-size: 0.85rem;">
+                                    {player['position']} • ${player['salary']:,}
+                                </span>
+                                <div style="margin-top: 0.5rem; font-size: 0.85rem; color: #d1d5db;">
+                                    💡 <strong>{own:.1f}% owned</strong> • {ceiling_ratio:.1f}x ceiling multiplier • SV: {sv:.0f}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.success("💡 **GPP Strategy**: These low-owned plays offer differentiation with strong underlying metrics")
+            else:
+                st.info("No clear leverage plays found (looking for <15% own + 65+ Smart Value)")
+        
+        with tab3:
+            st.markdown("#### 📊 Top Play by Position")
+            st.caption("Best Smart Value play at each position")
+            
+            for position in ['QB', 'RB', 'WR', 'TE', 'DST']:
+                pos_players = valid_pool[valid_pool['position'] == position]
+                
+                if len(pos_players) > 0:
+                    top_player = pos_players.nlargest(1, 'smart_value').iloc[0]
+                    
+                    sv = top_player.get('smart_value', 0)
+                    value_ratio = top_player.get('value_ratio', top_player['projection'] / (top_player['salary'] / 1000))
+                    own = top_player.get('ownership', 0)
+                    proj = top_player['projection']
+                    
+                    # Position-specific context
+                    context = ""
+                    if position == 'QB':
+                        itt = top_player.get('itt', 0)
+                        if itt > 0:
+                            context = f"ITT: {itt:.1f} pts"
+                    elif position in ['RB', 'WR', 'TE']:
+                        snap = top_player.get('snap_pct', 0)
+                        if snap > 0:
+                            context = f"Snap%: {snap:.1f}%"
+                    
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"""
+                        **{position}:** {top_player['name']} • ${top_player['salary']:,}  
+                        <span style="color: #9ca3af; font-size: 0.85rem;">
+                        {proj:.1f} proj • {value_ratio:.2f} value • {own:.1f}% own{' • ' + context if context else ''}
+                        </span>
+                        """, unsafe_allow_html=True)
+                    with col2:
+                        st.metric("SV", f"{sv:.0f}", label_visibility="collapsed")
+        
+        with tab4:
+            st.markdown("#### 🎲 GPP Differentiators")
+            st.caption("Unique plays that separate winning lineups from the field")
+            
+            # Find GPP differentiators: 
+            # 1. Low owned (< 10%) with high ceiling
+            # 2. OR mid-tier value with extreme ceiling
+            gpp_diff = valid_pool[
+                ((valid_pool.get('ownership', 100) < 10) & (valid_pool['smart_value'] >= 60)) |
+                ((valid_pool.get('value_ratio', 0) >= 3.0) & (valid_pool.get('smart_value', 0) >= 70))
+            ].nlargest(8, 'smart_value')
+            
+            if len(gpp_diff) > 0:
+                for _, player in gpp_diff.iterrows():
+                    sv = player.get('smart_value', 0)
+                    own = player.get('ownership', 0)
+                    proj = player['projection']
+                    ceiling = player.get('season_ceiling', proj * 1.5)
+                    
+                    # Determine differentiator type
+                    diff_type = ""
+                    if own < 5:
+                        diff_type = "🦄 Ultra-Contrarian"
+                    elif own < 10:
+                        diff_type = "⚡ Low-Owned Upside"
+                    else:
+                        diff_type = "💎 Value with Ceiling"
+                    
+                    st.markdown(f"""
+                    <div style="padding: 0.75rem; background: #2d1b4e; border-radius: 6px; margin-bottom: 0.5rem;">
+                        <strong>{diff_type}</strong> • {player['name']} ({player['position']})  
+                        <div style="color: #c4b5fd; font-size: 0.85rem; margin-top: 0.25rem;">
+                            {own:.1f}% own • {proj:.1f}→{ceiling:.1f} pts range • SV: {sv:.0f}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.warning("⚠️ **Risk/Reward**: High upside plays with lower ownership - perfect for GPP tournaments")
+            else:
+                st.info("No clear GPP differentiators identified")
+        
+        with tab5:
+            st.markdown("#### 🏆 Value Studs (Best Projection per Dollar)")
+            st.caption("Maximum efficiency plays - great for cash games")
+            
+            # Get value ratio or calculate it
+            if 'value_ratio' not in valid_pool.columns:
+                valid_pool['value_ratio'] = valid_pool['projection'] / (valid_pool['salary'] / 1000)
+            
+            value_studs = valid_pool[valid_pool['value_ratio'] >= 3.0].nlargest(8, 'value_ratio')
+            
+            if len(value_studs) > 0:
+                for _, player in value_studs.iterrows():
+                    sv = player.get('smart_value', 0)
+                    value_ratio = player['value_ratio']
+                    own = player.get('ownership', 0)
+                    proj = player['projection']
+                    
+                    # Value tier
+                    if value_ratio >= 4.0:
+                        value_tier = "💎 Elite Value"
+                        color = "#10b981"
+                    elif value_ratio >= 3.5:
+                        value_tier = "✨ Great Value"
+                        color = "#3b82f6"
+                    else:
+                        value_tier = "✅ Good Value"
+                        color = "#8b5cf6"
+                    
+                    st.markdown(f"""
+                    <div style="padding: 0.75rem; background: #1a1a2e; border-radius: 6px; margin-bottom: 0.5rem; border-left: 3px solid {color};">
+                        <div style="display: flex; justify-content: space-between;">
+                            <div>
+                                <strong style="color: {color};">{value_tier}</strong> • {player['name']} ({player['position']})  
+                                <div style="color: #9ca3af; font-size: 0.85rem; margin-top: 0.25rem;">
+                                    ${player['salary']:,} • {proj:.1f} proj • {own:.1f}% own • SV: {sv:.0f}
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 1.1rem; font-weight: bold; color: {color};">{value_ratio:.2f}</div>
+                                <div style="font-size: 0.75rem; color: #9ca3af;">pts/$1K</div>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                st.success("✅ **Cash Game Strategy**: These high-value plays provide stability and efficiency")
+            else:
+                st.info("No clear value studs found (looking for 3.0+ pts/$1K)")
+        
+        # Summary recommendation
+        st.markdown("---")
+        st.markdown("""
+        <div style="background: #1e1e3a; padding: 1rem; border-radius: 8px; border-left: 4px solid #f59e0b;">
+            <strong style="color: #f59e0b;">💡 How to Use This Analysis:</strong>
+            <ul style="color: #d1d5db; margin-top: 0.5rem; margin-bottom: 0;">
+                <li><strong>Cash Games:</strong> Focus on Elite Plays + Value Studs (consistency over ceiling)</li>
+                <li><strong>GPP Tournaments:</strong> Mix Elite Plays + Leverage Gems + GPP Differentiators (upside over safety)</li>
+                <li><strong>Stacking:</strong> Look for QB + WR combos from the same team in Elite/Leverage categories</li>
+                <li><strong>Contrarian:</strong> Target Leverage Gems with <10% ownership to differentiate</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def display_player_pool_details(pool_df: pd.DataFrame):
