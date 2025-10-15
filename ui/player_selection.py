@@ -821,6 +821,15 @@ Smart Value =
         opponent_map = st.session_state['opponent_lookup']
         df = add_opponents_to_dataframe(df, opponent_map)
     
+    # MIGRATION: Force recalculation of DFS metrics to populate REG column
+    # This ensures regression risk data is calculated with the correct Week 5 query
+    if 'dfs_metrics_migrated_reg_fix' not in st.session_state:
+        if 'dfs_metrics_calculated' in st.session_state:
+            del st.session_state['dfs_metrics_calculated']
+        if 'dfs_metrics_data' in st.session_state:
+            del st.session_state['dfs_metrics_data']
+        st.session_state['dfs_metrics_migrated_reg_fix'] = True
+    
     # Calculate DFS metrics (Value, Position Rank, Leverage)
     if 'dfs_metrics_calculated' not in st.session_state:
         with st.spinner("📊 Calculating DFS metrics..."):
