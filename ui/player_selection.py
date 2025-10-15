@@ -288,6 +288,10 @@ def render_player_selection():
     Provides interactive table for player states, search/filter,
     bulk actions, validation warnings, and counts.
     """
+    # Initialize session state for expander control
+    if 'smart_value_config_expanded' not in st.session_state:
+        st.session_state['smart_value_config_expanded'] = False
+    
     # Check if we should show loading screen
     if st.session_state.get('show_loading_screen', False):
         loading_message = st.session_state.get('loading_message', '📈 Analyzing historical trends...')
@@ -340,7 +344,7 @@ def render_player_selection():
     
     # Smart Value Configuration - moved to main area for responsive layout
     st.markdown("---")
-    with st.expander("⚙️ Smart Value Configuration - Adjust Weights & Factors", expanded=False):
+    with st.expander("⚙️ Smart Value Configuration - Adjust Weights & Factors", expanded=st.session_state.get('smart_value_config_expanded', False)):
             st.markdown("""
             **Control every factor** that contributes to the Smart Value score.
             Main category weights must sum to 1.0 (100%).
@@ -441,7 +445,21 @@ def render_player_selection():
                             st.session_state['projection_threshold'] = thresholds.get('projection_threshold', 15)
                             
                             st.session_state.current_profile = selected_profile
-                            st.success(f"Loaded {selected_display}")
+                            
+                            # Auto-apply the loaded profile (trigger Apply & Recalculate)
+                            st.session_state['smart_value_custom_weights'] = main_weights
+                            # Clear cached smart value data to force recalculation
+                            if 'smart_value_calculated' in st.session_state:
+                                del st.session_state['smart_value_calculated']
+                            if 'smart_value_data' in st.session_state:
+                                del st.session_state['smart_value_data']
+                            if 'enriched_player_data' in st.session_state:
+                                del st.session_state['enriched_player_data']
+                            
+                            # Collapse the Smart Value Configuration expander
+                            st.session_state['smart_value_config_expanded'] = False
+                            
+                            st.success(f"✅ Loaded and applied {selected_display}")
                             st.rerun()
                         else:
                             st.error("Profile not found")
