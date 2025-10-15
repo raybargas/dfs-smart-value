@@ -46,9 +46,8 @@ def render_optimization_config():
     </div>
     """, unsafe_allow_html=True)
     
-    # 3. Player Pool Summary (Task 4.1)
+    # 3. Player Pool Data
     pool_df = get_player_pool()
-    display_pool_summary(pool_df)
     
     # 3.4. Best Plays Narrative (Phase 4: Smart Value Storytelling)
     display_best_plays_narrative(pool_df)
