@@ -447,7 +447,7 @@ def render_player_selection():
                             st.session_state.current_profile = selected_profile
                             
                             # Auto-apply the loaded profile (trigger Apply & Recalculate)
-                            st.session_state['smart_value_custom_weights'] = main_weights
+                            st.session_state['smart_value_custom_weights'] = config.get('main_weights', DEFAULT_WEIGHTS)
                             # Clear cached smart value data to force recalculation
                             if 'smart_value_calculated' in st.session_state:
                                 del st.session_state['smart_value_calculated']
