@@ -303,9 +303,9 @@ def render_player_selection():
         </div>
         """, unsafe_allow_html=True)
         
-        # Clear the loading screen flag after a brief moment
+        # Clear the loading screen flag and rerun to show actual content
         st.session_state['show_loading_screen'] = False
-        return
+        st.rerun()
     # ========== SMART VALUE CONFIGURATION SIDEBAR ==========
     # Use custom CSS to make sidebar wider on desktop, responsive on mobile
     st.markdown("""
