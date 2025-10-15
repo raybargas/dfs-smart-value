@@ -1072,10 +1072,8 @@ Smart Value =
         has_warning = is_wr_regression or is_ceiling_concern
         warning_tooltip = " | ".join(flag_tooltip) if flag_tooltip else ""
         
-        # Add injury flag and tooltip
-        injury_flag = row.get('injury_flag', '')
+        # Add injury tooltip (flag removed from name display)
         injury_tooltip = row.get('injury_tooltip', '')
-        player_name_with_flag = row['name'] + injury_flag
         
         # Combine injury tooltip with warning tooltip
         combined_tooltip = warning_tooltip
@@ -1092,7 +1090,7 @@ Smart Value =
             '_warning_tooltip': combined_tooltip,  # Combined tooltip (injury + warnings)
             'Pool': is_in_pool,
             'Lock': is_locked,
-            'Player': player_name_with_flag,
+            'Player': row['name'],
             'Pos': row['position'],
             'Salary': row['salary'],
             'Proj': row['projection'],
