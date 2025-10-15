@@ -649,11 +649,26 @@ def display_vegas_lines_table(df):
     
     # Filter to only show games with main slate teams
     if main_slate_teams:
+        # Convert Vegas team names to abbreviations for comparison
+        # Vegas Lines use full names (e.g., "Kansas City Chiefs") while player data uses abbreviations (e.g., "KC")
+        from src.opponent_lookup import TEAM_NAME_TO_ABBR
+        
+        def convert_to_abbrev(team_name):
+            """Convert full team name to abbreviation."""
+            return TEAM_NAME_TO_ABBR.get(team_name, team_name)
+        
+        # Convert Vegas team names to abbreviations
+        df['Home Team Abbr'] = df['Home Team'].apply(convert_to_abbrev)
+        df['Away Team Abbr'] = df['Away Team'].apply(convert_to_abbrev)
+        
         # Filter games where either home or away team is in main slate
         filtered_df = df[
-            df['Home Team'].isin(main_slate_teams) | 
-            df['Away Team'].isin(main_slate_teams)
+            df['Home Team Abbr'].isin(main_slate_teams) | 
+            df['Away Team Abbr'].isin(main_slate_teams)
         ].copy()
+        
+        # Remove the temporary abbreviation columns
+        filtered_df = filtered_df.drop(['Home Team Abbr', 'Away Team Abbr'], axis=1)
         
         # Show filtering info
         original_count = len(df)
@@ -709,6 +724,7 @@ def display_injury_reports_table(df):
     # Filter to only show injuries from main slate teams
     if main_slate_teams:
         # Filter injuries where team is in main slate
+        # Note: Injury reports should already use abbreviations, but let's be safe
         filtered_df = df[df['Team'].isin(main_slate_teams)].copy()
         
         # Show filtering info
