@@ -197,6 +197,9 @@ def show():
     
     with col4:
         if st.button("▶️ Continue", use_container_width=True, type="primary", help="Next: Select Players"):
+            # Show loading screen instead of transitioning immediately
+            st.session_state['show_loading_screen'] = True
+            st.session_state['loading_message'] = "📈 Analyzing historical trends..."
             st.session_state['page'] = 'player_selection'
             st.rerun()
     

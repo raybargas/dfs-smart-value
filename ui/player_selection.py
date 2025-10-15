@@ -283,6 +283,29 @@ def render_player_selection():
     Provides interactive table for player states, search/filter,
     bulk actions, validation warnings, and counts.
     """
+    # Check if we should show loading screen
+    if st.session_state.get('show_loading_screen', False):
+        loading_message = st.session_state.get('loading_message', '📈 Analyzing historical trends...')
+        
+        # Create a centered loading screen
+        st.markdown("""
+        <div style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 60vh;
+            text-align: center;
+        ">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">📈</div>
+            <div style="font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem;">Analyzing Historical Trends</div>
+            <div style="color: #707070; font-size: 1rem;">Processing player data and calculating smart values...</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Clear the loading screen flag after a brief moment
+        st.session_state['show_loading_screen'] = False
+        return
     # ========== SMART VALUE CONFIGURATION SIDEBAR ==========
     # Use custom CSS to make sidebar wider on desktop, responsive on mobile
     st.markdown("""
@@ -869,7 +892,7 @@ Smart Value =
     force_recalc = 'ceiling_migrated_v2' not in st.session_state
     
     if 'season_stats_enriched' not in st.session_state or force_recalc:
-        with st.spinner("📈 Analyzing 5-week season trends..."):
+        with st.spinner("📈 Analyzing historical trends..."):
             df = analyze_season_stats(df, excel_path="2025 Stats thru week 5.xlsx")
             st.session_state['season_stats_data'] = df
             st.session_state['season_stats_enriched'] = True
