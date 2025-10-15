@@ -358,141 +358,141 @@ def render_player_selection():
             with col1:
                 base_weight = st.slider(
                     "Base Value",
-                    min_value=0.0, max_value=1.0, 
-                    value=st.session_state['smart_value_custom_weights']['base'],
-                    step=0.05,
+                    min_value=0, max_value=100, 
+                    value=int(st.session_state['smart_value_custom_weights']['base'] * 100),
+                    step=1,
                     key='base_weight_slider',
                     help="Projection per $1K spent. Pure salary efficiency."
                 )
             with col2:
-                st.metric("", f"{base_weight*100:.0f}%", label_visibility="collapsed")
+                st.metric("", f"{base_weight}%", label_visibility="collapsed")
             
             # Opportunity
             col1, col2 = st.columns([3, 1])
             with col1:
                 opp_weight = st.slider(
                     "Opportunity",
-                    min_value=0.0, max_value=1.0,
-                    value=st.session_state['smart_value_custom_weights']['opportunity'],
-                    step=0.05,
+                    min_value=0, max_value=100,
+                    value=int(st.session_state['smart_value_custom_weights']['opportunity'] * 100),
+                    step=1,
                     key='opp_weight_slider',
                     help="Volume metrics: Snap %, Target Share, RZ Targets"
                 )
             with col2:
-                st.metric("", f"{opp_weight*100:.0f}%", label_visibility="collapsed")
+                st.metric("", f"{opp_weight}%", label_visibility="collapsed")
             
             # Trends
             col1, col2 = st.columns([3, 1])
             with col1:
                 trends_weight = st.slider(
                     "Trends",
-                    min_value=0.0, max_value=1.0,
-                    value=st.session_state['smart_value_custom_weights']['trends'],
-                    step=0.05,
+                    min_value=0, max_value=100,
+                    value=int(st.session_state['smart_value_custom_weights']['trends'] * 100),
+                    step=1,
                     key='trends_weight_slider',
                     help="Momentum, role growth, recent production trajectory"
                 )
             with col2:
-                st.metric("", f"{trends_weight*100:.0f}%", label_visibility="collapsed")
+                st.metric("", f"{trends_weight}%", label_visibility="collapsed")
             
             # Risk
             col1, col2 = st.columns([3, 1])
             with col1:
                 risk_weight = st.slider(
                     "Risk",
-                    min_value=0.0, max_value=1.0,
-                    value=st.session_state['smart_value_custom_weights']['risk'],
-                    step=0.05,
+                    min_value=0, max_value=100,
+                    value=int(st.session_state['smart_value_custom_weights']['risk'] * 100),
+                    step=1,
                     key='risk_weight_slider',
                     help="Regression risk (80/20), XFP variance, consistency"
                 )
             with col2:
-                st.metric("", f"{risk_weight*100:.0f}%", label_visibility="collapsed")
+                st.metric("", f"{risk_weight}%", label_visibility="collapsed")
             
             # Matchup
             col1, col2 = st.columns([3, 1])
             with col1:
                 matchup_weight = st.slider(
                     "Matchup",
-                    min_value=0.0, max_value=1.0,
-                    value=st.session_state['smart_value_custom_weights']['matchup'],
-                    step=0.05,
+                    min_value=0, max_value=100,
+                    value=int(st.session_state['smart_value_custom_weights']['matchup'] * 100),
+                    step=1,
                     key='matchup_weight_slider',
                     help="Game environment, Vegas totals, pace/script factors"
                 )
             with col2:
-                st.metric("", f"{matchup_weight*100:.0f}%", label_visibility="collapsed")
+                st.metric("", f"{matchup_weight}%", label_visibility="collapsed")
             
             # Leverage (NEW from Week 6 analysis)
             col1, col2 = st.columns([3, 1])
             with col1:
                 leverage_weight = st.slider(
                     "💎 Leverage (NEW!)",
-                    min_value=0.0, max_value=1.0,
-                    value=st.session_state['smart_value_custom_weights'].get('leverage', 0.15),
-                    step=0.05,
+                    min_value=0, max_value=100,
+                    value=int(st.session_state['smart_value_custom_weights'].get('leverage', 0.15) * 100),
+                    step=1,
                     key='leverage_weight_slider',
                     help="🔥 Ceiling potential + low ownership = tournament gold! Based on Week 6 winners."
                 )
             with col2:
-                st.metric("", f"{leverage_weight*100:.0f}%", label_visibility="collapsed")
+                st.metric("", f"{leverage_weight}%", label_visibility="collapsed")
             
             # Regression (80/20 rule)
             col1, col2 = st.columns([3, 1])
             with col1:
                 regression_weight = st.slider(
                     "⚠️ 80/20 Regression",
-                    min_value=0.0, max_value=1.0,
-                    value=st.session_state['smart_value_custom_weights'].get('regression', 0.05),
-                    step=0.05,
+                    min_value=0, max_value=100,
+                    value=int(st.session_state['smart_value_custom_weights'].get('regression', 0.05) * 100),
+                    step=1,
                     key='regression_weight_slider',
                     help="🎯 Penalty for players who scored 20+ points last week (80% regression rate)"
                 )
             with col2:
-                st.metric("", f"{regression_weight*100:.0f}%", label_visibility="collapsed")
+                st.metric("", f"{regression_weight}%", label_visibility="collapsed")
             
             # Calculate total and show status
             total = base_weight + opp_weight + trends_weight + risk_weight + matchup_weight + leverage_weight + regression_weight
             
             # Auto-normalize weights if they don't sum to 100%
-            needs_normalization = abs(total - 1.0) > 0.001
+            needs_normalization = abs(total - 100) > 0.1
             
             if needs_normalization:
-                st.warning(f"⚠️ Weights sum to **{total*100:.1f}%**. Will auto-normalize to 100% when applied.")
+                st.warning(f"⚠️ Weights sum to **{total:.1f}%**. Will auto-normalize to 100% when applied.")
                 # Show what normalized weights will be
                 with st.expander("Preview normalized weights", expanded=False):
                     st.caption(f"Original → Normalized:")
-                st.caption(f"• Base: {base_weight*100:.1f}% → {(base_weight/total)*100:.1f}%")
-                st.caption(f"• Opportunity: {opp_weight*100:.1f}% → {(opp_weight/total)*100:.1f}%")
-                st.caption(f"• Trends: {trends_weight*100:.1f}% → {(trends_weight/total)*100:.1f}%")
-                st.caption(f"• Risk: {risk_weight*100:.1f}% → {(risk_weight/total)*100:.1f}%")
-                st.caption(f"• Matchup: {matchup_weight*100:.1f}% → {(matchup_weight/total)*100:.1f}%")
-                st.caption(f"• 💎 Leverage: {leverage_weight*100:.1f}% → {(leverage_weight/total)*100:.1f}%")
-                st.caption(f"• ⚠️ Regression: {regression_weight*100:.1f}% → {(regression_weight/total)*100:.1f}%")
+                st.caption(f"• Base: {base_weight:.1f}% → {(base_weight/total)*100:.1f}%")
+                st.caption(f"• Opportunity: {opp_weight:.1f}% → {(opp_weight/total)*100:.1f}%")
+                st.caption(f"• Trends: {trends_weight:.1f}% → {(trends_weight/total)*100:.1f}%")
+                st.caption(f"• Risk: {risk_weight:.1f}% → {(risk_weight/total)*100:.1f}%")
+                st.caption(f"• Matchup: {matchup_weight:.1f}% → {(matchup_weight/total)*100:.1f}%")
+                st.caption(f"• 💎 Leverage: {leverage_weight:.1f}% → {(leverage_weight/total)*100:.1f}%")
+                st.caption(f"• ⚠️ Regression: {regression_weight:.1f}% → {(regression_weight/total)*100:.1f}%")
             else:
-                st.success(f"✅ Weights sum to **{total*100:.0f}%**")
+                st.success(f"✅ Weights sum to **{total:.0f}%**")
             
             # Build new weights dict (normalized)
             if needs_normalization and total > 0:
-                # Normalize to sum to 1.0
+                # Normalize to sum to 1.0 (convert percentages back to decimals)
                 new_weights = {
-                    'base': base_weight / total,
-                    'opportunity': opp_weight / total,
-                    'trends': trends_weight / total,
-                    'risk': risk_weight / total,
-                    'matchup': matchup_weight / total,
-                    'leverage': leverage_weight / total,
-                    'regression': regression_weight / total
+                    'base': (base_weight / total),
+                    'opportunity': (opp_weight / total),
+                    'trends': (trends_weight / total),
+                    'risk': (risk_weight / total),
+                    'matchup': (matchup_weight / total),
+                    'leverage': (leverage_weight / total),
+                    'regression': (regression_weight / total)
                 }
             else:
                 new_weights = {
-                    'base': base_weight,
-                    'opportunity': opp_weight,
-                    'trends': trends_weight,
-                    'risk': risk_weight,
-                    'matchup': matchup_weight,
-                    'leverage': leverage_weight,
-                    'regression': regression_weight
+                    'base': base_weight / 100,
+                    'opportunity': opp_weight / 100,
+                    'trends': trends_weight / 100,
+                    'risk': risk_weight / 100,
+                    'matchup': matchup_weight / 100,
+                    'leverage': leverage_weight / 100,
+                    'regression': regression_weight / 100
                 }
             
             # Apply & Recalculate button
