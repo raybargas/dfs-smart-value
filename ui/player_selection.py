@@ -506,7 +506,7 @@ def render_player_selection():
                 sub_weights = st.session_state.get('smart_value_sub_weights', {})
                 opp_tgt_pct = sub_weights.get('opp_target_share', 0.60) * 100
                 opp_snap_pct = sub_weights.get('opp_snap_pct', 0.30) * 100
-                opp_rz_pct = sub_weights.get('opp_rz_targets', 0.10) * 100
+                opp_rz_pct = sub_weights.get('opp_redzone', 0.20) * 100
                 
                 opp_weight = st.slider(
                     "Opportunity",
@@ -524,9 +524,9 @@ def render_player_selection():
             with col1:
                 # Get sub-weights for tooltip
                 sub_weights = st.session_state.get('smart_value_sub_weights', {})
-                trends_mom_pct = sub_weights.get('trends_momentum', 0.50) * 100
-                trends_trend_pct = sub_weights.get('trends_trend', 0.30) * 100
-                trends_fpg_pct = sub_weights.get('trends_fpg', 0.20) * 100
+                trends_mom_pct = sub_weights.get('trend_momentum', 0.40) * 100
+                trends_trend_pct = sub_weights.get('trend_role_growth', 0.35) * 100
+                trends_fpg_pct = sub_weights.get('trend_recent_fp', 0.25) * 100
                 
                 trends_weight = st.slider(
                     "Trends",
@@ -718,7 +718,7 @@ def render_player_selection():
                 )
                 opp_rz = st.slider(
                     "RZ Targets",
-                    0.0, 1.0, st.session_state['smart_value_sub_weights']['opp_rz_targets'],
+                    0.0, 1.0, st.session_state['smart_value_sub_weights']['opp_redzone'],
                     0.05, key='opp_rz_slider',
                     help="Weight for red zone targets in Opportunity score"
                 )
@@ -732,19 +732,19 @@ def render_player_selection():
                 
                 trends_mom = st.slider(
                     "Momentum (FP change)",
-                    0.0, 1.0, st.session_state['smart_value_sub_weights']['trends_momentum'],
+                    0.0, 1.0, st.session_state['smart_value_sub_weights']['trend_momentum'],
                     0.05, key='trends_mom_slider',
                     help="Weight for production momentum (recent vs early)"
                 )
                 trends_trend = st.slider(
                     "Trend (Snap % change)",
-                    0.0, 1.0, st.session_state['smart_value_sub_weights']['trends_trend'],
+                    0.0, 1.0, st.session_state['smart_value_sub_weights']['trend_role_growth'],
                     0.05, key='trends_trend_slider',
                     help="Weight for role expansion (snap % W1→W5)"
                 )
                 trends_fpg = st.slider(
                     "FP/G (Recent production)",
-                    0.0, 1.0, st.session_state['smart_value_sub_weights']['trends_fpg'],
+                    0.0, 1.0, st.session_state['smart_value_sub_weights']['trend_recent_fp'],
                     0.05, key='trends_fpg_slider',
                     help="Weight for recent fantasy points per game"
                 )
@@ -776,10 +776,10 @@ def render_player_selection():
                 st.session_state['smart_value_sub_weights'] = {
                     'opp_target_share': opp_tgt / opp_total if opp_total > 0 else 0.60,
                     'opp_snap_pct': opp_snap / opp_total if opp_total > 0 else 0.30,
-                    'opp_rz_targets': opp_rz / opp_total if opp_total > 0 else 0.10,
-                    'trends_momentum': trends_mom / trends_total if trends_total > 0 else 0.50,
-                    'trends_trend': trends_trend / trends_total if trends_total > 0 else 0.30,
-                    'trends_fpg': trends_fpg / trends_total if trends_total > 0 else 0.20,
+                    'opp_redzone': opp_rz / opp_total if opp_total > 0 else 0.20,
+                    'trend_momentum': trends_mom / trends_total if trends_total > 0 else 0.40,
+                    'trend_role_growth': trends_trend / trends_total if trends_total > 0 else 0.35,
+                    'trend_recent_fp': trends_fpg / trends_total if trends_total > 0 else 0.25,
                     'risk_variance': risk_var / risk_total if risk_total > 0 else 0.60,
                     'risk_consistency': risk_cons / risk_total if risk_total > 0 else 0.40
                 }
