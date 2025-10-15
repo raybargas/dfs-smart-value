@@ -385,7 +385,7 @@ def render_player_selection():
                     value=int(st.session_state['smart_value_custom_weights']['base'] * 100),
                     step=1,
                     key='base_weight_slider',
-                    help="Projection per $1K spent. Pure salary efficiency."
+                    help="Projection per $1K spent. Pure salary efficiency.\n\nBreakdown:\n• Value ratio (pts/$1K)\n• Ceiling boost multiplier\n• Value penalty for poor ratios"
                 )
             with col2:
                 st.metric("", f"{base_weight}%", label_visibility="collapsed")
@@ -393,13 +393,19 @@ def render_player_selection():
             # Opportunity
             col1, col2 = st.columns([3, 1])
             with col1:
+                # Get sub-weights for tooltip
+                sub_weights = st.session_state.get('smart_value_sub_weights', {})
+                opp_tgt_pct = sub_weights.get('opp_target_share', 0.60) * 100
+                opp_snap_pct = sub_weights.get('opp_snap_pct', 0.30) * 100
+                opp_rz_pct = sub_weights.get('opp_rz_targets', 0.10) * 100
+                
                 opp_weight = st.slider(
                     "Opportunity",
                     min_value=0, max_value=100,
                     value=int(st.session_state['smart_value_custom_weights']['opportunity'] * 100),
                     step=1,
                     key='opp_weight_slider',
-                    help="Volume metrics: Snap %, Target Share, RZ Targets"
+                    help=f"Volume metrics: Snap %, Target Share, RZ Targets\n\nBreakdown:\n• Target Share: {opp_tgt_pct:.0f}%\n• Snap %: {opp_snap_pct:.0f}%\n• RZ Targets: {opp_rz_pct:.0f}%"
                 )
             with col2:
                 st.metric("", f"{opp_weight}%", label_visibility="collapsed")
@@ -407,13 +413,19 @@ def render_player_selection():
             # Trends
             col1, col2 = st.columns([3, 1])
             with col1:
+                # Get sub-weights for tooltip
+                sub_weights = st.session_state.get('smart_value_sub_weights', {})
+                trends_mom_pct = sub_weights.get('trends_momentum', 0.50) * 100
+                trends_trend_pct = sub_weights.get('trends_trend', 0.30) * 100
+                trends_fpg_pct = sub_weights.get('trends_fpg', 0.20) * 100
+                
                 trends_weight = st.slider(
                     "Trends",
                     min_value=0, max_value=100,
                     value=int(st.session_state['smart_value_custom_weights']['trends'] * 100),
                     step=1,
                     key='trends_weight_slider',
-                    help="Momentum, role growth, recent production trajectory"
+                    help=f"Momentum, role growth, recent production trajectory\n\nBreakdown:\n• Momentum (FP change): {trends_mom_pct:.0f}%\n• Trend (Snap % change): {trends_trend_pct:.0f}%\n• FP/G (Recent production): {trends_fpg_pct:.0f}%"
                 )
             with col2:
                 st.metric("", f"{trends_weight}%", label_visibility="collapsed")
@@ -421,13 +433,18 @@ def render_player_selection():
             # Risk
             col1, col2 = st.columns([3, 1])
             with col1:
+                # Get sub-weights for tooltip
+                sub_weights = st.session_state.get('smart_value_sub_weights', {})
+                risk_var_pct = sub_weights.get('risk_variance', 0.60) * 100
+                risk_cons_pct = sub_weights.get('risk_consistency', 0.40) * 100
+                
                 risk_weight = st.slider(
                     "Risk",
                     min_value=0, max_value=100,
                     value=int(st.session_state['smart_value_custom_weights']['risk'] * 100),
                     step=1,
                     key='risk_weight_slider',
-                    help="Regression risk (80/20), XFP variance, consistency"
+                    help=f"XFP variance, consistency (regression moved to separate component)\n\nBreakdown:\n• Variance: {risk_var_pct:.0f}%\n• Consistency: {risk_cons_pct:.0f}%"
                 )
             with col2:
                 st.metric("", f"{risk_weight}%", label_visibility="collapsed")
@@ -441,7 +458,7 @@ def render_player_selection():
                     value=int(st.session_state['smart_value_custom_weights']['matchup'] * 100),
                     step=1,
                     key='matchup_weight_slider',
-                    help="Game environment, Vegas totals, pace/script factors"
+                    help="Game environment, Vegas totals, pace/script factors\n\nBreakdown:\n• Game total (Vegas)\n• Implied team total\n• Pace/script factors"
                 )
             with col2:
                 st.metric("", f"{matchup_weight}%", label_visibility="collapsed")
@@ -455,7 +472,7 @@ def render_player_selection():
                     value=int(st.session_state['smart_value_custom_weights'].get('leverage', 0.15) * 100),
                     step=1,
                     key='leverage_weight_slider',
-                    help="🔥 Ceiling potential + low ownership = tournament gold! Based on Week 6 winners."
+                    help="🔥 Ceiling potential + low ownership = tournament gold! Based on Week 6 winners.\n\nBreakdown:\n• Ceiling potential (season high)\n• Ownership penalty (lower = better)\n• Value vs position median"
                 )
             with col2:
                 st.metric("", f"{leverage_weight}%", label_visibility="collapsed")
@@ -469,7 +486,7 @@ def render_player_selection():
                     value=int(st.session_state['smart_value_custom_weights'].get('regression', 0.05) * 100),
                     step=1,
                     key='regression_weight_slider',
-                    help="🎯 Penalty for players who scored 20+ points last week (80% regression rate)"
+                    help="🎯 Penalty for players who scored 20+ points last week (80% regression rate)\n\nBreakdown:\n• Prior week performance check\n• 20+ point threshold detection\n• Fixed penalty (-0.5) per occurrence"
                 )
             with col2:
                 st.metric("", f"{regression_weight}%", label_visibility="collapsed")
