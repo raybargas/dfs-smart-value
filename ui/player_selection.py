@@ -823,11 +823,20 @@ Smart Value =
     
     # MIGRATION: Force recalculation of DFS metrics to populate REG column
     # This ensures regression risk data is calculated with the correct Week 5 query
+    # CRITICAL: Must also clear season_stats and smart_value caches because they overwrite df
     if 'dfs_metrics_migrated_reg_fix' not in st.session_state:
         if 'dfs_metrics_calculated' in st.session_state:
             del st.session_state['dfs_metrics_calculated']
         if 'dfs_metrics_data' in st.session_state:
             del st.session_state['dfs_metrics_data']
+        if 'season_stats_enriched' in st.session_state:
+            del st.session_state['season_stats_enriched']
+        if 'season_stats_data' in st.session_state:
+            del st.session_state['season_stats_data']
+        if 'smart_value_calculated' in st.session_state:
+            del st.session_state['smart_value_calculated']
+        if 'smart_value_data' in st.session_state:
+            del st.session_state['smart_value_data']
         st.session_state['dfs_metrics_migrated_reg_fix'] = True
     
     # Calculate DFS metrics (Value, Position Rank, Leverage)
