@@ -48,24 +48,14 @@ def render_data_ingestion():
     </div>
     """, unsafe_allow_html=True)
     
-    # Ultra-compact 2-column layout: Upload | Info
-    col_upload, col_help = st.columns([4, 0.5])
-    
-    with col_upload:
-        uploaded_file = st.file_uploader(
-            "📂 Upload Player Data",
-            type=['csv', 'xlsx', 'xls'],
-            help="Upload CSV or Excel file with player data",
-            key="player_data_uploader",
-            label_visibility="visible"
-        )
-    
-    with col_help:
-        st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
-        with st.expander("ℹ️"):
-            st.caption("**Need:** Name, Pos, Salary, Proj")
-            st.caption("**Formats:** CSV, Excel")
-        st.markdown('</div>', unsafe_allow_html=True)
+    # Upload section
+    uploaded_file = st.file_uploader(
+        "📂 Upload Player Data",
+        type=['csv', 'xlsx', 'xls'],
+        help="Upload CSV or Excel file with player data",
+        key="player_data_uploader",
+        label_visibility="visible"
+    )
     
     # Track if this is a manual upload (from file uploader widget)
     is_manual_upload = uploaded_file is not None
@@ -194,45 +184,47 @@ def display_success_message(summary: Dict[str, Any], is_from_auto_load: bool = F
     # Compact inline summary with position counts
     positions_text = " · ".join([f"{pos}: {count}" for pos, count in sorted(position_breakdown.items())])
     
-    # Get timestamp info if available (only for auto-loaded data)
+    # Get timestamp info from file (always try to read it)
     import os
     import datetime
     last_updated_text = ""
     
-    if is_from_auto_load:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        timestamp_file = os.path.join(current_dir, "..", "last_upload_timestamp.txt")
-        
-        if os.path.exists(timestamp_file):
-            try:
-                with open(timestamp_file, 'r') as f:
-                    timestamp_str = f.read().strip()
-                    upload_time = datetime.datetime.fromisoformat(timestamp_str)
-                    
-                    # Calculate time ago
-                    now = datetime.datetime.now()
-                    diff = now - upload_time
-                    
-                    if diff.days > 0:
-                        last_updated_text = f"{diff.days}d ago"
-                    elif diff.seconds >= 3600:
-                        hours = diff.seconds // 3600
-                        last_updated_text = f"{hours}h ago"
-                    elif diff.seconds >= 60:
-                        minutes = diff.seconds // 60
-                        last_updated_text = f"{minutes}m ago"
-                    else:
-                        last_updated_text = "Just now"
-            except:
-                last_updated_text = "recently"
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    timestamp_file = os.path.join(current_dir, "..", "last_upload_timestamp.txt")
+    
+    if os.path.exists(timestamp_file):
+        try:
+            with open(timestamp_file, 'r') as f:
+                timestamp_str = f.read().strip()
+                upload_time = datetime.datetime.fromisoformat(timestamp_str)
+                
+                # Calculate time ago
+                now = datetime.datetime.now()
+                diff = now - upload_time
+                
+                if diff.days > 0:
+                    last_updated_text = f"{diff.days}d ago"
+                elif diff.seconds >= 3600:
+                    hours = diff.seconds // 3600
+                    last_updated_text = f"{hours}h ago"
+                elif diff.seconds >= 60:
+                    minutes = diff.seconds // 60
+                    last_updated_text = f"{minutes}m ago"
+                else:
+                    last_updated_text = "Just now"
+        except:
+            last_updated_text = "recently"
     
     col1, col2 = st.columns([3, 1])
     with col1:
         st.success(f"✅ Loaded **{total} players** · {positions_text}")
-        if is_from_auto_load and last_updated_text:
-            st.caption(f"🕒 Dataset from {last_updated_text}")
+        if last_updated_text:
+            if is_from_auto_load:
+                st.caption(f"🕒 Dataset from {last_updated_text}")
+            else:
+                st.caption(f"💾 Saved as default dataset · {last_updated_text}")
         else:
-            # Manual upload - show immediate confirmation
+            # Fallback if no timestamp file
             st.caption("💾 Saved as default dataset · Just now")
     with col2:
         if st.button("▶️ Continue", 
