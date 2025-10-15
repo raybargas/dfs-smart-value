@@ -38,6 +38,33 @@ def get_current_nfl_week() -> int:
     return max(1, min(18, week))
 
 
+def get_main_slate_teams():
+    """
+    Extract main slate teams from uploaded player data.
+    
+    Returns:
+        Set of team abbreviations that are on the main slate
+    """
+    try:
+        # Get player data from session state
+        if 'player_data' not in st.session_state:
+            return set()
+        
+        player_df = st.session_state['player_data']
+        if player_df is None or player_df.empty:
+            return set()
+        
+        # Extract unique teams from the player data
+        if 'team' in player_df.columns:
+            main_slate_teams = set(player_df['team'].dropna().unique())
+            return main_slate_teams
+        else:
+            return set()
+            
+    except Exception as e:
+        return set()
+
+
 def get_available_data_weeks():
     """
     Check which weeks have cached data available.
@@ -98,7 +125,7 @@ def show():
     if 'last_injury_update' not in st.session_state:
         st.session_state.last_injury_update = None
     if 'current_week' not in st.session_state:
-        st.session_state.current_week = 6  # Set to Week 6 for testing
+        st.session_state.current_week = get_current_nfl_week()
     
     # Auto-load data on first visit (silently)
     if 'narrative_data_auto_loaded' not in st.session_state:
@@ -168,19 +195,25 @@ def show():
         st.markdown(f"**Week {current_week}**")
     
     with col2:
-        available_weeks = get_available_data_weeks()
-        if available_weeks['vegas'] or available_weeks['injury']:
-            st.caption(f"📊 Vegas: Wk {available_weeks['vegas']} | Injury: Wk {available_weeks['injury']}")
-        else:
-            # Show current session week for debugging
-            st.caption(f"🔧 Session Week: {st.session_state.current_week}")
-    
-    with col3:
-        # Combine success messages inline
+        # Show data status
         vegas_count = len(st.session_state.vegas_lines_df) if st.session_state.vegas_lines_df is not None else 0
         injury_count = len(st.session_state.injury_reports_df) if st.session_state.injury_reports_df is not None else 0
         if vegas_count > 0 or injury_count > 0:
-            st.caption(f"✅ {vegas_count} games | {injury_count} injuries")
+            st.caption(f"📊 Data loaded: {vegas_count} games, {injury_count} injuries")
+        else:
+            st.caption("📊 No data loaded yet")
+    
+    with col3:
+        # Show last update times
+        if st.session_state.last_vegas_update or st.session_state.last_injury_update:
+            updates = []
+            if st.session_state.last_vegas_update:
+                vegas_time = get_time_ago(st.session_state.last_vegas_update)
+                updates.append(f"Vegas: {vegas_time}")
+            if st.session_state.last_injury_update:
+                injury_time = get_time_ago(st.session_state.last_injury_update)
+                updates.append(f"Injury: {injury_time}")
+            st.caption(f"🕒 {' | '.join(updates)}")
     
     with col4:
         if st.button("▶️ Continue", use_container_width=True, type="primary", help="Next: Select Players"):
@@ -208,10 +241,7 @@ def render_vegas_lines_section():
     st.markdown("### 🎰 Vegas Lines")
     st.caption("Team scoring expectations from betting markets")
     
-    # DEBUG: Show current session state week
-    st.caption(f"🔧 Debug: Session week = {st.session_state.current_week}")
-    
-    col1, col2, col3, col_reset = st.columns([1.5, 1.5, 1.5, 1])
+    col1, col2, col3 = st.columns([2, 2, 2])
     
     with col1:
         # Check API key
@@ -248,13 +278,6 @@ def render_vegas_lines_section():
         if is_rate_limited('vegas'):
             remaining = get_rate_limit_remaining('vegas')
             st.caption(f"⏱️ Refresh available in {remaining}")
-    
-    with col_reset:
-        # Force reset to Week 6 button
-        if st.button("🔄 Reset Week 6", help="Force reset to Week 6"):
-            st.session_state.current_week = 6
-            st.info(f"✅ Reset session to Week 6")
-            load_vegas_lines_from_db()
     
     # Display data table
     if st.session_state.vegas_lines_df is not None and not st.session_state.vegas_lines_df.empty:
@@ -620,9 +643,33 @@ def load_injury_reports_from_db():
 # ===== Display Functions =====
 
 def display_vegas_lines_table(df):
-    """Display Vegas lines in a formatted table."""
+    """Display Vegas lines in a formatted table, filtered to main slate teams."""
+    # Get main slate teams
+    main_slate_teams = get_main_slate_teams()
+    
+    # Filter to only show games with main slate teams
+    if main_slate_teams:
+        # Filter games where either home or away team is in main slate
+        filtered_df = df[
+            df['Home Team'].isin(main_slate_teams) | 
+            df['Away Team'].isin(main_slate_teams)
+        ].copy()
+        
+        # Show filtering info
+        original_count = len(df)
+        filtered_count = len(filtered_df)
+        if original_count > filtered_count:
+            st.caption(f"🎯 Filtered to main slate: {original_count} → {filtered_count} games ({len(main_slate_teams)} teams)")
+        
+        # Use filtered data for display
+        display_df = filtered_df
+    else:
+        # No main slate data available, show all games
+        display_df = df
+        st.caption("📋 Showing all games (no player data loaded for main slate filtering)")
+    
     st.dataframe(
-        df,
+        display_df,
         use_container_width=True,
         hide_index=True,
         column_config={
@@ -637,14 +684,14 @@ def display_vegas_lines_table(df):
     )
     
     # Summary stats
-    if 'Home ITT' in df.columns and 'Away ITT' in df.columns:
+    if 'Home ITT' in display_df.columns and 'Away ITT' in display_df.columns:
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Games Loaded", len(df))
+            st.metric("Games Loaded", len(display_df))
         with col2:
             # Find highest ITT
             all_itts = []
-            for val in list(df['Home ITT']) + list(df['Away ITT']):
+            for val in list(display_df['Home ITT']) + list(display_df['Away ITT']):
                 if val != 'N/A':
                     all_itts.append(float(val))
             if all_itts:
@@ -655,7 +702,28 @@ def display_vegas_lines_table(df):
 
 
 def display_injury_reports_table(df):
-    """Display injury reports with ESPN context and affected players (IR filtered out)."""
+    """Display injury reports with ESPN context and affected players (IR filtered out), filtered to main slate teams."""
+    # Get main slate teams
+    main_slate_teams = get_main_slate_teams()
+    
+    # Filter to only show injuries from main slate teams
+    if main_slate_teams:
+        # Filter injuries where team is in main slate
+        filtered_df = df[df['Team'].isin(main_slate_teams)].copy()
+        
+        # Show filtering info
+        original_count = len(df)
+        filtered_count = len(filtered_df)
+        if original_count > filtered_count:
+            st.caption(f"🎯 Filtered to main slate: {original_count} → {filtered_count} injuries ({len(main_slate_teams)} teams)")
+        
+        # Use filtered data for display
+        display_df = filtered_df
+    else:
+        # No main slate data available, show all injuries
+        display_df = df
+        st.caption("📋 Showing all injuries (no player data loaded for main slate filtering)")
+    
     # Add color coding based on status (now using short codes: Q, D, Out)
     def color_status(val):
         if not val or not isinstance(val, str):
@@ -669,7 +737,7 @@ def display_injury_reports_table(df):
             return 'background-color: #f5c6cb; color: #721c24; font-weight: bold'  # Red
         return ''
     
-    styled_df = df.style.applymap(color_status, subset=['Status'])
+    styled_df = display_df.style.applymap(color_status, subset=['Status'])
     
     st.dataframe(
         styled_df,
@@ -689,15 +757,15 @@ def display_injury_reports_table(df):
     # Summary stats (IR filtered out)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("DFS Injuries", len(df))
+        st.metric("DFS Injuries", len(display_df))
     with col2:
-        q_count = len(df[df['Status'].str.upper() == 'Q'])
+        q_count = len(display_df[display_df['Status'].str.upper() == 'Q'])
         st.metric("Questionable", q_count)
     with col3:
-        d_count = len(df[df['Status'].str.upper() == 'D'])
+        d_count = len(display_df[display_df['Status'].str.upper() == 'D'])
         st.metric("Doubtful", d_count)
     with col4:
-        o_count = len(df[df['Status'].str.upper() == 'OUT'])
+        o_count = len(display_df[display_df['Status'].str.upper() == 'OUT'])
         st.metric("Out", o_count)
     
     # Expandable full context viewer
@@ -713,6 +781,13 @@ def display_injury_reports_table(df):
             inj for inj in espn_data 
             if inj.get('injury_status', '').upper() not in ['IR', 'INJURED RESERVE']
         ]
+        
+        # Further filter to main slate teams if available
+        if main_slate_teams:
+            active_espn = [
+                inj for inj in active_espn 
+                if inj.get('team', '') in main_slate_teams
+            ]
         
         # Create player selector
         player_options = [f"{inj['player_name']} ({inj['team']} {inj['position']})" for inj in active_espn]

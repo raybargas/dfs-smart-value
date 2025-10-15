@@ -346,9 +346,7 @@ def render_optimization_config():
     else:
         st.session_state['temp_config']['stacking_penalty_weight'] = 0.0  # No penalty when stacking disabled
     
-    # Task 2.3: Max Ownership Filter
-    st.markdown("### 🔍 Optional Filters")
-    
+    # Task 2.3: Max Ownership Filter (moved inline with other settings)
     # Check if ownership data exists
     has_ownership = 'ownership' in pool_df.columns
     
@@ -680,9 +678,7 @@ def display_best_plays_narrative(pool_df: pd.DataFrame):
     if len(valid_pool) == 0:
         return  # No valid plays to highlight
     
-    st.markdown("### 🎯 Today's Best Plays")
-    
-    with st.expander("📖 **Smart Value Narrative: Top Plays by Category**", expanded=True):
+    with st.expander("🎯 **Today's Best Plays**", expanded=False):
         st.markdown("""
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
             <p style="color: white; margin: 0; font-size: 0.95rem; line-height: 1.6;">

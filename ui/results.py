@@ -15,6 +15,111 @@ src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
 from models import Lineup
+import sqlite3
+from datetime import datetime
+from typing import Dict, Optional
+
+
+def get_current_nfl_week() -> int:
+    """
+    Calculate current NFL week based on date.
+    NFL 2025 season starts September 4, 2025 (Week 1 Thursday).
+    
+    Returns:
+        Current NFL week (1-18)
+    """
+    # NFL 2025 season start date (Week 1 Thursday)
+    season_start = datetime(2025, 9, 4)
+    current_date = datetime.now()
+    
+    # Calculate weeks since start
+    days_since_start = (current_date - season_start).days
+    week = (days_since_start // 7) + 1
+    
+    # Clamp to valid range (1-18)
+    return max(1, min(18, week))
+
+
+def load_historical_player_scores(week: int) -> Optional[Dict[str, float]]:
+    """
+    Load actual DraftKings fantasy scores for players from a historical week.
+    
+    Args:
+        week: NFL week number to load scores for
+        
+    Returns:
+        Dictionary mapping player names to their actual DraftKings fantasy scores
+        Returns None if no historical data available
+    """
+    try:
+        import os
+        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dfs_optimizer.db")
+        
+        if not os.path.exists(db_path):
+            return None
+            
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Query player game stats for the specified week
+        query = """
+        SELECT player_name, fantasy_points_draftkings
+        FROM player_game_stats pgs
+        JOIN game_boxscores gb ON pgs.game_id = gb.game_id
+        WHERE gb.week = ? AND pgs.fantasy_points_draftkings IS NOT NULL
+        """
+        
+        cursor.execute(query, (week,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            return None
+            
+        # Convert to dictionary
+        historical_scores = {}
+        for player_name, dk_points in rows:
+            # Handle potential name variations (case insensitive)
+            historical_scores[player_name.lower()] = dk_points
+            
+        return historical_scores
+        
+    except Exception as e:
+        st.error(f"❌ Error loading historical scores for Week {week}: {str(e)}")
+        return None
+
+
+def calculate_lineup_actual_score(lineup: Lineup, historical_scores: Dict[str, float]) -> Optional[float]:
+    """
+    Calculate the actual DraftKings score for a lineup using historical data.
+    
+    Args:
+        lineup: Lineup object to score
+        historical_scores: Dictionary of player names to actual scores
+        
+    Returns:
+        Total actual score for the lineup, or None if any player missing
+    """
+    if not historical_scores:
+        return None
+        
+    total_score = 0.0
+    missing_players = []
+    
+    for player in lineup.players:
+        # Try exact match first
+        if player.name in historical_scores:
+            total_score += historical_scores[player.name]
+        elif player.name.lower() in historical_scores:
+            total_score += historical_scores[player.name.lower()]
+        else:
+            missing_players.append(player.name)
+    
+    # Return None if any players are missing from historical data
+    if missing_players:
+        return None
+        
+    return round(total_score, 2)
 
 
 def render_results():
@@ -24,8 +129,9 @@ def render_results():
     Displays:
     1. Generation summary (count, time, success rate)
     2. Individual lineup cards with detailed stats
-    3. Export options (DraftKings CSV format)
-    4. Navigation back to modify settings
+    3. Historical scoring (if analyzing past weeks)
+    4. Export options (DraftKings CSV format)
+    5. Navigation back to modify settings
     """
     
     # Apply compact styles
@@ -43,6 +149,15 @@ def render_results():
     
     lineups: List[Lineup] = st.session_state['lineups']
     metadata = st.session_state['generation_metadata']
+    
+    # Check if this is a historical week analysis
+    current_week = st.session_state.get('current_week', None)
+    is_historical = current_week is not None and current_week < get_current_nfl_week()
+    
+    # Load historical scores if analyzing past week
+    historical_scores = None
+    if is_historical:
+        historical_scores = load_historical_player_scores(current_week)
     
     # ULTRA-COMPACT Header: Single line
     st.markdown("""
@@ -268,11 +383,31 @@ def render_results():
     # COMPACT lineup section
     st.markdown("### 🏈 Your Lineups")
     
+    # Show historical scoring info if available
+    if is_historical and historical_scores:
+        st.info(f"📊 **Historical Analysis Mode** - Showing actual Week {current_week} scores alongside projections")
+    elif is_historical and not historical_scores:
+        st.warning(f"⚠️ **Historical Analysis Mode** - No actual scores available for Week {current_week}")
+    
     for lineup in lineups:
+        # Calculate actual score if historical data available
+        actual_score = None
+        if historical_scores:
+            actual_score = calculate_lineup_actual_score(lineup, historical_scores)
+        
+        # Build expander title
+        if actual_score is not None:
+            title = f"**Lineup #{lineup.lineup_id}** - ${lineup.total_salary:,} | " \
+                   f"Proj: {lineup.total_projection:.1f} pts | " \
+                   f"**Actual: {actual_score:.1f} pts** | " \
+                   f"${lineup.salary_remaining:,} remaining"
+        else:
+            title = f"**Lineup #{lineup.lineup_id}** - ${lineup.total_salary:,} | " \
+                   f"{lineup.total_projection:.1f} pts | " \
+                   f"${lineup.salary_remaining:,} remaining"
+        
         with st.expander(
-            f"**Lineup #{lineup.lineup_id}** - ${lineup.total_salary:,} | "
-            f"{lineup.total_projection:.1f} pts | "
-            f"${lineup.salary_remaining:,} remaining",
+            title,
             expanded=(lineup.lineup_id == 1)  # Expand first lineup by default
         ):
             # Create lineup table
@@ -301,6 +436,32 @@ def render_results():
                     "Own%": f"{player.ownership:.1f}%" if player.ownership else "N/A"
                 }
                 
+                # Add actual score if historical data available
+                if historical_scores:
+                    player_actual = None
+                    if player.name in historical_scores:
+                        player_actual = historical_scores[player.name]
+                    elif player.name.lower() in historical_scores:
+                        player_actual = historical_scores[player.name.lower()]
+                    
+                    if player_actual is not None:
+                        row["Actual"] = f"{player_actual:.1f}"
+                        # Add performance indicator
+                        diff = player_actual - player.projection
+                        if diff >= 5:
+                            row["Performance"] = "🔥"
+                        elif diff >= 2:
+                            row["Performance"] = "✅"
+                        elif diff >= -2:
+                            row["Performance"] = "➖"
+                        elif diff >= -5:
+                            row["Performance"] = "⚠️"
+                        else:
+                            row["Performance"] = "❌"
+                    else:
+                        row["Actual"] = "N/A"
+                        row["Performance"] = "?"
+                
                 # Show Smart Value if using Smart Value optimization, otherwise show traditional Value
                 if metadata.get('optimization_objective') == 'smart_value':
                     smart_val = getattr(player, 'smart_value', None)
@@ -314,15 +475,33 @@ def render_results():
             st.dataframe(df, use_container_width=True, hide_index=True)
             
             # Lineup stats
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.markdown(f"**Total Salary:** ${lineup.total_salary:,} / $50,000")
-            
-            with col2:
-                st.markdown(f"**Total Projection:** {lineup.total_projection:.1f} pts")
-            
-            with col3:
+            if actual_score is not None:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Projected Score", f"{lineup.total_projection:.1f}")
+                
+                with col2:
+                    st.metric("Actual Score", f"{actual_score:.1f}")
+                
+                with col3:
+                    diff = actual_score - lineup.total_projection
+                    st.metric("Difference", f"{diff:+.1f}", delta=f"{diff:+.1f}")
+                
+                with col4:
+                    performance_pct = (actual_score / lineup.total_projection * 100) if lineup.total_projection > 0 else 0
+                    st.metric("Performance", f"{performance_pct:.1f}%")
+            else:
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown(f"**Total Salary:** ${lineup.total_salary:,} / $50,000")
+                
+                with col2:
+                    st.markdown(f"**Total Projection:** {lineup.total_projection:.1f} pts")
+                
+                with col3:
+                    st.markdown(f"**Salary Remaining:** ${lineup.salary_remaining:,}")
                 # Show Smart Value average if using Smart Value optimization
                 if metadata.get('optimization_objective') == 'smart_value':
                     smart_values = [getattr(p, 'smart_value', 0) for p in lineup.players]
@@ -331,6 +510,58 @@ def render_results():
                 else:
                     avg_value = sum(p.value for p in lineup.players) / 9
                     st.markdown(f"**Avg Value:** {avg_value:.2f} pts/$1K")
+    
+    # Historical Analysis Summary
+    if is_historical and historical_scores:
+        st.markdown("---")
+        st.markdown("### 📊 Historical Analysis Summary")
+        
+        # Calculate summary statistics
+        actual_scores = []
+        projected_scores = []
+        
+        for lineup in lineups:
+            actual_score = calculate_lineup_actual_score(lineup, historical_scores)
+            if actual_score is not None:
+                actual_scores.append(actual_score)
+                projected_scores.append(lineup.total_projection)
+        
+        if actual_scores:
+            avg_projected = sum(projected_scores) / len(projected_scores)
+            avg_actual = sum(actual_scores) / len(actual_scores)
+            best_actual = max(actual_scores)
+            worst_actual = min(actual_scores)
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Avg Projected", f"{avg_projected:.1f}")
+            
+            with col2:
+                st.metric("Avg Actual", f"{avg_actual:.1f}")
+            
+            with col3:
+                st.metric("Best Lineup", f"{best_actual:.1f}")
+            
+            with col4:
+                st.metric("Worst Lineup", f"{worst_actual:.1f}")
+            
+            # Performance analysis
+            st.markdown("**Performance Analysis:**")
+            over_performed = sum(1 for i, proj in enumerate(projected_scores) if actual_scores[i] > proj)
+            under_performed = len(actual_scores) - over_performed
+            
+            st.markdown(f"- **Over-performed:** {over_performed}/{len(actual_scores)} lineups ({over_performed/len(actual_scores)*100:.1f}%)")
+            st.markdown(f"- **Under-performed:** {under_performed}/{len(actual_scores)} lineups ({under_performed/len(actual_scores)*100:.1f}%)")
+            
+            # Contest context
+            st.markdown("**Contest Context (Week 6 DraftKings):**")
+            st.markdown("- **Winning Score:** ~229 pts")
+            st.markdown("- **Top 10 Cutoff:** ~213 pts") 
+            st.markdown("- **Min Cash:** ~140-145 pts")
+            
+            cash_count = sum(1 for score in actual_scores if score >= 145)
+            st.markdown(f"- **Your Cash Rate:** {cash_count}/{len(actual_scores)} lineups ({cash_count/len(actual_scores)*100:.1f}%)")
     
     st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
     
