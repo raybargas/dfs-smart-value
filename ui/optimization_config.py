@@ -59,22 +59,8 @@ def render_optimization_config():
     # COMPACT Configuration Controls
     st.markdown("### ⚙️ Lineup Settings")
     
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        # Task 2.1: Lineup Count Slider
-        lineup_count = st.slider(
-            "Number of Lineups",
-            min_value=1,
-            max_value=20,
-            value=5,
-            step=1,
-            help="Generate 1-20 unique lineup variations. More lineups = more coverage but longer generation time.",
-            key="lineup_count"
-        )
-    with col2:
-        st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
-        st.metric("", f"{lineup_count}", label_visibility="collapsed")
-        st.markdown('</div>', unsafe_allow_html=True)
+    # Default lineup count to 10, hide in advanced options
+    lineup_count = 10
     
     # Store in session state (temporary config)
     if 'temp_config' not in st.session_state:
@@ -102,8 +88,6 @@ def render_optimization_config():
     unique_players_needed = math.ceil(9 * (uniqueness_pct / 100))
     max_shared = 9 - unique_players_needed
     
-    st.caption(f"Lineup Diversity: Each lineup must differ by at least {unique_players_needed} players")
-    
     st.session_state['temp_config']['uniqueness_pct'] = uniqueness_pct
     
     # Max Player Exposure
@@ -130,6 +114,26 @@ def render_optimization_config():
     st.caption(f"Each player can appear in at most {max_lineups_per_player} of {lineup_count} lineups")
     
     st.session_state['temp_config']['max_exposure_pct'] = max_exposure_pct
+    
+    # Advanced Options
+    with st.expander("🔧 Advanced Options"):
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            lineup_count = st.slider(
+                "Number of Lineups",
+                min_value=1,
+                max_value=20,
+                value=10,
+                step=1,
+                help="Generate 1-20 unique lineup variations. More lineups = more coverage but longer generation time.",
+                key="lineup_count"
+            )
+        with col2:
+            st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
+            st.metric("", f"{lineup_count}", label_visibility="collapsed")
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.session_state['temp_config']['lineup_count'] = lineup_count
     
     # Smart Value Quality Filter
     st.markdown("### 🧠 Smart Value Filter")
