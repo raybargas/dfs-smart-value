@@ -19,8 +19,7 @@ def main():
     st.set_page_config(
         page_title="DFS Lineup Optimizer",
         page_icon="🏈",
-        layout="wide",
-        initial_sidebar_state="auto"  # Auto-collapse on mobile, expanded on desktop
+        layout="wide"
     )
     
     # Initialize session state with persistence
@@ -30,6 +29,8 @@ def main():
         st.session_state['player_data'] = None
     if 'selections' not in st.session_state:
         st.session_state['selections'] = {}
+    if 'current_week' not in st.session_state:
+        st.session_state['current_week'] = 7  # Default to current NFL week
     
     # Route to appropriate page
     if st.session_state['page'] == 'data_ingestion':

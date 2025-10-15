@@ -48,6 +48,31 @@ def render_data_ingestion():
     </div>
     """, unsafe_allow_html=True)
     
+    # Week selector
+    col1, col2 = st.columns([1, 3])
+    
+    with col1:
+        selected_week = st.selectbox(
+            "NFL Week",
+            options=list(range(1, 19)),
+            index=st.session_state.get('current_week', 7) - 1,
+            help="Select the NFL week for analysis",
+            key="week_selector"
+        )
+        
+        # Update session state if week changed
+        if selected_week != st.session_state.get('current_week', 7):
+            st.session_state['current_week'] = selected_week
+            # Clear cached data when week changes
+            if 'player_data' in st.session_state:
+                del st.session_state['player_data']
+            if 'data_summary' in st.session_state:
+                del st.session_state['data_summary']
+            st.rerun()
+    
+    with col2:
+        st.caption(f"📅 Analyzing Week {selected_week} data")
+    
     # Upload section
     uploaded_file = st.file_uploader(
         "📂 Upload Player Data",
@@ -137,10 +162,10 @@ def render_data_ingestion():
                         st.warning(f"⚠️ Could not save as default dataset: {save_error}")
                         st.session_state['manual_upload_saved'] = False
                 
-                # Build opponent lookup from Vegas lines (Week 6 - current week)
+                # Build opponent lookup from Vegas lines for selected week
                 # This creates a clean team -> opponent mapping
-                # TODO: Make week dynamic based on current NFL week
-                opponent_map = build_opponent_lookup(week=6, db_path="dfs_optimizer.db")
+                current_week = st.session_state.get('current_week', 7)
+                opponent_map = build_opponent_lookup(week=current_week, db_path="dfs_optimizer.db")
                 st.session_state['opponent_lookup'] = opponent_map
             
             # Clear any cached DFS metrics, season stats, and smart value when new data is loaded

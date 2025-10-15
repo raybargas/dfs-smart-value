@@ -21,6 +21,11 @@ from src.regression_analyzer import check_regression_risk
 from src.opponent_lookup import add_opponents_to_dataframe
 from src.season_stats_analyzer import analyze_season_stats, format_trend_display, format_consistency_display, format_momentum_display, format_variance_display
 from src.smart_value_calculator import calculate_smart_value, get_available_profiles
+from src.profile_manager import (
+    load_profiles, save_profile_config, get_profile_config, 
+    validate_config, get_profile_display_name, ALL_PROFILES,
+    DEFAULT_WEIGHTS, DEFAULT_SUB_WEIGHTS, DEFAULT_POSITION_WEIGHTS, DEFAULT_THRESHOLDS
+)
 from src.database_models import create_session, InjuryReport
 from fuzzywuzzy import fuzz
 
@@ -373,6 +378,110 @@ def render_player_selection():
                     'leverage': 0.10  # UPDATED: Reduced contrarian bias + Sweet Spot multiplier (was 0.15)
                 }
             
+            # Initialize profile management
+            if 'current_profile' not in st.session_state:
+                st.session_state.current_profile = 'Ray_Default'
+            if 'profiles_loaded' not in st.session_state:
+                st.session_state.profiles_loaded = False
+            
+            # Initialize sub-weights in session state (needed for profile saving)
+            if 'smart_value_sub_weights' not in st.session_state:
+                st.session_state['smart_value_sub_weights'] = DEFAULT_SUB_WEIGHTS.copy()
+            
+            # Initialize thresholds in session state (needed for profile saving)
+            if 'smart_threshold' not in st.session_state:
+                st.session_state['smart_threshold'] = DEFAULT_THRESHOLDS['smart_threshold']
+            if 'ownership_threshold' not in st.session_state:
+                st.session_state['ownership_threshold'] = DEFAULT_THRESHOLDS['ownership_threshold']
+            if 'salary_threshold' not in st.session_state:
+                st.session_state['salary_threshold'] = DEFAULT_THRESHOLDS['salary_threshold']
+            if 'projection_threshold' not in st.session_state:
+                st.session_state['projection_threshold'] = DEFAULT_THRESHOLDS['projection_threshold']
+            
+            # Personal Weight Profiles
+            st.markdown("#### 👤 Personal Weight Profiles")
+            st.caption("Save and load your custom weight configurations")
+            
+            # Profile management UI
+            col1, col2, col3 = st.columns([2, 1, 1])
+            
+            with col1:
+                # Profile selector
+                profile_options = [get_profile_display_name(name) for name in ALL_PROFILES]
+                current_display = get_profile_display_name(st.session_state.current_profile)
+                selected_display = st.selectbox(
+                    "Select Profile",
+                    options=profile_options,
+                    index=profile_options.index(current_display),
+                    key="profile_selector"
+                )
+                
+                # Convert display name back to internal name
+                selected_profile = None
+                for name in ALL_PROFILES:
+                    if get_profile_display_name(name) == selected_display:
+                        selected_profile = name
+                        break
+            
+            with col2:
+                if st.button("📥 Load Profile", use_container_width=True):
+                    if selected_profile:
+                        config = get_profile_config(selected_profile)
+                        if config:
+                            # Load all configuration components
+                            st.session_state['smart_value_custom_weights'] = config.get('main_weights', DEFAULT_WEIGHTS)
+                            st.session_state['smart_value_sub_weights'] = config.get('sub_weights', DEFAULT_SUB_WEIGHTS)
+                            st.session_state['position_specific_weights'] = config.get('position_weights', DEFAULT_POSITION_WEIGHTS)
+                            
+                            # Load thresholds
+                            thresholds = config.get('thresholds', DEFAULT_THRESHOLDS)
+                            st.session_state['smart_threshold'] = thresholds.get('smart_threshold', 60)
+                            st.session_state['ownership_threshold'] = thresholds.get('ownership_threshold', 25)
+                            st.session_state['salary_threshold'] = thresholds.get('salary_threshold', 8000)
+                            st.session_state['projection_threshold'] = thresholds.get('projection_threshold', 15)
+                            
+                            st.session_state.current_profile = selected_profile
+                            st.success(f"Loaded {selected_display}")
+                            st.rerun()
+                        else:
+                            st.error("Profile not found")
+            
+            with col3:
+                if st.button("💾 Save Profile", use_container_width=True):
+                    if selected_profile:
+                        # Collect all current configuration
+                        current_config = {
+                            'main_weights': st.session_state.get('smart_value_custom_weights', DEFAULT_WEIGHTS),
+                            'sub_weights': st.session_state.get('smart_value_sub_weights', DEFAULT_SUB_WEIGHTS),
+                            'position_weights': st.session_state.get('position_specific_weights', DEFAULT_POSITION_WEIGHTS),
+                            'thresholds': {
+                                'smart_threshold': st.session_state.get('smart_threshold', 60),
+                                'ownership_threshold': st.session_state.get('ownership_threshold', 25),
+                                'salary_threshold': st.session_state.get('salary_threshold', 8000),
+                                'projection_threshold': st.session_state.get('projection_threshold', 15)
+                            }
+                        }
+                        
+                        # Debug info
+                        st.write("Debug - Current config:")
+                        st.write(f"Main weights: {current_config['main_weights']}")
+                        st.write(f"Sub weights: {current_config['sub_weights']}")
+                        st.write(f"Thresholds: {current_config['thresholds']}")
+                        
+                        if validate_config(current_config):
+                            if save_profile_config(selected_profile, current_config):
+                                st.session_state.current_profile = selected_profile
+                                st.success(f"✅ Saved {selected_display} successfully!")
+                            else:
+                                st.error("❌ Failed to save profile")
+                        else:
+                            st.error("❌ Configuration validation failed")
+                    else:
+                        st.error("❌ No profile selected")
+            
+            # Show current profile
+            st.caption(f"Current: {get_profile_display_name(st.session_state.current_profile)}")
+            
             st.markdown("#### 🎯 Main Category Weights")
             st.caption("Adjust how much each factor influences the final score")
             
@@ -590,22 +699,7 @@ def render_player_selection():
             with st.expander("⚙️ Fine-tune sub-factors", expanded=False):
                 st.caption("These control how each category combines its inputs")
                 
-                # Initialize sub-weights in session state
-                if 'smart_value_sub_weights' not in st.session_state:
-                    st.session_state['smart_value_sub_weights'] = {
-                        # Opportunity sub-weights (WR/TE)
-                        'opp_target_share': 0.60,
-                        'opp_snap_pct': 0.30,
-                        'opp_rz_targets': 0.10,
-                        # Trends sub-weights
-                        'trends_momentum': 0.50,
-                        'trends_trend': 0.30,
-                        'trends_fpg': 0.20,
-                        # Risk sub-weights
-                        'risk_regression': 0.50,
-                        'risk_variance': 0.30,
-                        'risk_consistency': 0.20
-                    }
+                # Sub-weights already initialized at top of function
                 
                 st.markdown("**Opportunity** (WR/TE breakdown)")
                 st.caption("How Opportunity score is built for WR/TE positions")
@@ -941,7 +1035,7 @@ Smart Value =
                 position_weights = {pos: weights for pos, weights in position_weights.items() if weights}
             
             # Get current week for Vegas lines lookup
-            current_week = st.session_state.get('current_week', 6)
+            current_week = st.session_state.get('current_week', 7)
             df = calculate_smart_value(df, profile='balanced', custom_weights=custom_weights, position_weights=position_weights, sub_weights=sub_weights, week=current_week)
             st.session_state['smart_value_data'] = df
             st.session_state['smart_value_calculated'] = True
@@ -954,7 +1048,7 @@ Smart Value =
             df = add_opponents_to_dataframe(df, opponent_map)
     
     # Add injury flags to player names
-    current_week = st.session_state.get('current_week', 6)
+    current_week = st.session_state.get('current_week', 7)
     df = add_injury_flags_to_dataframe(df, week=current_week)
     
     # Verify required columns exist before storing

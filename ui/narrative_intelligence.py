@@ -163,22 +163,9 @@ def show():
     col1, col2, col3, col4 = st.columns([0.8, 2, 1.5, 1])
     
     with col1:
-        previous_week = st.session_state.current_week
-        new_week = st.number_input(
-            "Week",
-            min_value=1,
-            max_value=18,
-            value=st.session_state.current_week,
-            help="NFL week",
-            label_visibility="collapsed",
-            key="week_selector"
-        )
-        # Update session state from widget value
-        if new_week != previous_week:
-            st.session_state.current_week = new_week
-            load_vegas_lines_from_db()
-            load_injury_reports_from_db()
-            st.rerun()
+        # Show current analysis week
+        current_week = st.session_state.get('current_week', 7)
+        st.markdown(f"**Week {current_week}**")
     
     with col2:
         available_weeks = get_available_data_weeks()
@@ -592,7 +579,8 @@ def load_injury_reports_from_db():
             import os
             db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dfs_optimizer.db")
             session = create_session(db_path)
-            reports = session.query(InjuryReport).filter_by(week=st.session_state.current_week).all()
+            current_week = st.session_state.get('current_week', 7)
+            reports = session.query(InjuryReport).filter_by(week=current_week).all()
             
             if reports:
                 # Convert to DataFrame (filter out IR players - not relevant for weekly DFS)

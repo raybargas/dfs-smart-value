@@ -1,0 +1,176 @@
+{
+  "Ray_Default": {
+    "main_weights": {
+      "base": 0.15,
+      "opportunity": 0.22,
+      "trends": 0.13,
+      "risk": 0.05,
+      "matchup": 0.19,
+      "leverage": 0.13,
+      "regression": 0.13
+    },
+    "sub_weights": {
+      "opp_target_share": 0.4,
+      "opp_snap_pct": 0.3,
+      "opp_redzone": 0.2,
+      "opp_air_yards": 0.1,
+      "trend_momentum": 0.4,
+      "trend_role_growth": 0.35,
+      "trend_recent_fp": 0.25,
+      "risk_variance": 0.6,
+      "risk_consistency": 0.4
+    },
+    "position_weights": {},
+    "thresholds": {
+      "smart_threshold": 60,
+      "ownership_threshold": 25,
+      "salary_threshold": 8000,
+      "projection_threshold": 15
+    }
+  },
+  "Ray_Tournament": {
+    "main_weights": {
+      "base": 0.15,
+      "opportunity": 0.22,
+      "trends": 0.13,
+      "risk": 0.05,
+      "matchup": 0.19,
+      "leverage": 0.13,
+      "regression": 0.13
+    },
+    "sub_weights": {
+      "opp_target_share": 0.4,
+      "opp_snap_pct": 0.3,
+      "opp_redzone": 0.2,
+      "opp_air_yards": 0.1,
+      "trend_momentum": 0.4,
+      "trend_role_growth": 0.35,
+      "trend_recent_fp": 0.25,
+      "risk_variance": 0.6,
+      "risk_consistency": 0.4
+    },
+    "position_weights": {},
+    "thresholds": {
+      "smart_threshold": 60,
+      "ownership_threshold": 25,
+      "salary_threshold": 8000,
+      "projection_threshold": 15
+    }
+  },
+  "Ray_Cash": {
+    "main_weights": {
+      "base": 0.15,
+      "opportunity": 0.22,
+      "trends": 0.13,
+      "risk": 0.05,
+      "matchup": 0.19,
+      "leverage": 0.13,
+      "regression": 0.13
+    },
+    "sub_weights": {
+      "opp_target_share": 0.4,
+      "opp_snap_pct": 0.3,
+      "opp_redzone": 0.2,
+      "opp_air_yards": 0.1,
+      "trend_momentum": 0.4,
+      "trend_role_growth": 0.35,
+      "trend_recent_fp": 0.25,
+      "risk_variance": 0.6,
+      "risk_consistency": 0.4
+    },
+    "position_weights": {},
+    "thresholds": {
+      "smart_threshold": 60,
+      "ownership_threshold": 25,
+      "salary_threshold": 8000,
+      "projection_threshold": 15
+    }
+  },
+  "Chris_Default": {
+    "main_weights": {
+      "base": 0.15,
+      "opportunity": 0.22,
+      "trends": 0.13,
+      "risk": 0.05,
+      "matchup": 0.19,
+      "leverage": 0.13,
+      "regression": 0.13
+    },
+    "sub_weights": {
+      "opp_target_share": 0.4,
+      "opp_snap_pct": 0.3,
+      "opp_redzone": 0.2,
+      "opp_air_yards": 0.1,
+      "trend_momentum": 0.4,
+      "trend_role_growth": 0.35,
+      "trend_recent_fp": 0.25,
+      "risk_variance": 0.6,
+      "risk_consistency": 0.4
+    },
+    "position_weights": {},
+    "thresholds": {
+      "smart_threshold": 60,
+      "ownership_threshold": 25,
+      "salary_threshold": 8000,
+      "projection_threshold": 15
+    }
+  },
+  "Chris_Tournament": {
+    "main_weights": {
+      "base": 0.15,
+      "opportunity": 0.22,
+      "trends": 0.13,
+      "risk": 0.05,
+      "matchup": 0.19,
+      "leverage": 0.13,
+      "regression": 0.13
+    },
+    "sub_weights": {
+      "opp_target_share": 0.4,
+      "opp_snap_pct": 0.3,
+      "opp_redzone": 0.2,
+      "opp_air_yards": 0.1,
+      "trend_momentum": 0.4,
+      "trend_role_growth": 0.35,
+      "trend_recent_fp": 0.25,
+      "risk_variance": 0.6,
+      "risk_consistency": 0.4
+    },
+    "position_weights": {},
+    "thresholds": {
+      "smart_threshold": 60,
+      "ownership_threshold": 25,
+      "salary_threshold": 8000,
+      "projection_threshold": 15
+    }
+  },
+  "Chris_Cash": {
+    "main_weights": {
+      "base": 0.15,
+      "opportunity": 0.22,
+      "trends": 0.13,
+      "risk": 0.05,
+      "matchup": 0.19,
+      "leverage": 0.13,
+      "regression": 0.13
+    },
+    "sub_weights": {
+      "opp_target_share": 0.4,
+      "opp_snap_pct": 0.3,
+      "opp_redzone": 0.2,
+      "opp_air_yards": 0.1,
+      "trend_momentum": 0.4,
+      "trend_role_growth": 0.35,
+      "trend_recent_fp": 0.25,
+      "risk_variance": 0.6,
+      "risk_consistency": 0.4
+    },
+    "position_weights": {},
+    "thresholds": {
+      "smart_threshold": 60,
+      "ownership_threshold": 25,
+      "salary_threshold": 8000,
+      "projection_threshold": 15
+    }
+  }
+}

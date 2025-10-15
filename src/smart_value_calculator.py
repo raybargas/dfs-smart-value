@@ -85,18 +85,18 @@ def get_ceiling_boost_multiplier(position: str, projection: float) -> float:
 
 
 # Weight Profiles
-# NOTE: Default 'balanced' profile is TOURNAMENT-OPTIMIZED based on Week 6 winners analysis
-# Week 6 post-mortem: Leverage plays (Pickens 10.6%, McConkey 14.1%) were undervalued
-# PHASE 1 IMPROVEMENTS: Doubled leverage weight, rebalanced opportunity/matchup
+# NOTE: Default 'balanced' profile optimized for balanced tournament play
+# Custom configuration: Reduced matchup/leverage, increased trends/regression
+# Focus: More balanced approach with stronger trend analysis and regression protection
 WEIGHT_PROFILES = {
     'balanced': {
         'base': 0.15,          # Value + ceiling boost multiplier (includes explosiveness)
-        'opportunity': 0.25,   # ↓ Volume metrics (reduced 5% to balance leverage increase)
-        'trends': 0.10,        # Consistency matters less in tournaments
+        'opportunity': 0.22,   # Volume metrics (adjusted from 25% to 22%)
+        'trends': 0.13,        # Consistency trends (increased from 10% to 13%)
         'risk': 0.05,          # EMBRACE variance (De'Von Achane effect) - variance + consistency only
-        'matchup': 0.25,       # ↓ Game environment (reduced 5% to balance leverage increase)
-        'leverage': 0.20,      # ↑↑ DOUBLED from 0.10 - Sweet spot ownership now impactful
-        'regression': 0.05     # NEW: 80/20 regression rule (separate from risk)
+        'matchup': 0.19,       # Game environment (reduced from 25% to 19%)
+        'leverage': 0.13,      # Sweet spot ownership (reduced from 20% to 13%)
+        'regression': 0.13     # 80/20 regression rule (increased from 5% to 13%)
     },
     'cash': {
         'base': 0.50,          # ↑ Ultra-safe for cash games
