@@ -21,7 +21,8 @@ def generate_lineups(
     max_ownership_enabled: bool = False,
     max_ownership_pct: float = None,
     stacking_enabled: bool = True,
-    portfolio_avg_smart_value: float = None
+    portfolio_avg_smart_value: float = None,
+    stacking_penalty_weight: float = 1.0
 ) -> Tuple[List[Lineup], Optional[str]]:
     """
     Generate N unique DraftKings-valid lineups using linear programming.
@@ -48,6 +49,8 @@ def generate_lineups(
         stacking_enabled: Whether to enforce QB + WR/TE same team constraint (default True)
             True: Force QB + at least 1 WR/TE from same team (GPP strategy)
             False: Pure optimization without team correlation requirements
+        stacking_penalty_weight: Weight for stacking penalty (0.0 = no penalty, 1.0 = full penalty)
+            Applied post-generation to adjust Smart Value scores for unrealistic stacking
     
     Returns:
         Tuple of (List of Lineup objects, Error message or None)
@@ -90,6 +93,15 @@ def generate_lineups(
             return lineups, f"Could not generate lineup {i+1}: {error}"
         
         lineups.append(lineup)
+    
+    # Apply stacking penalty to all generated lineups
+    if stacking_penalty_weight > 0:
+        try:
+            from stacking_analyzer import apply_stacking_penalty_to_lineups
+            lineups = apply_stacking_penalty_to_lineups(lineups, stacking_penalty_weight)
+        except ImportError:
+            # Stacking analyzer not available - skip penalty
+            pass
     
     return lineups, None  # Full success
 

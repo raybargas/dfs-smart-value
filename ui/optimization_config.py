@@ -304,6 +304,20 @@ def render_optimization_config():
     
     st.session_state['temp_config']['stacking_enabled'] = stacking_enabled
     
+    # Stacking Penalty Weight (if stacking is enabled)
+    if stacking_enabled:
+        stacking_penalty_weight = st.slider(
+            "Stacking Penalty Weight",
+            min_value=0, max_value=100,
+            value=50,  # Default 50% penalty weight
+            step=5,
+            help="Penalty for excessive same-team stacking (3+ players). Higher values reduce unrealistic lineups with multiple players from the same team.\n\nPenalty Rules:\n• 2 players per team: No penalty (legitimate stacking)\n• 3 players per team: 10% Smart Value reduction\n• 4+ players per team: 20% Smart Value reduction\n• Multiple teams with 3+ players: Penalties are additive\n• Maximum penalty capped at 50%",
+            key="stacking_penalty_weight"
+        )
+        st.session_state['temp_config']['stacking_penalty_weight'] = stacking_penalty_weight / 100  # Convert to decimal
+    else:
+        st.session_state['temp_config']['stacking_penalty_weight'] = 0.0  # No penalty when stacking disabled
+    
     # Task 2.3: Max Ownership Filter
     st.markdown("### 🔍 Optional Filters")
     
@@ -385,6 +399,7 @@ def render_optimization_config():
                     'positional_floors': positional_floors,  # For positional mode
                     'portfolio_avg_smart_value': portfolio_avg if filter_strategy == 'portfolio' else None,  # For portfolio mode
                     'stacking_enabled': stacking_enabled,
+                    'stacking_penalty_weight': st.session_state['temp_config'].get('stacking_penalty_weight', 0.5),
                     'estimated_time': validation_result['estimated_time'],
                     'validation_status': validation_result['status'],
                     'validation_message': validation_result['message']

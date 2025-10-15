@@ -129,7 +129,8 @@ def render_lineup_generation():
             max_ownership_enabled=config.get('max_ownership_enabled', False),
             max_ownership_pct=config.get('max_ownership_pct', None),
             stacking_enabled=config.get('stacking_enabled', True),  # Default ON for GPPs
-            portfolio_avg_smart_value=portfolio_avg_sv  # For portfolio mode
+            portfolio_avg_smart_value=portfolio_avg_sv,  # For portfolio mode
+            stacking_penalty_weight=config.get('stacking_penalty_weight', 0.5)  # Stacking penalty weight
         )
         
         generation_time = time.time() - start_time
