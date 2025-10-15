@@ -167,11 +167,6 @@ def render_results():
     historical_scores = None
     if is_historical:
         historical_scores = load_historical_player_scores(current_week)
-        # Temporary debug for cloud deployment
-        if historical_scores is None:
-            st.error(f"🔧 CLOUD DEBUG: historical_scores is None for week {current_week}")
-        else:
-            st.success(f"🔧 CLOUD DEBUG: Loaded {len(historical_scores)} historical scores")
     
     # ULTRA-COMPACT Header: Single line
     st.markdown("""
