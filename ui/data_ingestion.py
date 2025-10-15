@@ -52,15 +52,10 @@ def render_data_ingestion():
     col1, col2 = st.columns([1, 3])
     
     with col1:
-        current_week = st.session_state.get('current_week', 7)
-        
-        # Create options with current week first, then others in ascending order
-        week_options = [current_week] + [w for w in range(1, 19) if w != current_week]
-        
         selected_week = st.selectbox(
             "NFL Week",
-            options=week_options,
-            index=0,  # Current week is always first
+            options=list(range(1, 19)),
+            index=st.session_state.get('current_week', 7) - 1,
             help="Select the NFL week for analysis",
             key="week_selector"
         )
