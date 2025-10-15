@@ -57,6 +57,13 @@ def load_historical_player_scores(week: int) -> Optional[Dict[str, float]]:
         
         if not os.path.exists(db_path):
             return None
+        
+        # Initialize historical data if needed (for cloud deployment)
+        try:
+            from init_historical_data import init_historical_data
+            init_historical_data()
+        except Exception:
+            pass  # Continue even if initialization fails
             
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
