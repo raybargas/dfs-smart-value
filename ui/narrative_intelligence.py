@@ -406,7 +406,7 @@ def fetch_vegas_lines():
 
 def load_vegas_lines_from_db():
     """Load Vegas lines from database cache."""
-    with st.spinner("Loading cached Vegas lines from database..."):
+    with st.spinner(""):
         try:
             # Debug: Log the week being queried
             query_week = st.session_state.current_week
@@ -414,13 +414,9 @@ def load_vegas_lines_from_db():
             # Use absolute path to database
             import os
             db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dfs_optimizer.db")
-            st.info(f"🔍 Querying Week {query_week} from: {db_path}")
-            st.info(f"📁 DB exists: {os.path.exists(db_path)}")
             
             session = create_session(db_path)
             lines = session.query(VegasLine).filter_by(week=query_week).all()
-            
-            st.info(f"📊 Query returned {len(lines)} games")
             
             if lines:
                 # Convert to DataFrame
@@ -441,8 +437,6 @@ def load_vegas_lines_from_db():
                 # Get latest update time
                 if lines:
                     st.session_state.last_vegas_update = max(line.fetched_at for line in lines)
-                
-                st.success(f"✅ Loaded {len(lines)} games from database cache")
             else:
                 # Try loading from JSON cache file as fallback
                 import json
@@ -467,9 +461,9 @@ def load_vegas_lines_from_db():
                     
                     st.session_state.vegas_lines_df = pd.DataFrame(data)
                     st.session_state.last_vegas_update = datetime.fromisoformat(cache_data['cached_at'])
-                    st.success(f"✅ Loaded {len(data)} games from cache file (Week {query_week})")
+                    pass  # Silently loaded from cache
                 else:
-                    st.warning(f"⚠️ No cached data found for Week {query_week}")
+                    pass  # No cached data - silently continue
             
             session.close()
             
@@ -590,7 +584,7 @@ def fetch_injury_reports():
 
 def load_injury_reports_from_db():
     """Load injury reports from database cache."""
-    with st.spinner("Loading cached injury reports from database..."):
+    with st.spinner(""):
         try:
             import os
             db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dfs_optimizer.db")
@@ -623,10 +617,8 @@ def load_injury_reports_from_db():
                     st.session_state.last_injury_update = max(
                         report.updated_at for report in reports if report.updated_at
                     )
-                
-                st.success(f"✅ Loaded {len(reports)} injury reports from database cache")
             else:
-                st.warning(f"⚠️ No cached injury data found for Week {st.session_state.current_week}")
+                pass  # No cached data - silently continue
             
             session.close()
             
