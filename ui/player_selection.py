@@ -133,18 +133,27 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
             regression_tooltips.append(f"Error: {str(e)[:50]}")
             prior_week_points.append(0)
         
-        # Leverage tooltip
+        # Leverage tooltip (numeric score)
         pos_median = df[df['position'] == row['position']]['value'].median()
         own = row['ownership'] if pd.notna(row['ownership']) else 100
         val = row['value']
-        lvg_tier = row['leverage_tier']
+        lvg_score = row['leverage']
         
-        if lvg_tier == '🔥':
-            lvg_tooltip = f"🔥 HIGH LEVERAGE | Own: {own:.1f}% (Low) | Value: {val:.2f} vs {pos_median:.2f} median | Great GPP play - low owned + above average value"
-        elif lvg_tier == '⚡':
-            lvg_tooltip = f"⚡ MEDIUM LEVERAGE | Own: {own:.1f}% (Moderate) | Value: {val:.2f} vs {pos_median:.2f} median | Decent GPP option"
+        # Determine leverage tier based on numeric score
+        if lvg_score >= 0.50:
+            tier = "🔥 ELITE"
+            description = "Exceptional GPP opportunity - high value + very low ownership"
+        elif lvg_score >= 0.30:
+            tier = "⚡ STRONG"
+            description = "Good GPP leverage - solid value + manageable ownership"
+        elif lvg_score >= 0.15:
+            tier = "✓ DECENT"
+            description = "Moderate leverage - playable in tournaments"
         else:
-            lvg_tooltip = f"• LOW LEVERAGE | Own: {own:.1f}% | Value: {val:.2f} vs {pos_median:.2f} median | Either chalk or poor value"
+            tier = "• LOW"
+            description = "Either chalk or poor value - better for cash games"
+        
+        lvg_tooltip = f"{tier} LEVERAGE: {lvg_score:.2f} | Own: {own:.1f}% | Value: {val:.2f} pts/$1K (pos median: {pos_median:.2f}) | {description}"
         
         leverage_tooltips.append(lvg_tooltip)
     
@@ -1100,7 +1109,7 @@ Smart Value =
             'Pos SV': row['smart_value'] if 'smart_value' in row else row.get('value', 0),
             'Smart_Value_Tooltip': row.get('smart_value_tooltip', 'Smart Value calculation pending'),
             'Rank': f"{row['position']}{int(row['pos_rank'])}" if 'pos_rank' in row else "-",
-            'Lvg': row['leverage_tier'] if 'leverage_tier' in row else '•',
+            'Lvg': row['leverage'] if 'leverage' in row else 0,
             'Lvg_Tooltip': row['leverage_tooltip'] if 'leverage_tooltip' in row else '',
             'Reg': row['regression_risk'] if 'regression_risk' in row else '',
             'Reg_Tooltip': row['regression_tooltip'] if 'regression_tooltip' in row else '',
@@ -1259,17 +1268,15 @@ Smart Value =
     
     gb.configure_column("Lvg", 
                         header_name="Lvg",
-                        filter="agTextColumnFilter",
-                        filterParams={
-                            "buttons": ["reset", "apply"],
-                            "closeOnApply": True,
-                            "debounceMs": 200
-                        },
+                        type=["numericColumn"],
+                        valueFormatter="value ? value.toFixed(2) : ''",
+                        filter="agNumberColumnFilter",
+                        filterParams=filter_config,
                         menuTabs=menu_tabs,
-                        width=70,
-                        cellStyle={'textAlign': 'center', 'fontSize': '1.2rem'},
+                        width=80,
+                        cellStyle={'textAlign': 'center', 'fontWeight': '500'},
                         tooltipField="Lvg_Tooltip",
-                        headerTooltip="LEVERAGE INDICATOR - Tournament play identifier based on ownership + value. 🔥 HIGH (own <10% + above-position-median value) = Great contrarian play with value - these are your GPP gems. ⚡ MEDIUM (own <20% + above-median value) = Solid leverage opportunity. • LOW (high own OR below-median value) = Chalk or poor value. Strategy: Stack 🔥 players in tournaments for differentiation when they boom. Avoid over-using in cash games where safety matters more.")
+                        headerTooltip="LEVERAGE SCORE - Calculated as Value ÷ Ownership% (e.g., 3.0 pts/$1K ÷ 10% own = 0.30 leverage). Higher scores = better tournament opportunity. FORMULA: A 0.50+ leverage score means excellent GPP upside (low-owned + good value). 0.30-0.50 = solid leverage. <0.30 = chalk or poor value. Strategy: Target high leverage (0.40+) for GPP differentiation. Sort by this column to find the best contrarian plays with value.")
     
     gb.configure_column("Reg", 
                         header_name="Reg",
