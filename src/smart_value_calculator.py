@@ -19,6 +19,23 @@ import numpy as np
 from typing import Dict, Optional
 
 
+# NFL Team Abbreviation to Full Name Mapping
+# Used to match DraftKings abbreviations to Vegas lines full team names
+TEAM_ABBREV_TO_FULL = {
+    'ARI': 'Arizona Cardinals', 'ATL': 'Atlanta Falcons', 'BAL': 'Baltimore Ravens',
+    'BUF': 'Buffalo Bills', 'CAR': 'Carolina Panthers', 'CHI': 'Chicago Bears',
+    'CIN': 'Cincinnati Bengals', 'CLE': 'Cleveland Browns', 'DAL': 'Dallas Cowboys',
+    'DEN': 'Denver Broncos', 'DET': 'Detroit Lions', 'GB': 'Green Bay Packers',
+    'HOU': 'Houston Texans', 'IND': 'Indianapolis Colts', 'JAX': 'Jacksonville Jaguars',
+    'KC': 'Kansas City Chiefs', 'LV': 'Las Vegas Raiders', 'LAC': 'Los Angeles Chargers',
+    'LAR': 'Los Angeles Rams', 'MIA': 'Miami Dolphins', 'MIN': 'Minnesota Vikings',
+    'NE': 'New England Patriots', 'NO': 'New Orleans Saints', 'NYG': 'New York Giants',
+    'NYJ': 'New York Jets', 'PHI': 'Philadelphia Eagles', 'PIT': 'Pittsburgh Steelers',
+    'SF': 'San Francisco 49ers', 'SEA': 'Seattle Seahawks', 'TB': 'Tampa Bay Buccaneers',
+    'TEN': 'Tennessee Titans', 'WAS': 'Washington Commanders'
+}
+
+
 # PHASE 4.6: Projection Gates for Ceiling Boost
 # Philosophy: Ceiling upside only matters if the floor is tournament-viable
 # A 9.8→18.5 spike (Gainwell) is less valuable than an 18.2→28.6 spike (DJ Moore)
@@ -440,6 +457,9 @@ def calculate_matchup_score(df: pd.DataFrame, weight: float, week: int = 6) -> p
         
         # Build Vegas lookup: team -> {game_total, itt, spread, win_prob}
         # PHASE 3: Added spread + win probability for game script analysis
+        # Create reverse lookup: full name -> abbreviation
+        full_to_abbrev = {v: k for k, v in TEAM_ABBREV_TO_FULL.items()}
+        
         vegas_map = {}
         for line in vegas_lines:
             home_spread = line.home_spread if line.home_spread else 0.0
@@ -452,20 +472,32 @@ def calculate_matchup_score(df: pd.DataFrame, weight: float, week: int = 6) -> p
             home_win_prob = 0.5 + (abs(home_spread) / 14) if home_spread < 0 else 0.5 - (home_spread / 14)
             away_win_prob = 1.0 - home_win_prob
             
-            vegas_map[line.home_team] = {
+            home_data = {
                 'game_total': line.total if line.total else 45.0,
                 'itt': line.home_itt if line.home_itt else 22.5,
                 'spread': home_spread,
                 'win_prob': home_win_prob
             }
-            vegas_map[line.away_team] = {
+            away_data = {
                 'game_total': line.total if line.total else 45.0,
                 'itt': line.away_itt if line.away_itt else 22.5,
                 'spread': away_spread,
                 'win_prob': away_win_prob
             }
+            
+            # Store using BOTH full name and abbreviation
+            vegas_map[line.home_team] = home_data
+            vegas_map[line.away_team] = away_data
+            
+            # Also store by abbreviation if full name is recognized
+            home_abbrev = full_to_abbrev.get(line.home_team)
+            away_abbrev = full_to_abbrev.get(line.away_team)
+            if home_abbrev:
+                vegas_map[home_abbrev] = home_data
+            if away_abbrev:
+                vegas_map[away_abbrev] = away_data
         
-        # Map Vegas data to players
+        # Map Vegas data to players (now works with both abbreviations and full names)
         df['game_total'] = df['team'].map(lambda t: vegas_map.get(t, {}).get('game_total', 45.0))
         df['team_itt'] = df['team'].map(lambda t: vegas_map.get(t, {}).get('itt', 22.5))
         df['team_spread'] = df['team'].map(lambda t: vegas_map.get(t, {}).get('spread', 0.0))
