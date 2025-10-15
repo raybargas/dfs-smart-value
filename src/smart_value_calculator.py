@@ -73,11 +73,15 @@ def min_max_scale_by_position(df: pd.DataFrame, metric_col: str) -> pd.Series:
 
 def calculate_base_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     """
-    Calculate BASE score component (projection per $1K + ceiling boost).
+    Calculate BASE score component (projection per $1K + ceiling boost + value penalty).
     
     PHASE 1 IMPROVEMENT: Added ceiling boost multiplier
     Week 6 analysis showed low-projection/high-ceiling plays (Kayshon Boutte: 6.9 proj, 26.3 actual)
     were undervalued. Ceiling ratio now boosts base value for explosion potential.
+    
+    PHASE 4 IMPROVEMENT: Added value ratio penalty for trap chalk
+    Week 6 analysis showed Puka Nacua (2.80 value ratio, 25.6% own) killed 4/6 lineups.
+    Low value ratio players (< 3.0 pts/$1K) now get penalized to prevent trap chalk.
     
     Args:
         df: Player DataFrame (must include 'season_ceiling' column)
@@ -87,7 +91,25 @@ def calculate_base_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
         DataFrame with 'base_raw' and 'base_norm' columns
     """
     # Calculate raw value (pts per $1K)
-    df['base_raw'] = df['projection'] / (df['salary'] / 1000)
+    df['value_ratio'] = df['projection'] / (df['salary'] / 1000)
+    df['base_raw'] = df['value_ratio'].copy()
+    
+    # PHASE 4 IMPROVEMENT: Value Ratio Penalty (trap chalk defense)
+    # Penalize players with poor value ratios to avoid expensive busts
+    # Thresholds based on Week 6 data:
+    # - Good value: 3.0+ pts/$1K (no penalty)
+    # - Mediocre value: 2.5-3.0 pts/$1K (15% penalty)
+    # - Poor value: < 2.5 pts/$1K (30% penalty)
+    def get_value_penalty(value_ratio):
+        if value_ratio >= 3.0:
+            return 1.0   # No penalty - good value
+        elif value_ratio >= 2.5:
+            return 0.85  # 15% penalty - mediocre value (Puka was 2.80)
+        else:
+            return 0.70  # 30% penalty - poor value
+    
+    df['value_penalty'] = df['value_ratio'].apply(get_value_penalty)
+    df['base_raw'] = df['base_raw'] * df['value_penalty']
     
     # PHASE 1 IMPROVEMENT: Add ceiling boost for explosion potential
     # ceiling_ratio = season_ceiling / projection (e.g., Boutte: 17.4 / 6.9 = 2.52x)

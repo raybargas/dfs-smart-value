@@ -166,6 +166,17 @@ def render_results():
         min_sv = metadata.get('min_smart_value', 0)
         pos_floors = metadata.get('positional_floors', None)
         portfolio_avg = metadata.get('portfolio_avg_smart_value', None)
+        hard_floor = metadata.get('hard_floor', 0)
+        
+        # PHASE 4: Show hard floor defense if applied
+        if hard_floor > 0:
+            st.info(f"""
+            🛡️ **Hard Floor Defense: {hard_floor}**
+            
+            All players below Smart Value **{hard_floor}** were blocked before applying your filter strategy.
+            
+            **Trap chalk protection**: Prevents extreme low-value chalk (e.g., Puka Nacua Week 6) from entering lineups.
+            """)
         
         if filter_strategy == 'simple' and min_sv > 0:
             st.success(f"""

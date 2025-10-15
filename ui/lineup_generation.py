@@ -57,6 +57,16 @@ def render_lineup_generation():
     min_smart_value = config.get('min_smart_value', 0)
     positional_floors = config.get('positional_floors', None)
     portfolio_avg_sv = config.get('portfolio_avg_smart_value', None)
+    hard_floor = config.get('hard_floor', 0)
+    
+    # PHASE 4: Apply hard floor FIRST (blocks extreme trap chalk across all strategies)
+    if hard_floor > 0 and 'smart_value' in player_pool_df.columns:
+        original_count = len(player_pool_df)
+        player_pool_df = player_pool_df[player_pool_df['smart_value'] >= hard_floor].copy()
+        
+        blocked_count = original_count - len(player_pool_df)
+        if blocked_count > 0:
+            st.caption(f"🛡️ Hard floor ({hard_floor}) blocked {blocked_count} trap chalk players")
     
     # Pre-filtering for simple/positional modes (portfolio uses LP constraint)
     if filter_strategy in ['simple', 'positional'] and 'smart_value' in player_pool_df.columns:
@@ -133,6 +143,7 @@ def render_lineup_generation():
         'error_message': error,
         'uniqueness_pct': config['uniqueness_pct'],
         'player_pool_size': len(player_pool_df),  # After filtering
+        'hard_floor': config.get('hard_floor', 0),  # PHASE 4: Hard floor defense
         'filter_strategy': config.get('filter_strategy', 'simple'),
         'min_smart_value': config.get('min_smart_value', 0),  # For simple mode
         'positional_floors': config.get('positional_floors', None),  # For positional mode

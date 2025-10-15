@@ -114,7 +114,14 @@ def render_optimization_config():
         min_smart_value = 0
         filter_strategy = 'simple'
         positional_floors = None
+        hard_floor = 0
     else:
+        # PHASE 4: Hard floor defense (blocks extreme trap chalk)
+        # Week 6 analysis: Puka Nacua (SV ~52) killed 4/6 lineups
+        # Hard floor of 55 blocks extreme trap chalk while allowing all winners
+        hard_floor = 55  # Constant hard floor applied before all filter strategies
+        st.info(f"🛡️ **Hard Floor: {hard_floor}** - Blocks extreme trap chalk (e.g., Puka Nacua) before applying your filter strategy below.")
+        
         st.markdown("""
         Smart Value combines opportunity, matchup, trends, and leverage into a 0-100 score.  
         Setting a minimum ensures you only build lineups from high-quality plays.
@@ -263,6 +270,7 @@ def render_optimization_config():
     st.session_state['temp_config']['min_smart_value'] = min_smart_value
     st.session_state['temp_config']['positional_floors'] = positional_floors
     st.session_state['temp_config']['portfolio_avg_smart_value'] = portfolio_avg if filter_strategy == 'portfolio' else None
+    st.session_state['temp_config']['hard_floor'] = hard_floor if has_smart_value else 0
     
     # Stacking Strategy (for GPP tournament play)
     st.markdown("### 🔗 Stacking Strategy")
