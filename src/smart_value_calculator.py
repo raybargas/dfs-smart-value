@@ -357,25 +357,43 @@ def calculate_matchup_score(df: pd.DataFrame, weight: float, week: int = 6) -> p
             df['team_itt'] = 0
             return df
         
-        # Build Vegas lookup: team -> {game_total, itt}
+        # Build Vegas lookup: team -> {game_total, itt, spread, win_prob}
+        # PHASE 3: Added spread + win probability for game script analysis
         vegas_map = {}
         for line in vegas_lines:
+            home_spread = line.home_spread if line.home_spread else 0.0
+            away_spread = line.away_spread if line.away_spread else 0.0
+            
+            # Calculate win probability from spread
+            # Formula: win_prob = 0.5 + (spread / 14)
+            # Example: -7 spread (7-point favorite) = 0.5 + (-7/14) = 0.0 (wait, that's wrong)
+            # Correct: -7 spread means HOME is favored, so home_win_prob = 0.5 + (7/14) = 0.75
+            home_win_prob = 0.5 + (abs(home_spread) / 14) if home_spread < 0 else 0.5 - (home_spread / 14)
+            away_win_prob = 1.0 - home_win_prob
+            
             vegas_map[line.home_team] = {
-                'game_total': line.total if line.total else 45.0,  # Default to 45
-                'itt': line.home_itt if line.home_itt else 22.5
+                'game_total': line.total if line.total else 45.0,
+                'itt': line.home_itt if line.home_itt else 22.5,
+                'spread': home_spread,
+                'win_prob': home_win_prob
             }
             vegas_map[line.away_team] = {
                 'game_total': line.total if line.total else 45.0,
-                'itt': line.away_itt if line.away_itt else 22.5
+                'itt': line.away_itt if line.away_itt else 22.5,
+                'spread': away_spread,
+                'win_prob': away_win_prob
             }
         
         # Map Vegas data to players
         df['game_total'] = df['team'].map(lambda t: vegas_map.get(t, {}).get('game_total', 45.0))
         df['team_itt'] = df['team'].map(lambda t: vegas_map.get(t, {}).get('itt', 22.5))
+        df['team_spread'] = df['team'].map(lambda t: vegas_map.get(t, {}).get('spread', 0.0))
+        df['team_win_prob'] = df['team'].map(lambda t: vegas_map.get(t, {}).get('win_prob', 0.5))
         
-        # Calculate matchup score using both game total and ITT
-        # Game total indicates shootout potential (50+ = ceiling game)
-        # ITT indicates team-specific scoring expectation
+        # PHASE 3: GAME SCRIPT-AWARE MATCHUP SCORE
+        # Position-specific game script logic based on Week 6 analysis
+        # Rico Dowdle (RB, 35.5% own, favored) = 36.9 pts (positive script)
+        # Puka Nacua (WR, 30.8% own, neutral) = 4.8 pts (no script advantage)
         
         # Normalize game total (range typically 38-56)
         game_total_norm = (df['game_total'] - 38) / (56 - 38)
@@ -384,10 +402,57 @@ def calculate_matchup_score(df: pd.DataFrame, weight: float, week: int = 6) -> p
         # Normalize ITT by position (different scoring expectations)
         itt_norm = min_max_scale_by_position(df, 'team_itt')
         
-        # Combined matchup score: 60% game total, 40% ITT
-        # High total = ceiling game for both teams
-        # High ITT = this specific team expected to score
-        matchup_raw = (game_total_norm * 0.6) + (itt_norm * 0.4)
+        # PHASE 3: Calculate position-specific game script scores
+        def calculate_game_script_bonus(row):
+            """
+            PHASE 3: Position-specific game script intelligence.
+            
+            RBs: Want positive script (leading/favored) → more carries, clock management
+            WRs/TEs: Want high volume (high total) OR negative script (trailing) → more passes
+            QBs: Want pure volume (high total) → more plays, more fantasy pts
+            DST: Want positive script (leading) → more sacks, turnovers
+            """
+            position = row.get('position', '').upper()
+            win_prob = row['team_win_prob']
+            total = row['game_total']
+            
+            # Normalize volume (game total 40-55 range)
+            volume_score = (total - 40) / 15
+            volume_score = max(0, min(1, volume_score))
+            
+            if position == 'RB':
+                # RBs want positive game script (leading/favored = more carries)
+                # 60% win prob weight, 40% volume
+                script_score = (win_prob * 0.6) + (volume_score * 0.4)
+                
+            elif position in ['WR', 'TE']:
+                # WRs/TEs want high volume OR negative script (trailing = passing)
+                # Prefer volume over script (70/30 split)
+                negative_script = 1.0 - win_prob  # Trailing teams pass more
+                script_score = (volume_score * 0.7) + (negative_script * 0.3)
+                
+            elif position == 'QB':
+                # QBs want pure volume (high total = more plays)
+                script_score = volume_score
+                
+            elif position == 'DST':
+                # DST wants positive script (leading = opponent passing, more sacks)
+                script_score = win_prob
+                
+            else:
+                # Default: neutral
+                script_score = 0.5
+            
+            return script_score
+        
+        # Apply game script bonus (0-1 scale)
+        df['game_script_bonus'] = df.apply(calculate_game_script_bonus, axis=1)
+        
+        # Combined matchup score with game script intelligence
+        # 40% game total (ceiling environment)
+        # 30% ITT (team scoring expectation)
+        # 30% game script bonus (position-specific advantage)
+        matchup_raw = (game_total_norm * 0.4) + (itt_norm * 0.3) + (df['game_script_bonus'] * 0.3)
         df['matchup_score'] = matchup_raw * weight
         
         return df
@@ -432,29 +497,68 @@ def calculate_leverage_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     # Normalize ceiling ratio by position (different expectations)
     ceiling_norm = min_max_scale_by_position(df, 'ceiling_ratio')
     
-    # Calculate ownership discount using SWEET SPOT approach
-    # Philosophy: "Smart contrarian, not cute contrarian"
-    # Rewards 8-15% owned (optimal leverage zone), doesn't penalize good chalk
+    # PHASE 2: CONTEXT-AWARE OWNERSHIP DISCOUNT
+    # Philosophy: "Differentiate good chalk from trap chalk"
+    # Week 6 showed: Rico Dowdle (35.5% own, 36.9 pts) = justified chalk
+    #                Puka Nacua (30.8% own, 4.8 pts) = trap chalk
     # 
+    # NEW: Chalk (25%+) gets analyzed for value ratio + matchup quality
+    #      If elite value (>3.5 pts/$1K) + elite matchup (>0.75) = "forced chalk" (reward)
+    #      Otherwise = "trap chalk" (penalize)
+    #
     # Ownership Tiers:
     #   < 8%:  2.5x - Ultra-contrarian (risky dart throws, slight penalty)
     #   8-15%: 3.0x - OPTIMAL leverage zone (best risk/reward)
     #   15-25%: 2.0x - Popular but still good leverage
-    #   25%+:  1.0x - Chalk plays (neutral, no penalty or bonus)
+    #   25%+:  CONTEXT-DEPENDENT - analyze value + matchup
     df['ownership_pct'] = df['ownership'].clip(lower=1.0)  # Min 1% to avoid divide by zero
     
-    def sweet_spot_discount(own):
-        """Calculate ownership discount with sweet spot bias"""
+    # Calculate value ratio (pts per $1K) for chalk analysis
+    df['value_ratio'] = df['projection'] / (df['salary'] / 1000)
+    
+    # Calculate matchup quality score (0-1 scale) for chalk analysis
+    if 'game_total' in df.columns:
+        matchup_quality = (df['game_total'] - 38) / (56 - 38)
+        matchup_quality = matchup_quality.clip(0, 1)
+    else:
+        matchup_quality = 0.5  # Neutral if no data
+    
+    def contextual_ownership_discount(row):
+        """
+        PHASE 2: Context-aware ownership discount with chalk intelligence.
+        
+        Week 6 Analysis:
+        - Rico Dowdle: 35.5% own, 3.12 pts/$1K, good game → 36.9 pts (justified chalk)
+        - Puka Nacua: 30.8% own, 2.80 pts/$1K, avg game → 4.8 pts (trap chalk)
+        """
+        own = row['ownership_pct']
+        value_ratio = row['value_ratio']
+        matchup = matchup_quality.loc[row.name] if hasattr(matchup_quality, 'loc') else 0.5
+        
+        # Base sweet spot logic (unchanged for <25% ownership)
         if 8.0 <= own <= 15.0:
             return 3.0  # Optimal leverage zone
         elif own < 8.0:
-            return 2.5  # Ultra-contrarian (slightly discouraged)
+            return 2.5  # Ultra-contrarian
         elif own <= 25.0:
             return 2.0  # Popular but acceptable
-        else:
-            return 1.0  # Chalk (neutral)
+        
+        # PHASE 2: Chalk analysis (25%+ ownership)
+        # Check if player DESERVES chalk (high value + elite matchup)
+        if own > 25.0:
+            # "Forced chalk" detection: elite value + elite matchup
+            if value_ratio > 3.5 and matchup > 0.75:
+                return 1.5  # REWARD justified chalk (don't fade elite plays)
+            # Good value but not elite matchup (or vice versa)
+            elif value_ratio > 3.0 or matchup > 0.7:
+                return 1.0  # Neutral (neither reward nor punish)
+            # Trap chalk: high ownership but no justification
+            else:
+                return 0.8  # PENALIZE trap chalk (fade opportunity)
+        
+        return 1.0  # Default neutral
     
-    df['own_discount'] = df['ownership_pct'].apply(sweet_spot_discount)
+    df['own_discount'] = df.apply(contextual_ownership_discount, axis=1)
     
     # Normalize ownership discount
     own_norm = (df['own_discount'] - df['own_discount'].min()) / (df['own_discount'].max() - df['own_discount'].min() + 0.001)
