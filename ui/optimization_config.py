@@ -102,7 +102,7 @@ def render_optimization_config():
     unique_players_needed = math.ceil(9 * (uniqueness_pct / 100))
     max_shared = 9 - unique_players_needed
     
-    st.caption(f"≥ {unique_players_needed} unique players per lineup (max {max_shared} shared)")
+    st.caption(f"Lineup Diversity: Each lineup must differ by at least {unique_players_needed} players")
     
     st.session_state['temp_config']['uniqueness_pct'] = uniqueness_pct
     
@@ -1081,7 +1081,7 @@ def display_constraints_summary(pool_df: pd.DataFrame, lineup_count: int, unique
     # Configuration
     st.markdown("**Configuration:**")
     st.markdown(f"- Lineup count: {lineup_count} lineups")
-    st.markdown(f"- Uniqueness: {uniqueness_pct}% (≥{math.ceil(9 * uniqueness_pct / 100)} unique players per lineup)")
+    st.markdown(f"- Lineup Diversity: {uniqueness_pct}% (≥{math.ceil(9 * uniqueness_pct / 100)} different players per lineup)")
     
     # Estimated Time
     time_color = "green" if validation_result['estimated_time'] < 30 else "yellow" if validation_result['estimated_time'] < 60 else "red"
