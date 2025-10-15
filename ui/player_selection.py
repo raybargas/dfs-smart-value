@@ -98,9 +98,10 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
             is_at_risk, points, stats = check_regression_risk(player_name, week=6, threshold=20.0, db_path="dfs_optimizer.db")
             
             if is_at_risk and stats:
-                regression_risks.append('⚠️')
+                regression_risks.append('✓')  # Checkmark indicates regression risk
                 # Build detailed tooltip
-                tooltip_parts = [f"Week 6: {points:.1f} DK pts"]
+                tooltip_parts = [f"⚠️ 80/20 REGRESSION RISK"]
+                tooltip_parts.append(f"Week 6: {points:.1f} DK pts (20+ threshold)")
                 if stats['pass_yards'] > 0:
                     tooltip_parts.append(f"Pass: {stats['pass_yards']} yds, {stats['pass_td']} TD")
                     if stats['pass_int'] > 0:
@@ -109,23 +110,23 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
                     tooltip_parts.append(f"Rush: {stats['rush_yards']} yds, {stats['rush_td']} TD")
                 if stats['receptions'] > 0:
                     tooltip_parts.append(f"Rec: {stats['receptions']} rec, {stats['rec_yards']} yds, {stats['rec_td']} TD")
-                tooltip_parts.append("⚠️ 80% likely to regress")
-                regression_tooltips.append(" | ".join(tooltip_parts))
-            elif points is not None and stats:
-                regression_risks.append('✓')
-                # Build tooltip for safe players
-                tooltip_parts = [f"Week 6: {points:.1f} DK pts"]
-                if stats['pass_yards'] > 0:
-                    tooltip_parts.append(f"Pass: {stats['pass_yards']} yds, {stats['pass_td']} TD")
-                if stats['rush_yards'] > 0:
-                    tooltip_parts.append(f"Rush: {stats['rush_yards']} yds, {stats['rush_td']} TD")
-                if stats['receptions'] > 0:
-                    tooltip_parts.append(f"Rec: {stats['receptions']} rec, {stats['rec_yards']} yds, {stats['rec_td']} TD")
-                tooltip_parts.append("✓ Safe - No regression risk")
+                tooltip_parts.append("80% of WRs scoring 20+ regress next week")
                 regression_tooltips.append(" | ".join(tooltip_parts))
             else:
-                regression_risks.append('')
-                regression_tooltips.append("No Week 6 data available")
+                regression_risks.append('')  # No checkmark = no risk or no data
+                if points is not None and stats:
+                    # Build tooltip for safe players
+                    tooltip_parts = [f"Week 6: {points:.1f} DK pts"]
+                    if stats['pass_yards'] > 0:
+                        tooltip_parts.append(f"Pass: {stats['pass_yards']} yds, {stats['pass_td']} TD")
+                    if stats['rush_yards'] > 0:
+                        tooltip_parts.append(f"Rush: {stats['rush_yards']} yds, {stats['rush_td']} TD")
+                    if stats['receptions'] > 0:
+                        tooltip_parts.append(f"Rec: {stats['receptions']} rec, {stats['rec_yards']} yds, {stats['rec_td']} TD")
+                    tooltip_parts.append("No regression risk (scored <20 pts)")
+                    regression_tooltips.append(" | ".join(tooltip_parts))
+                else:
+                    regression_tooltips.append("No Week 6 data available")
             
             prior_week_points.append(points if points is not None else 0)
         except Exception as e:
@@ -1061,7 +1062,7 @@ Smart Value =
         flag_tooltip = []
         
         # Flag 1: 80/20 WR Regression Risk (WRs only who scored 20+ last week)
-        if row['position'] == 'WR' and row.get('regression_risk') == '⚠️':
+        if row['position'] == 'WR' and row.get('regression_risk') == '✓':
             is_wr_regression = True
             flag_tooltip.append("⚠️ WR REGRESSION RISK: Scored 20+ last week, 80% chance of regression")
         
@@ -1274,9 +1275,9 @@ Smart Value =
                         },
                         menuTabs=menu_tabs,
                         width=65,
-                        cellStyle={'textAlign': 'center', 'fontSize': '1.2rem'},
+                        cellStyle={'textAlign': 'center', 'fontSize': '1.2rem', 'color': '#f59e0b'},
                         tooltipField="Reg_Tooltip",
-                        headerTooltip="80/20 REGRESSION RISK - The 80/20 rule states that 80% of players who scored 20+ DraftKings fantasy points last week will regress (score less) this week. ⚠️ WARNING = Player scored 20+ last week, high regression risk - use caution, lower exposure in lineups, fade in cash games. ✓ SAFE = Player found in last week's data but scored <20 points, no regression concern. BLANK = No prior week data available. Strategy: Fade ⚠️ players in cash games where consistency matters. In GPPs, they can be contrarian if ownership is inflated due to recency bias.")
+                        headerTooltip="80/20 REGRESSION RISK - Based on historical data: 80% of players who scored 20+ fantasy points last week will regress (score less) this week. ✓ CHECKMARK = Player scored 20+ last week, HIGH REGRESSION RISK - use caution, lower exposure, fade in cash games. BLANK = No risk (scored <20 last week) or no prior week data. Strategy: Fade ✓ players in cash games. In GPPs, they can be contrarian if ownership is inflated due to recency bias. Hover over checkmark for detailed Week 6 stats.")
     
     # Hide tooltip columns (they're just data sources for tooltips)
     gb.configure_column("Lvg_Tooltip", hide=True)
