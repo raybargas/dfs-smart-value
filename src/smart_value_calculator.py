@@ -19,6 +19,54 @@ import numpy as np
 from typing import Dict, Optional
 
 
+# PHASE 4.6: Projection Gates for Ceiling Boost
+# Philosophy: Ceiling upside only matters if the floor is tournament-viable
+# A 9.8→18.5 spike (Gainwell) is less valuable than an 18.2→28.6 spike (DJ Moore)
+# Week 6 validation: ZERO winning lineups had RBs projecting <12 pts
+PROJECTION_GATES = {
+    'QB': {'full': 18.0, 'half': 15.0},   # QBs score more - higher threshold
+    'RB': {'full': 13.0, 'half': 10.0},   # Core position - moderate threshold
+    'WR': {'full': 13.0, 'half': 10.0},   # Core position - moderate threshold
+    'TE': {'full': 10.0, 'half': 8.0},    # TEs score less - lower threshold
+    'DST': {'full': 6.0, 'half': 4.0}     # DSTs score differently - lowest threshold
+}
+
+
+def get_ceiling_boost_multiplier(position: str, projection: float) -> float:
+    """
+    Determine ceiling boost multiplier based on projection viability.
+    
+    PHASE 4.6: Projection-Gated Ceiling Boost
+    Prevents low-projection "cute contrarian" plays (e.g., Kenneth Gainwell: 9.8 proj, 1.81 value,
+    0.5% own) from achieving high Smart Value through ceiling/leverage alone.
+    
+    Philosophy:
+    - Tournament lineups need ~16.7 pts/player average for 150+ pt total
+    - Low-projection plays can't reach this even hitting ceiling
+    - Ceiling boost should only apply to tournament-viable projections
+    
+    Args:
+        position: Player position (QB, RB, WR, TE, DST)
+        projection: DFS projection in points
+    
+    Returns:
+        float: Multiplier for ceiling boost (1.0 = full, 0.5 = half, 0.0 = blocked)
+    
+    Examples:
+        - Kenneth Gainwell RB (9.8 proj): 0.0x → ceiling boost BLOCKED
+        - DJ Moore WR (18.2 proj): 1.0x → full ceiling boost
+        - Jake Ferguson TE (13.6 proj): 1.0x → full boost (TE threshold: 10.0)
+    """
+    gates = PROJECTION_GATES.get(position, {'full': 13.0, 'half': 10.0})
+    
+    if projection >= gates['full']:
+        return 1.0  # Full ceiling boost
+    elif projection >= gates['half']:
+        return 0.5  # Half ceiling boost
+    else:
+        return 0.0  # Block ceiling boost - projection too low
+
+
 # Weight Profiles
 # NOTE: Default 'balanced' profile is TOURNAMENT-OPTIMIZED based on Week 6 winners analysis
 # Week 6 post-mortem: Leverage plays (Pickens 10.6%, McConkey 14.1%) were undervalued
@@ -112,18 +160,29 @@ def calculate_base_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     df['base_raw'] = df['base_raw'] * df['value_penalty']
     
     # PHASE 1 IMPROVEMENT: Add ceiling boost for explosion potential
+    # PHASE 4.6 ENHANCEMENT: Gate ceiling boost by projection viability
     # ceiling_ratio = season_ceiling / projection (e.g., Boutte: 17.4 / 6.9 = 2.52x)
-    # Players with 2.5x+ ceiling get up to 50% base boost
+    # Players with 2.5x+ ceiling get up to 50% base boost (IF projection is tournament-viable)
     if 'season_ceiling' in df.columns:
         df['ceiling_ratio'] = df['season_ceiling'] / df['projection'].replace(0, 1)  # Avoid division by zero
         df['ceiling_ratio'] = df['ceiling_ratio'].fillna(1.5)  # Default if missing
         
+        # PHASE 4.6: Calculate projection-based multiplier
+        # Blocks ceiling boost for low-projection plays (e.g., Gainwell 9.8 pts)
+        # Preserves ceiling boost for tournament-viable plays (e.g., DJ Moore 18.2 pts)
+        df['ceiling_multiplier'] = df.apply(
+            lambda row: get_ceiling_boost_multiplier(row['position'], row['projection']),
+            axis=1
+        )
+        
         # Ceiling boost: 0-50% boost for high ceiling/projection ratios
         # (ceiling_ratio - 1.0) / 2.0 scales it so 3.0x ratio = 1.0 boost (capped at 0.5)
-        df['ceiling_boost'] = np.clip((df['ceiling_ratio'] - 1.0) / 2.0, 0, 0.5)
+        # MULTIPLIED by projection gate (1.0, 0.5, or 0.0)
+        df['ceiling_boost'] = np.clip((df['ceiling_ratio'] - 1.0) / 2.0, 0, 0.5) * df['ceiling_multiplier']
         
         # Apply boost: base_raw * (1 + boost)
-        # Example: Boutte with 2.52x ratio → 0.38 boost → 38% increase to base value
+        # Example (Phase 1): Boutte with 2.52x ratio → 0.38 boost → 38% increase
+        # Example (Phase 4.6): Gainwell with 1.89x ratio BUT 9.8 proj → 0.0 boost → BLOCKED
         df['base_raw'] = df['base_raw'] * (1 + df['ceiling_boost'])
     
     # Normalize by position
