@@ -323,15 +323,16 @@ def render_player_selection():
             if 'weights_migrated_v2' not in st.session_state:
                 st.session_state['smart_value_custom_weights'] = {
                     'base': 0.15,  # UPDATED: Value matters more (was 0.10)
-                    'opportunity': 0.30,
+                    'opportunity': 0.25,  # Reduced to make room for regression
                     'trends': 0.10,
                     'risk': 0.05,
-                    'matchup': 0.30,  # INCREASED: Game environment = most predictive
-                    'leverage': 0.10  # UPDATED: Reduced contrarian bias + Sweet Spot multiplier (was 0.15)
+                    'matchup': 0.25,  # Reduced to make room for regression
+                    'leverage': 0.20,  # Increased leverage weight
+                    'regression': 0.05  # NEW: 80/20 regression component
                 }
                 # Delete old widget keys to force slider reset
                 widget_keys = ['base_weight_slider', 'opp_weight_slider', 'trends_weight_slider', 
-                              'risk_weight_slider', 'matchup_weight_slider', 'leverage_weight_slider']
+                              'risk_weight_slider', 'matchup_weight_slider', 'leverage_weight_slider', 'regression_weight_slider']
                 for key in widget_keys:
                     if key in st.session_state:
                         del st.session_state[key]
@@ -436,8 +437,22 @@ def render_player_selection():
             with col2:
                 st.metric("", f"{leverage_weight*100:.0f}%", label_visibility="collapsed")
             
+            # Regression (80/20 rule)
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                regression_weight = st.slider(
+                    "⚠️ 80/20 Regression",
+                    min_value=0.0, max_value=1.0,
+                    value=st.session_state['smart_value_custom_weights'].get('regression', 0.05),
+                    step=0.05,
+                    key='regression_weight_slider',
+                    help="🎯 Penalty for players who scored 20+ points last week (80% regression rate)"
+                )
+            with col2:
+                st.metric("", f"{regression_weight*100:.0f}%", label_visibility="collapsed")
+            
             # Calculate total and show status
-            total = base_weight + opp_weight + trends_weight + risk_weight + matchup_weight + leverage_weight
+            total = base_weight + opp_weight + trends_weight + risk_weight + matchup_weight + leverage_weight + regression_weight
             
             # Auto-normalize weights if they don't sum to 100%
             needs_normalization = abs(total - 1.0) > 0.001
@@ -447,12 +462,13 @@ def render_player_selection():
                 # Show what normalized weights will be
                 with st.expander("Preview normalized weights", expanded=False):
                     st.caption(f"Original → Normalized:")
-                    st.caption(f"• Base: {base_weight*100:.1f}% → {(base_weight/total)*100:.1f}%")
-                    st.caption(f"• Opportunity: {opp_weight*100:.1f}% → {(opp_weight/total)*100:.1f}%")
-                    st.caption(f"• Trends: {trends_weight*100:.1f}% → {(trends_weight/total)*100:.1f}%")
-                    st.caption(f"• Risk: {risk_weight*100:.1f}% → {(risk_weight/total)*100:.1f}%")
-                    st.caption(f"• Matchup: {matchup_weight*100:.1f}% → {(matchup_weight/total)*100:.1f}%")
-                    st.caption(f"• 💎 Leverage: {leverage_weight*100:.1f}% → {(leverage_weight/total)*100:.1f}%")
+                st.caption(f"• Base: {base_weight*100:.1f}% → {(base_weight/total)*100:.1f}%")
+                st.caption(f"• Opportunity: {opp_weight*100:.1f}% → {(opp_weight/total)*100:.1f}%")
+                st.caption(f"• Trends: {trends_weight*100:.1f}% → {(trends_weight/total)*100:.1f}%")
+                st.caption(f"• Risk: {risk_weight*100:.1f}% → {(risk_weight/total)*100:.1f}%")
+                st.caption(f"• Matchup: {matchup_weight*100:.1f}% → {(matchup_weight/total)*100:.1f}%")
+                st.caption(f"• 💎 Leverage: {leverage_weight*100:.1f}% → {(leverage_weight/total)*100:.1f}%")
+                st.caption(f"• ⚠️ Regression: {regression_weight*100:.1f}% → {(regression_weight/total)*100:.1f}%")
             else:
                 st.success(f"✅ Weights sum to **{total*100:.0f}%**")
             
@@ -465,7 +481,8 @@ def render_player_selection():
                     'trends': trends_weight / total,
                     'risk': risk_weight / total,
                     'matchup': matchup_weight / total,
-                    'leverage': leverage_weight / total
+                    'leverage': leverage_weight / total,
+                    'regression': regression_weight / total
                 }
             else:
                 new_weights = {
@@ -474,7 +491,8 @@ def render_player_selection():
                     'trends': trends_weight,
                     'risk': risk_weight,
                     'matchup': matchup_weight,
-                    'leverage': leverage_weight
+                    'leverage': leverage_weight,
+                    'regression': regression_weight
                 }
             
             # Apply & Recalculate button
@@ -519,7 +537,7 @@ def render_player_selection():
                 
                 # CRITICAL: Delete widget keys so sliders reset to new values
                 widget_keys = ['base_weight_slider', 'opp_weight_slider', 'trends_weight_slider', 
-                              'risk_weight_slider', 'matchup_weight_slider', 'leverage_weight_slider']
+                              'risk_weight_slider', 'matchup_weight_slider', 'leverage_weight_slider', 'regression_weight_slider']
                 for key in widget_keys:
                     if key in st.session_state:
                         del st.session_state[key]
@@ -602,14 +620,8 @@ def render_player_selection():
                 
                 st.markdown("---")
                 st.markdown("**Risk** breakdown")
-                st.caption("How Risk adjustments are balanced")
+                st.caption("How Risk adjustments are balanced (regression moved to separate component)")
                 
-                risk_reg = st.slider(
-                    "Regression (80/20)",
-                    0.0, 1.0, st.session_state['smart_value_sub_weights']['risk_regression'],
-                    0.05, key='risk_reg_slider',
-                    help="Weight for 80/20 regression risk penalty"
-                )
                 risk_var = st.slider(
                     "Variance (Luck)",
                     0.0, 1.0, st.session_state['smart_value_sub_weights']['risk_variance'],
@@ -622,7 +634,7 @@ def render_player_selection():
                     0.05, key='risk_cons_slider',
                     help="Weight for snap % consistency bonus"
                 )
-                risk_total = risk_reg + risk_var + risk_cons
+                risk_total = risk_var + risk_cons
                 if abs(risk_total - 1.0) > 0.001:
                     st.warning(f"Risk sub-weights: {risk_total*100:.0f}% (should be 100%)")
                 
@@ -634,9 +646,8 @@ def render_player_selection():
                     'trends_momentum': trends_mom / trends_total if trends_total > 0 else 0.50,
                     'trends_trend': trends_trend / trends_total if trends_total > 0 else 0.30,
                     'trends_fpg': trends_fpg / trends_total if trends_total > 0 else 0.20,
-                    'risk_regression': risk_reg / risk_total if risk_total > 0 else 0.50,
-                    'risk_variance': risk_var / risk_total if risk_total > 0 else 0.30,
-                    'risk_consistency': risk_cons / risk_total if risk_total > 0 else 0.20
+                    'risk_variance': risk_var / risk_total if risk_total > 0 else 0.60,
+                    'risk_consistency': risk_cons / risk_total if risk_total > 0 else 0.40
                 }
                 
                 st.success("✅ **Sub-weights are ACTIVE!** These control how each main category combines its inputs. Click 'Apply & Recalculate' below to use your custom sub-weights.")

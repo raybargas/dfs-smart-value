@@ -115,11 +115,13 @@ def render_results():
         
         # Get weights from session state if available
         custom_weights = st.session_state.get('smart_value_custom_weights', {
-            'base': 0.40,
-            'opportunity': 0.30,
-            'trends': 0.15,
-            'risk': 0.10,
-            'matchup': 0.05
+            'base': 0.15,
+            'opportunity': 0.25,
+            'trends': 0.10,
+            'risk': 0.05,
+            'matchup': 0.25,
+            'leverage': 0.20,
+            'regression': 0.05
         })
         
         col1, col2 = st.columns([1, 1])
@@ -127,11 +129,13 @@ def render_results():
         with col1:
             st.markdown(f"""
             **Main Category Weights:**
-            - 💰 **Base Value** ({custom_weights.get('base', 0.40)*100:.0f}%): Projection per $1K salary
-            - 📊 **Opportunity** ({custom_weights.get('opportunity', 0.30)*100:.0f}%): Snap %, targets, red zone usage
-            - 📈 **Trends** ({custom_weights.get('trends', 0.15)*100:.0f}%): Momentum, role expansion, recent production
-            - ⚠️ **Risk Adjustment** ({custom_weights.get('risk', 0.10)*100:.0f}%): Regression risk, variance, consistency
-            - 🎯 **Matchup** ({custom_weights.get('matchup', 0.05)*100:.0f}%): Vegas lines, game environment
+            - 💰 **Base Value** ({custom_weights.get('base', 0.15)*100:.0f}%): Projection per $1K salary
+            - 📊 **Opportunity** ({custom_weights.get('opportunity', 0.25)*100:.0f}%): Snap %, targets, red zone usage
+            - 📈 **Trends** ({custom_weights.get('trends', 0.10)*100:.0f}%): Momentum, role expansion, recent production
+            - ⚠️ **Risk Adjustment** ({custom_weights.get('risk', 0.05)*100:.0f}%): Variance, consistency
+            - 🎯 **Matchup** ({custom_weights.get('matchup', 0.25)*100:.0f}%): Vegas lines, game environment
+            - 💎 **Leverage** ({custom_weights.get('leverage', 0.20)*100:.0f}%): Ceiling potential + low ownership
+            - ⚠️ **80/20 Regression** ({custom_weights.get('regression', 0.05)*100:.0f}%): Penalty for 20+ point scorers
             """)
         
         with col2:
@@ -143,6 +147,7 @@ def render_results():
             ✅ Accounted for salary value, not just projections  
             ✅ Used your position-specific customizations  
             ✅ Applied your sub-weight configurations
+            ✅ Considered leverage and ownership factors
             """)
         
         # Show position-specific overrides if any

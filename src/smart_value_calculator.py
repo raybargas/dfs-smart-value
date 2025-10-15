@@ -93,9 +93,10 @@ WEIGHT_PROFILES = {
         'base': 0.15,          # Value + ceiling boost multiplier (includes explosiveness)
         'opportunity': 0.25,   # ↓ Volume metrics (reduced 5% to balance leverage increase)
         'trends': 0.10,        # Consistency matters less in tournaments
-        'risk': 0.05,          # EMBRACE variance (De'Von Achane effect)
+        'risk': 0.05,          # EMBRACE variance (De'Von Achane effect) - variance + consistency only
         'matchup': 0.25,       # ↓ Game environment (reduced 5% to balance leverage increase)
-        'leverage': 0.20       # ↑↑ DOUBLED from 0.10 - Sweet spot ownership now impactful
+        'leverage': 0.20,      # ↑↑ DOUBLED from 0.10 - Sweet spot ownership now impactful
+        'regression': 0.05     # NEW: 80/20 regression rule (separate from risk)
     },
     'cash': {
         'base': 0.50,          # ↑ Ultra-safe for cash games
@@ -103,7 +104,8 @@ WEIGHT_PROFILES = {
         'trends': 0.10,        # Stable role growth
         'risk': 0.15,          # Avoid volatility
         'matchup': 0.00,       # Don't chase ceiling games
-        'leverage': 0.00       # No leverage in cash - want floor
+        'leverage': 0.00,      # No leverage in cash - want floor
+        'regression': 0.10     # Higher regression penalty for cash games
     },
     'gpp': {
         'base': 0.05,          # ↓ Minimal value consideration
@@ -111,7 +113,8 @@ WEIGHT_PROFILES = {
         'trends': 0.05,        # Minimal consistency focus
         'risk': 0.00,          # ZERO variance penalty
         'matchup': 0.25,       # ↑ Max game environment focus
-        'leverage': 0.35       # ↑↑ MAXIMUM leverage for ultra-aggressive GPP
+        'leverage': 0.35,      # ↑↑ MAXIMUM leverage for ultra-aggressive GPP
+        'regression': 0.00     # No regression penalty in GPP (embrace variance)
     }
 }
 
@@ -295,7 +298,9 @@ def calculate_opportunity_score(df: pd.DataFrame, weight: float, sub_weights: Op
                     total_opp += rz_norm * rz_weight  # Use custom sub-weight
             
             # If no opportunity data available, use projection proxy
-            if total_opp.sum() == 0:
+            if isinstance(total_opp, pd.Series) and total_opp.sum() == 0:
+                total_opp = pos_df['projection'] / pos_df['projection'].max() if pos_df['projection'].max() > 0 else 0.5
+            elif not isinstance(total_opp, pd.Series) and total_opp == 0:
                 total_opp = pos_df['projection'] / pos_df['projection'].max() if pos_df['projection'].max() > 0 else 0.5
             
             df.loc[pos_mask, 'opp_score'] = total_opp * weight
@@ -360,43 +365,34 @@ def calculate_trends_score(df: pd.DataFrame, weight: float, sub_weights: Optiona
 
 def calculate_risk_score(df: pd.DataFrame, weight: float, sub_weights: Optional[Dict[str, float]] = None) -> pd.DataFrame:
     """
-    Calculate RISK score component (regression risk, variance/luck, consistency) with configurable sub-weights.
+    Calculate RISK score component (variance/luck, consistency) with configurable sub-weights.
     
     Uses:
-    - Regression Risk (80/20 rule) - penalty for players who scored 20+ last week
     - XFP Variance (luck indicator) - bonus for unlucky players, penalty for lucky
     - Consistency (snap % volatility) - bonus for stable roles
     
+    NOTE: Regression Risk (80/20 rule) moved to separate 'regression' component
+    
     Args:
         df: Player DataFrame
-        weight: Weight for this component (default 0.10)
-        sub_weights: Optional dict with keys 'risk_regression', 'risk_variance', 'risk_consistency'
-                    Defaults to {0.50, 0.30, 0.20} if not provided
+        weight: Weight for this component (default 0.05)
+        sub_weights: Optional dict with keys 'risk_variance', 'risk_consistency'
+                    Defaults to {0.60, 0.40} if not provided
     
     Returns:
         DataFrame with 'risk_score' column
     """
-    # Default sub-weights if not provided
+    # Default sub-weights if not provided (regression removed)
     if sub_weights is None:
         sub_weights = {
-            'risk_regression': 0.50,
-            'risk_variance': 0.30,
-            'risk_consistency': 0.20
+            'risk_variance': 0.60,
+            'risk_consistency': 0.40
         }
     
     # Extract sub-weights
-    reg_weight = sub_weights.get('risk_regression', 0.50)
-    var_weight = sub_weights.get('risk_variance', 0.30)
-    cons_weight = sub_weights.get('risk_consistency', 0.20)
+    var_weight = sub_weights.get('risk_variance', 0.60)
+    cons_weight = sub_weights.get('risk_consistency', 0.40)
     df['risk_score'] = 0.0
-    
-    # Regression penalty (if available)
-    if 'regression_risk' in df.columns:
-        # -0.5 for regression warning, 0 otherwise
-        regression_adjustment = df['regression_risk'].apply(
-            lambda x: -0.5 if isinstance(x, str) and '⚠️' in x else 0
-        )
-        df['risk_score'] += regression_adjustment * (weight * reg_weight)  # Use custom sub-weight
     
     # XFP Variance bonus/penalty (if available)
     if 'season_var' in df.columns:
@@ -705,6 +701,33 @@ def calculate_leverage_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     return df
 
 
+def calculate_regression_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
+    """
+    Calculate REGRESSION score component (80/20 rule penalty).
+    
+    Applies penalty to players who scored 20+ fantasy points the previous week.
+    Based on the 80/20 rule: "80% of players who scored 20+ regress next week"
+    
+    Args:
+        df: Player DataFrame with 'regression_risk' column
+        weight: Weight for this component (default 0.05)
+    
+    Returns:
+        DataFrame with 'regression_score' column
+    """
+    df['regression_score'] = 0.0
+    
+    # Apply regression penalty (if available)
+    if 'regression_risk' in df.columns:
+        # -0.5 for regression warning, 0 otherwise
+        regression_adjustment = df['regression_risk'].apply(
+            lambda x: -0.5 if isinstance(x, str) and '⚠️' in x else 0
+        )
+        df['regression_score'] = regression_adjustment * weight
+    
+    return df
+
+
 def calculate_anti_chalk_penalty(df: pd.DataFrame) -> pd.DataFrame:
     """
     Apply ANTI-CHALK penalty to high-owned players in bad matchups.
@@ -761,17 +784,18 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
     """
     Calculate Smart Value Score using multi-factor weighted formula with optional position-specific overrides and sub-weight customization.
     
-    Formula: Smart Value = BASE + OPPORTUNITY + TRENDS + RISK + MATCHUP + LEVERAGE - CHALK_PENALTY
+    Formula: Smart Value = BASE + OPPORTUNITY + TRENDS + RISK + MATCHUP + LEVERAGE + REGRESSION - CHALK_PENALTY
     
     NEW (Week 6 Analysis):
     - LEVERAGE: Rewards ceiling potential + low ownership (De'Von Achane effect)
     - CHALK_PENALTY: Punishes high ownership in bad matchups (Puka Nacua trap)
+    - REGRESSION: 80/20 rule penalty (separate from risk component)
     
     Args:
         df: Player DataFrame with required columns (projection, salary, position, etc.)
         profile: Weight profile to use ('balanced', 'cash', 'gpp', 'custom')
         custom_weights: Optional dict of custom weights. If provided, overrides profile.
-                       Should contain: 'base', 'opportunity', 'trends', 'risk', 'matchup', 'leverage'
+                       Should contain: 'base', 'opportunity', 'trends', 'risk', 'matchup', 'leverage', 'regression'
         position_weights: Optional dict mapping position to weight overrides.
                          Example: {'QB': {'base': 0.50, 'opportunity': 0.20}, 'RB': {'opportunity': 0.45}}
         sub_weights: Optional dict of sub-factor weights for fine-grained control.
@@ -783,6 +807,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         - smart_value: Final score (0-100 scale)
         - smart_value_tooltip: Breakdown explanation
         - leverage_score: Tournament leverage component
+        - regression_score: 80/20 regression component
         - chalk_penalty: Anti-chalk adjustment
         - Individual component scores for debugging
     """
@@ -806,6 +831,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df['risk_score'] = 0.0
         df['matchup_score'] = 0.0
         df['leverage_score'] = 0.0
+        df['regression_score'] = 0.0
         
         for position in df['position'].unique():
             pos_mask = df['position'] == position
@@ -825,9 +851,10 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
             pos_df = calculate_risk_score(pos_df, pos_weights['risk'], sub_weights)
             pos_df = calculate_matchup_score(pos_df, pos_weights['matchup'], week)
             pos_df = calculate_leverage_score(pos_df, pos_weights.get('leverage', 0.15))
+            pos_df = calculate_regression_score(pos_df, pos_weights.get('regression', 0.05))
             
             # Update the main dataframe for this position
-            for col in ['base_score', 'opp_score', 'trends_score', 'risk_score', 'matchup_score', 'leverage_score']:
+            for col in ['base_score', 'opp_score', 'trends_score', 'risk_score', 'matchup_score', 'leverage_score', 'regression_score']:
                 df.loc[pos_mask, col] = pos_df[col]
     else:
         # Calculate uniformly across all positions
@@ -837,6 +864,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df = calculate_risk_score(df, weights['risk'], sub_weights)
         df = calculate_matchup_score(df, weights['matchup'], week)
         df = calculate_leverage_score(df, weights.get('leverage', 0.15))
+        df = calculate_regression_score(df, weights.get('regression', 0.05))
     
     # Apply anti-chalk penalty (independent of position)
     df = calculate_anti_chalk_penalty(df)
@@ -849,6 +877,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df['risk_score'] +
         df['matchup_score'] +
         df['leverage_score'] +
+        df['regression_score'] +  # NEW: 80/20 regression component
         df['chalk_penalty']  # Negative values reduce score
     )
     
