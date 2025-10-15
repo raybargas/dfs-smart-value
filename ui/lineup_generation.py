@@ -126,6 +126,7 @@ def render_lineup_generation():
             player_pool_df=player_pool_df,
             lineup_count=config['lineup_count'],
             uniqueness_pct=config['uniqueness_pct'],
+            max_exposure_pct=config.get('max_exposure_pct', 1.0),  # Max player exposure
             max_ownership_enabled=config.get('max_ownership_enabled', False),
             max_ownership_pct=config.get('max_ownership_pct', None),
             stacking_enabled=config.get('stacking_enabled', True),  # Default ON for GPPs

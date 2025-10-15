@@ -97,6 +97,33 @@ def render_results():
             st.rerun()
         return
     
+    # Player Exposure Analysis
+    st.caption("👥 Player Exposure Analysis")
+    
+    # Calculate exposure for all players
+    player_exposure = {}
+    for lineup in lineups:
+        for player in lineup.players:
+            player_exposure[player.name] = player_exposure.get(player.name, 0) + 1
+    
+    # Sort by exposure count (descending)
+    sorted_exposure = sorted(player_exposure.items(), key=lambda x: x[1], reverse=True)
+    
+    # Get top 10 most exposed players
+    top_exposed = sorted_exposure[:10]
+    
+    # Display in columns
+    if top_exposed:
+        exposure_text = " | ".join([f"{name} ({count}/{len(lineups)})" for name, count in top_exposed[:5]])
+        st.caption(f"**Top Exposure:** {exposure_text}")
+        
+        # Show warning for high exposure
+        max_exposure = top_exposed[0][1] if top_exposed else 0
+        max_exposure_pct = (max_exposure / len(lineups)) * 100 if len(lineups) > 0 else 0
+        
+        if max_exposure_pct > 70:
+            st.warning(f"⚠️ High exposure detected: {top_exposed[0][0]} appears in {max_exposure}/{len(lineups)} lineups ({max_exposure_pct:.0f}%). Consider lowering Max Exposure setting.")
+    
     st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
     
     # COMPACT Optimization Transparency Section

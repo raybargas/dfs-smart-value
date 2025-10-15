@@ -81,7 +81,7 @@ def render_optimization_config():
         st.session_state['temp_config'] = {}
     st.session_state['temp_config']['lineup_count'] = lineup_count
     
-    # Task 2.2: Uniqueness Slider
+    # Task 2.2: Uniqueness & Exposure Sliders
     col1, col2 = st.columns([3, 1])
     with col1:
         uniqueness_pct = st.slider(
@@ -105,6 +105,31 @@ def render_optimization_config():
     st.caption(f"≥ {unique_players_needed} unique players per lineup (max {max_shared} shared)")
     
     st.session_state['temp_config']['uniqueness_pct'] = uniqueness_pct
+    
+    # Max Player Exposure
+    st.markdown("### 🎯 Max Player Exposure")
+    
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        max_exposure_pct = st.slider(
+            "Max Player Exposure",
+            min_value=20,
+            max_value=100,
+            value=40,
+            step=5,
+            format="%d%%",
+            help="Limits how many lineups any single player can appear in. Lower values reduce concentration risk.\n\nExample: 40% with 10 lineups = max 4 lineups per player\n\nRecommended: 40% for tournaments (diversification)",
+            key="max_exposure_pct"
+        )
+    with col2:
+        st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
+        st.metric("", f"{max_exposure_pct}%", label_visibility="collapsed")
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    max_lineups_per_player = int(lineup_count * (max_exposure_pct / 100))
+    st.caption(f"Each player can appear in at most {max_lineups_per_player} of {lineup_count} lineups")
+    
+    st.session_state['temp_config']['max_exposure_pct'] = max_exposure_pct
     
     # Smart Value Quality Filter
     st.markdown("### 🧠 Smart Value Filter")
@@ -392,6 +417,7 @@ def render_optimization_config():
                 st.session_state['optimization_config'] = {
                     'lineup_count': lineup_count,
                     'uniqueness_pct': uniqueness_pct / 100,  # Convert to decimal
+                    'max_exposure_pct': st.session_state['temp_config'].get('max_exposure_pct', 100) / 100,  # Convert to decimal
                     'max_ownership_enabled': max_ownership_enabled,
                     'max_ownership_pct': max_ownership_pct / 100 if max_ownership_pct else None,
                     'filter_strategy': filter_strategy,  # 'simple', 'positional', or 'portfolio'

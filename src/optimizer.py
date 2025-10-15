@@ -22,7 +22,8 @@ def generate_lineups(
     max_ownership_pct: float = None,
     stacking_enabled: bool = True,
     portfolio_avg_smart_value: float = None,
-    stacking_penalty_weight: float = 1.0
+    stacking_penalty_weight: float = 1.0,
+    max_exposure_pct: float = 1.0
 ) -> Tuple[List[Lineup], Optional[str]]:
     """
     Generate N unique DraftKings-valid lineups using linear programming.
@@ -51,6 +52,9 @@ def generate_lineups(
             False: Pure optimization without team correlation requirements
         stacking_penalty_weight: Weight for stacking penalty (0.0 = no penalty, 1.0 = full penalty)
             Applied post-generation to adjust Smart Value scores for unrealistic stacking
+        max_exposure_pct: Maximum exposure percentage for any single player (0.20-1.0)
+            Example: 0.40 means no player can appear in more than 40% of lineups
+            Default: 1.0 (no exposure limit)
     
     Returns:
         Tuple of (List of Lineup objects, Error message or None)
@@ -74,6 +78,12 @@ def generate_lineups(
     # Example: 55% uniqueness → must differ by 5 → can share max 4
     max_shared = int(9 * (1 - uniqueness_pct))
     
+    # Calculate max lineups per player from exposure percentage
+    max_lineups_per_player = int(lineup_count * max_exposure_pct)
+    
+    # Track player exposure across all lineups
+    player_exposure_count = {}
+    
     lineups = []
     
     for i in range(lineup_count):
@@ -85,7 +95,9 @@ def generate_lineups(
             max_ownership_pct=max_ownership_pct,
             lineup_number=i + 1,
             stacking_enabled=stacking_enabled,
-            portfolio_avg_smart_value=portfolio_avg_smart_value
+            portfolio_avg_smart_value=portfolio_avg_smart_value,
+            player_exposure_count=player_exposure_count,
+            max_lineups_per_player=max_lineups_per_player
         )
         
         if error:
@@ -93,6 +105,10 @@ def generate_lineups(
             return lineups, f"Could not generate lineup {i+1}: {error}"
         
         lineups.append(lineup)
+        
+        # Update player exposure counts
+        for player in lineup.players:
+            player_exposure_count[player.name] = player_exposure_count.get(player.name, 0) + 1
     
     # Apply stacking penalty to all generated lineups
     if stacking_penalty_weight > 0:
@@ -114,7 +130,9 @@ def _generate_single_lineup(
     max_ownership_pct: float,
     lineup_number: int,
     stacking_enabled: bool = True,
-    portfolio_avg_smart_value: float = None
+    portfolio_avg_smart_value: float = None,
+    player_exposure_count: dict = None,
+    max_lineups_per_player: int = None
 ) -> Tuple[Optional[Lineup], Optional[str]]:
     """
     Generate a single lineup using PuLP linear programming.
@@ -237,6 +255,14 @@ def _generate_single_lineup(
         prob += pulp.lpSum([
             player_vars[p.name] for p in players if p.name in prev_player_names
         ]) <= max_shared, f"Uniqueness_vs_Lineup_{prev_idx + 1}"
+    
+    # Constraint 5b: Max Exposure (limit how many lineups a player can appear in)
+    if player_exposure_count is not None and max_lineups_per_player is not None:
+        for player in players:
+            current_exposure = player_exposure_count.get(player.name, 0)
+            # If player has reached max exposure, exclude them from this lineup
+            if current_exposure >= max_lineups_per_player:
+                prob += player_vars[player.name] == 0, f"MaxExposure_{player.name.replace(' ', '_')}"
     
     # Constraint 6: Stacking (if enabled)
     if stacking_enabled:
