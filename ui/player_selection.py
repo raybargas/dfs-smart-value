@@ -1217,15 +1217,15 @@ Smart Value =
     # Hide "Value" column - replaced by Smart Value
     gb.configure_column("Value", hide=True)
     
-    # PHASE 4.5: Dual Smart Value Columns
+    # PHASE 4.5: Smart Value (Global) - Primary ranking metric
     gb.configure_column("Global SV", 
-                        header_name="Global SV",
+                        header_name="Smart Value",  # Renamed from "Global SV" for simplicity
                         type=["numericColumn"],
                         valueFormatter="value ? value.toFixed(0) : ''",  # Show as whole number (0-100 scale)
                         filter="agNumberColumnFilter",
                         filterParams=filter_config,
                         menuTabs=menu_tabs,
-                        width=110,
+                        width=120,
                         cellStyle={
                             'fontWeight': 'bold',
                             'textAlign': 'center',
@@ -1233,24 +1233,10 @@ Smart Value =
                             'color': '#60a5fa'  # Light blue text
                         },
                         tooltipField="Smart_Value_Tooltip",
-                        headerTooltip="GLOBAL SMART VALUE 🌐 - Ranks players ACROSS ALL POSITIONS. Shows true tournament-winning plays. A QB with 90 Global SV is comparable to an RB with 90 Global SV. Use this for cross-position decisions and identifying actual elite plays. High-projection positions (QB/RB/WR) will naturally score higher. Low-impact plays (6-13 pt projections) will score lower even if they're the best at their position.")
+                        headerTooltip="SMART VALUE SCORE 🧠 - Ranks players ACROSS ALL POSITIONS for cross-position comparison. Combines value, opportunity, leverage, matchup, and game script intelligence. A QB with 90 Smart Value is comparable to an RB with 90 Smart Value in actual tournament impact. Higher = Better overall DFS value. Sort by this column to find true tournament-winning plays. NOTE: Position-specific Smart Value (used for filters) is calculated separately but hidden from this view.")
     
-    gb.configure_column("Pos SV", 
-                        header_name="Pos SV",
-                        type=["numericColumn"],
-                        valueFormatter="value ? value.toFixed(0) : ''",  # Show as whole number (0-100 scale)
-                        filter="agNumberColumnFilter",
-                        filterParams=filter_config,
-                        menuTabs=menu_tabs,
-                        width=100,
-                        cellStyle={
-                            'fontWeight': 'bold',
-                            'textAlign': 'center',
-                            'backgroundColor': '#1a472a',  # Dark green background
-                            'color': '#4ade80'  # Light green text
-                        },
-                        tooltipField="Smart_Value_Tooltip",
-                        headerTooltip="POSITION SMART VALUE 📊 - Ranks players WITHIN THEIR POSITION. Shows best QB, best RB, best TE, etc. Used for filters and positional constraints. A TE with 90 Pos SV is the best TE available, but might only have 45 Global SV (not elite overall). Use this for position-specific decisions like 'Do I want the #1 TE or #3 TE?'")
+    # Hide Position SV - only needed for backend filtering, not user display
+    gb.configure_column("Pos SV", hide=True)
     
     # Hide "Rank" column - no longer needed with Smart Value
     gb.configure_column("Rank", hide=True)
