@@ -470,11 +470,13 @@ def render_player_selection():
             st.markdown("---")
             if st.button("🔄 Apply & Recalculate", use_container_width=True, type="primary"):
                 st.session_state['smart_value_custom_weights'] = new_weights
-                # Clear cached smart value data to force recalculation
+                # Clear cached smart value data to force recalculation (including enriched_player_data)
                 if 'smart_value_calculated' in st.session_state:
                     del st.session_state['smart_value_calculated']
                 if 'smart_value_data' in st.session_state:
                     del st.session_state['smart_value_data']
+                if 'enriched_player_data' in st.session_state:
+                    del st.session_state['enriched_player_data']
                 st.success("✅ Configuration applied!")
                 st.rerun()
             
@@ -488,11 +490,13 @@ def render_player_selection():
                     'matchup': 0.30,  # INCREASED: Game environment = most predictive
                     'leverage': 0.10  # UPDATED: Less contrarian bias + Sweet Spot multiplier
                 }
-                # Clear cached data
+                # Clear cached data (including enriched_player_data that optimization config uses)
                 if 'smart_value_calculated' in st.session_state:
                     del st.session_state['smart_value_calculated']
                 if 'smart_value_data' in st.session_state:
                     del st.session_state['smart_value_data']
+                if 'enriched_player_data' in st.session_state:
+                    del st.session_state['enriched_player_data']
                 
                 # CRITICAL: Delete widget keys so sliders reset to new values
                 widget_keys = ['base_weight_slider', 'opp_weight_slider', 'trends_weight_slider', 
