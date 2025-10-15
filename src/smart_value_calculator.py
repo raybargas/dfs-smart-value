@@ -720,8 +720,9 @@ def calculate_regression_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     # Apply regression penalty (if available)
     if 'regression_risk' in df.columns:
         # -0.5 for regression warning, 0 otherwise
+        # Check for both '⚠️' (tooltip format) and '✓' (UI format)
         regression_adjustment = df['regression_risk'].apply(
-            lambda x: -0.5 if isinstance(x, str) and '⚠️' in x else 0
+            lambda x: -0.5 if isinstance(x, str) and ('⚠️' in x or '✓' in x) else 0
         )
         df['regression_score'] = regression_adjustment * weight
     
@@ -903,10 +904,12 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
             group_max = group['smart_value_raw'].max()
             
             if group_max > group_min:
-                return ((group['smart_value_raw'] - group_min) / (group_max - group_min)) * 100
+                scaled_values = ((group['smart_value_raw'] - group_min) / (group_max - group_min)) * 100
             else:
                 # If all scores in position are the same, set to 50
-                return 50.0
+                scaled_values = pd.Series([50.0] * len(group), index=group.index)
+            
+            return scaled_values
         
         df['smart_value'] = df.groupby('position', group_keys=False).apply(scale_position_group).reset_index(drop=True)
     else:
