@@ -299,32 +299,17 @@ def analyze_season_stats(
                 fp_g = snap_match.get('FP/G', 0.0)
                 player_df.at[idx, 'season_fpg'] = round(float(fp_g), 1) if pd.notna(fp_g) else 0.0
                 
-                # Calculate CONSISTENCY-ADJUSTED ceiling (best game × reliability factor)
-                # This prevents fluky one-game outliers from inflating ceiling value
-                # Formula: ceiling = max(weekly_fp) × reliability_factor
-                #   where reliability_factor = 1 - min(stdev / 15, 0.5)
-                # 
-                # Example outcomes:
-                #   Fluky player [35, 8, 7, 9, 6] → stdev=11 → factor=0.50 → ceiling=17.5
-                #   Consistent player [22, 25, 20, 23, 24] → stdev=2 → factor=0.87 → ceiling=21.8
+                # Calculate CEILING (best single game performance)
+                # PHASE 1 IMPROVEMENT: No longer penalizing volatility/variance
+                # Week 6 analysis showed boom/bust players (Kayshon Boutte, George Pickens) won tournaments
+                # GPP philosophy: EMBRACE variance, not penalize it
+                # Formula: ceiling = max(weekly_fp) [NO reliability penalty]
                 weekly_fp = snap_metrics['weekly_fp']
                 
                 if weekly_fp and len(weekly_fp) > 0:
-                    # Raw ceiling (best single game)
+                    # Ceiling = best single game (no consistency adjustment)
                     raw_ceiling = max(weekly_fp)
-                    
-                    # Calculate consistency (standard deviation)
-                    fp_array = np.array(weekly_fp)
-                    fp_stdev = np.std(fp_array) if len(fp_array) > 1 else 0.0
-                    
-                    # Reliability factor: consistent players get higher factor (closer to 1.0)
-                    # Volatile players get penalized (down to 0.5 minimum)
-                    # Scale: stdev of 15+ gets max penalty (50% reduction)
-                    reliability_factor = 1.0 - min(fp_stdev / 15.0, 0.5)
-                    
-                    # Adjusted ceiling
-                    adjusted_ceiling = raw_ceiling * reliability_factor
-                    player_df.at[idx, 'season_ceiling'] = round(float(adjusted_ceiling), 1)
+                    player_df.at[idx, 'season_ceiling'] = round(float(raw_ceiling), 1)
                 else:
                     player_df.at[idx, 'season_ceiling'] = 0.0
                 

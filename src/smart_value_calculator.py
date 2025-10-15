@@ -20,17 +20,17 @@ from typing import Dict, Optional
 
 
 # Weight Profiles
-# NOTE: Default 'balanced' profile is now TOURNAMENT-OPTIMIZED based on Week 6 winners
-# Analyzed 317K entries - these weights match what actually won
-# UPDATED: Reduced leverage penalty to allow chalk plays (lineup was too contrarian)
+# NOTE: Default 'balanced' profile is TOURNAMENT-OPTIMIZED based on Week 6 winners analysis
+# Week 6 post-mortem: Leverage plays (Pickens 10.6%, McConkey 14.1%) were undervalued
+# PHASE 1 IMPROVEMENTS: Doubled leverage weight, rebalanced opportunity/matchup
 WEIGHT_PROFILES = {
     'balanced': {
-        'base': 0.15,          # ↑ Value matters - projection/salary efficiency (was 0.10)
-        'opportunity': 0.30,   # ↑ Volume = ceiling (JSN, Pickens dominated)
-        'trends': 0.10,        # ↓ Consistency matters less in tournaments
-        'risk': 0.05,          # ↓ EMBRACE variance (De'Von Achane effect)
-        'matchup': 0.30,       # ↑ Game environment = MOST predictive (was 0.20)
-        'leverage': 0.10       # ↓↓ REDUCED from 0.15 - Sweet Spot multiplier handles contrarian (was 0.25 → 0.15 → 0.10)
+        'base': 0.15,          # Value + ceiling boost multiplier (includes explosiveness)
+        'opportunity': 0.25,   # ↓ Volume metrics (reduced 5% to balance leverage increase)
+        'trends': 0.10,        # Consistency matters less in tournaments
+        'risk': 0.05,          # EMBRACE variance (De'Von Achane effect)
+        'matchup': 0.25,       # ↓ Game environment (reduced 5% to balance leverage increase)
+        'leverage': 0.20       # ↑↑ DOUBLED from 0.10 - Sweet spot ownership now impactful
     },
     'cash': {
         'base': 0.50,          # ↑ Ultra-safe for cash games
@@ -73,17 +73,36 @@ def min_max_scale_by_position(df: pd.DataFrame, metric_col: str) -> pd.Series:
 
 def calculate_base_score(df: pd.DataFrame, weight: float) -> pd.DataFrame:
     """
-    Calculate BASE score component (projection per $1K).
+    Calculate BASE score component (projection per $1K + ceiling boost).
+    
+    PHASE 1 IMPROVEMENT: Added ceiling boost multiplier
+    Week 6 analysis showed low-projection/high-ceiling plays (Kayshon Boutte: 6.9 proj, 26.3 actual)
+    were undervalued. Ceiling ratio now boosts base value for explosion potential.
     
     Args:
-        df: Player DataFrame
-        weight: Weight for this component (default 0.40)
+        df: Player DataFrame (must include 'season_ceiling' column)
+        weight: Weight for this component (default 0.15)
     
     Returns:
         DataFrame with 'base_raw' and 'base_norm' columns
     """
     # Calculate raw value (pts per $1K)
     df['base_raw'] = df['projection'] / (df['salary'] / 1000)
+    
+    # PHASE 1 IMPROVEMENT: Add ceiling boost for explosion potential
+    # ceiling_ratio = season_ceiling / projection (e.g., Boutte: 17.4 / 6.9 = 2.52x)
+    # Players with 2.5x+ ceiling get up to 50% base boost
+    if 'season_ceiling' in df.columns:
+        df['ceiling_ratio'] = df['season_ceiling'] / df['projection'].replace(0, 1)  # Avoid division by zero
+        df['ceiling_ratio'] = df['ceiling_ratio'].fillna(1.5)  # Default if missing
+        
+        # Ceiling boost: 0-50% boost for high ceiling/projection ratios
+        # (ceiling_ratio - 1.0) / 2.0 scales it so 3.0x ratio = 1.0 boost (capped at 0.5)
+        df['ceiling_boost'] = np.clip((df['ceiling_ratio'] - 1.0) / 2.0, 0, 0.5)
+        
+        # Apply boost: base_raw * (1 + boost)
+        # Example: Boutte with 2.52x ratio → 0.38 boost → 38% increase to base value
+        df['base_raw'] = df['base_raw'] * (1 + df['ceiling_boost'])
     
     # Normalize by position
     df['base_norm'] = min_max_scale_by_position(df, 'base_raw')
