@@ -114,11 +114,25 @@ def calculate_lineup_actual_score(lineup: Lineup, historical_scores: Dict[str, f
     missing_players = []
     
     for player in lineup.players:
-        # Try exact match first
+        # Try multiple matching strategies
+        player_score = None
+        
+        # Strategy 1: Exact match
         if player.name in historical_scores:
-            total_score += historical_scores[player.name]
+            player_score = historical_scores[player.name]
+        # Strategy 2: Case-insensitive match
         elif player.name.lower() in historical_scores:
-            total_score += historical_scores[player.name.lower()]
+            player_score = historical_scores[player.name.lower()]
+        # Strategy 3: Case-insensitive match with original case
+        elif player.name.lower() in [k.lower() for k in historical_scores.keys()]:
+            # Find the actual key with matching case-insensitive name
+            for key in historical_scores.keys():
+                if key.lower() == player.name.lower():
+                    player_score = historical_scores[key]
+                    break
+        
+        if player_score is not None:
+            total_score += player_score
         else:
             missing_players.append(player.name)
     
@@ -167,6 +181,15 @@ def render_results():
     historical_scores = None
     if is_historical:
         historical_scores = load_historical_player_scores(current_week)
+        
+        # Debug: Check which lineups can be scored
+        if historical_scores:
+            scoreable_lineups = 0
+            for lineup in lineups:
+                actual_score = calculate_lineup_actual_score(lineup, historical_scores)
+                if actual_score is not None:
+                    scoreable_lineups += 1
+            st.info(f"🔧 DEBUG: {scoreable_lineups}/{len(lineups)} lineups can be historically scored")
     
     # ULTRA-COMPACT Header: Single line
     st.markdown("""
