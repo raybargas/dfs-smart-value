@@ -213,12 +213,13 @@ class DFSSalariesAPIClient(BaseAPIClient):
                 self.logger.info(f"Using cached data for {site} (cached {cached_at})")
                 return cached_data
         
-        # Fetch from API
-        endpoint = "daily_dfs.json"
+        # Fetch from API - use "current" season keyword for latest week
+        endpoint = "current/week/current/dfs.json"
+        params = {'dfstype': site}  # Filter by DFS site
         self.logger.info(f"Fetching current week salaries from MySportsFeeds for {site}...")
         
         try:
-            response_data = self._make_request(endpoint)
+            response_data = self._make_request(endpoint, params=params)
             
             # Parse response
             df = self._parse_dfs_response(response_data, site)
@@ -270,10 +271,11 @@ class DFSSalariesAPIClient(BaseAPIClient):
         
         # Construct endpoint
         endpoint = f"{season}/week/{week}/dfs.json"
+        params = {'dfstype': site}  # Filter by DFS site
         self.logger.info(f"Fetching historical salaries for {season} Week {week} ({site})...")
         
         try:
-            response_data = self._make_request(endpoint)
+            response_data = self._make_request(endpoint, params=params)
             
             # Parse response
             df = self._parse_dfs_response(response_data, site)
