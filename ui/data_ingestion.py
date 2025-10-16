@@ -41,6 +41,7 @@ def render_data_ingestion():
     <div style="padding: 0.5rem 0; margin-bottom: 0.75rem;">
         <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">
             🏈 <span class="gradient-text">DFS Lineup Optimizer</span>
+            <span style="font-size: 0.7rem; color: #666; margin-left: 0.5rem;">v2.0-linestar</span>
         </h2>
     </div>
     """, unsafe_allow_html=True)
