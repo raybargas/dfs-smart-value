@@ -195,27 +195,15 @@ def render_data_ingestion():
                                 # Count players per slate to find the biggest one (= main Sunday slate)
                                 slate_counts = df_salaries.groupby('slate_label').size()
                                 main_slate = slate_counts.idxmax()  # Slate with most players = main slate
-                                
                                 df_salaries = df_salaries[df_salaries['slate_label'] == main_slate].copy()
-                                
-                                st.info(f"🎯 Filtered to MAIN SLATE ONLY: {original_count} → {len(df_salaries)} players")
-                                st.info(f"📅 Selected slate: '{main_slate}' (largest slate = Sunday main)")
                             
                             # Remove duplicate players (keep first occurrence)
                             if 'player_name' in df_salaries.columns:
-                                before_dedup = len(df_salaries)
                                 df_salaries = df_salaries.drop_duplicates(subset=['player_name'], keep='first')
-                                if before_dedup > len(df_salaries):
-                                    st.info(f"📊 Removed {before_dedup - len(df_salaries)} duplicates → {len(df_salaries)} unique players")
                             
                             # Filter to only players with projections > 0
                             if 'projection' in df_salaries.columns:
-                                before_proj_filter = len(df_salaries)
                                 df_salaries = df_salaries[df_salaries['projection'] > 0].copy()
-                                players_without_proj = before_proj_filter - len(df_salaries)
-                                if players_without_proj > 0:
-                                    st.info(f"🎯 Filtered to players with projections: {before_proj_filter} → {len(df_salaries)} players")
-                                    st.info(f"❌ Excluded {players_without_proj} players without projections")
                         
                         if df_salaries is not None and not df_salaries.empty:
                             # Create slate and store (for historical tracking)
