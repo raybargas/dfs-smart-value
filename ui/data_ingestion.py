@@ -329,20 +329,20 @@ def render_data_ingestion():
                             pass
             except Exception:
                 # If historical load fails, try CSV fallback
-            import os
-            import io
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
-            
-            if os.path.exists(test_file_path):
-                try:
-                    with open(test_file_path, 'rb') as f:
-                        file_content = f.read()
-                        uploaded_file = io.BytesIO(file_content)
-                        uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
-                        st.session_state['auto_loaded'] = True
-                except Exception:
-                    pass
+                import os
+                import io
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
+                
+                if os.path.exists(test_file_path):
+                    try:
+                        with open(test_file_path, 'rb') as f:
+                            file_content = f.read()
+                            uploaded_file = io.BytesIO(file_content)
+                            uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
+                            st.session_state['auto_loaded'] = True
+                    except Exception:
+                        pass
     
     # Check if we already have loaded data and should just display it
     if 'player_data' in st.session_state and st.session_state['player_data'] is not None and uploaded_file is None:
