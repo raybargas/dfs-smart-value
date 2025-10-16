@@ -351,11 +351,10 @@ def render_data_ingestion():
                     # Found historical data - load it
                     summary = {
                         'total_players': len(historical_df),
-                        'positions': historical_df['position'].value_counts().to_dict(),
-                        'salary_min': int(historical_df['salary'].min()),
-                        'salary_max': int(historical_df['salary'].max()),
-                        'salary_avg': int(historical_df['salary'].mean()),
-                        'teams': historical_df['team'].nunique()
+                        'position_breakdown': historical_df['position'].value_counts().to_dict(),
+                        'salary_range': (int(historical_df['salary'].min()), int(historical_df['salary'].max())),
+                        'quality_score': 100.0,
+                        'issues': []
                     }
                     
                     # Get metadata
@@ -430,23 +429,17 @@ def render_data_ingestion():
                     df = df[df['projection'] > 0].copy()
                     filtered_count = initial_count - len(df)
                     
-                    # DEBUG: Log filter results
-                    print(f"DEBUG FILTER - Initial: {initial_count}, After filter: {len(df)}, Removed: {filtered_count}")
-                    
                     if filtered_count > 0:
-                        st.info(f"ℹ️ Filtered out {filtered_count} players with zero projections")
-                    
-                    # DEBUG: Verify session state will have filtered data
-                    print(f"DEBUG - About to save {len(df)} players to session_state")
+                        st.warning(f"🔍 **Projection Filter:** {initial_count} players → {len(df)} players (removed {filtered_count} with zero projections)")
                     
                     # Recalculate summary after filtering
+                    # CRITICAL: Must match key names from load_and_validate_player_data()
                     summary = {
                         'total_players': len(df),
-                        'positions': df['position'].value_counts().to_dict(),
-                        'salary_min': int(df['salary'].min()),
-                        'salary_max': int(df['salary'].max()),
-                        'salary_avg': int(df['salary'].mean()),
-                        'teams': df['team'].nunique()
+                        'position_breakdown': df['position'].value_counts().to_dict(),  # Was 'positions' - WRONG!
+                        'salary_range': (int(df['salary'].min()), int(df['salary'].max())),
+                        'quality_score': summary.get('quality_score', 100.0),  # Preserve from original
+                        'issues': summary.get('issues', [])  # Preserve from original
                     }
                 
                 # Store in session state with metadata
