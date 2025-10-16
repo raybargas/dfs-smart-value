@@ -98,10 +98,10 @@ def render_optimization_config():
             "Max Player Exposure",
             min_value=20,
             max_value=100,
-            value=40,
+            value=60,
             step=5,
             format="%d%%",
-            help="Limits how many lineups any single player can appear in. Lower values reduce concentration risk.\n\nExample: 40% with 10 lineups = max 4 lineups per player\n\nRecommended: 40% for tournaments (diversification)",
+            help="Limits how many lineups any single player can appear in. Lower values reduce concentration risk.\n\nExample: 60% with 10 lineups = max 6 lineups per player\n\nRecommended: 60% for balanced exposure (default)",
             key="max_exposure_pct"
         )
     with col2:
