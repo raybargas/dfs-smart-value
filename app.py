@@ -22,6 +22,17 @@ def main():
         layout="wide"
     )
     
+    # Run database migrations once on startup (lightweight check)
+    if 'migrations_checked' not in st.session_state:
+        try:
+            from migrations.run_migrations import run_all_migrations
+            run_all_migrations()
+            st.session_state['migrations_checked'] = True
+        except Exception as e:
+            # Log but don't block - migrations may already be complete
+            st.session_state['migrations_checked'] = True
+            st.session_state['migration_error'] = str(e)
+    
     # Initialize session state with persistence
     if 'page' not in st.session_state:
         st.session_state['page'] = 'data_ingestion'
