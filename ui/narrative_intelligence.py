@@ -670,13 +670,7 @@ def display_vegas_lines_table(df):
         # Remove the temporary abbreviation columns
         filtered_df = filtered_df.drop(['Home Team Abbr', 'Away Team Abbr'], axis=1)
         
-        # Show filtering info
-        original_count = len(df)
-        filtered_count = len(filtered_df)
-        if original_count > filtered_count:
-            st.caption(f"🎯 Filtered to main slate: {original_count} → {filtered_count} games ({len(main_slate_teams)} teams)")
-        
-        # Use filtered data for display
+        # Use filtered data for display (silently filter to main slate)
         display_df = filtered_df
     else:
         # No main slate data available, show all games
@@ -723,15 +717,9 @@ def display_injury_reports_table(df):
     
     # Filter to only show injuries from main slate teams
     if main_slate_teams:
-        # Filter injuries where team is in main slate
+        # Filter injuries where team is in main slate (silently)
         # Note: Injury reports should already use abbreviations, but let's be safe
         filtered_df = df[df['Team'].isin(main_slate_teams)].copy()
-        
-        # Show filtering info
-        original_count = len(df)
-        filtered_count = len(filtered_df)
-        if original_count > filtered_count:
-            st.caption(f"🎯 Filtered to main slate: {original_count} → {filtered_count} injuries ({len(main_slate_teams)} teams)")
         
         # Use filtered data for display
         display_df = filtered_df
