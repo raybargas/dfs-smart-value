@@ -57,50 +57,60 @@ def standardize_linestar(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Standardized format with Linestar enhancements
     """
-    # Work with copy and rename columns directly
-    standardized = df.copy()
-    
-    # Define column mapping (Linestar → Internal format)
-    column_mapping = {
-        # Core columns (required)
-        'Name': 'name',
-        'Position': 'position',
-        'Team': 'team',
-        'Salary': 'salary',
-        'Projected': 'projection',
-        'ProjOwn': 'ownership',
-        # Enhanced columns
-        'Ceiling': 'ceiling',
-        'Floor': 'floor',
-        'Consistency': 'consistency',
-        'OppRank': 'opp_rank',
-        'VersusStr': 'opponent',
-        'PPG': 'ppg',
-        'VegasImplied': 'implied_total',
-        'Vegas': 'vegas_spread',
-        'VegasML': 'vegas_ml',
-        'VegasTotals': 'vegas_total',
-        'Leverage': 'linestar_leverage',
-        'Safety': 'linestar_safety',
-        'StartingStatus': 'starting_status',
-        'LineStarId': 'linestar_id'
-    }
-    
     # Verify required columns exist
     required_cols = ['Name', 'Position', 'Team', 'Salary', 'Projected', 'ProjOwn']
-    missing = [col for col in required_cols if col not in standardized.columns]
+    missing = [col for col in required_cols if col not in df.columns]
     if missing:
-        raise ValueError(f"Missing required Linestar columns: {missing}. Found: {standardized.columns.tolist()}")
+        raise ValueError(f"Missing required Linestar columns: {missing}. Found: {df.columns.tolist()}")
     
-    # Rename columns that exist in the DataFrame
-    rename_dict = {k: v for k, v in column_mapping.items() if k in standardized.columns}
-    standardized = standardized.rename(columns=rename_dict)
+    # Create brand new DataFrame with EXPLICIT column mapping
+    # This ensures 'salary' gets data from 'Salary', 'projection' from 'Projected', etc.
+    result = pd.DataFrame({
+        # Core columns (required by app)
+        'name': df['Name'],
+        'player_name': df['Name'],
+        'position': df['Position'],
+        'team': df['Team'],
+        'salary': df['Salary'],          # EXPLICIT: Salary (8800) → salary
+        'projection': df['Projected'],    # EXPLICIT: Projected (23.94) → projection
+        'ownership': df['ProjOwn'],
+    })
     
-    # Add player_name as alias for name (required by some parts of app)
-    if 'name' in standardized.columns:
-        standardized['player_name'] = standardized['name']
+    # Add enhanced columns (Linestar advantages)
+    if 'Ceiling' in df.columns:
+        result['ceiling'] = df['Ceiling']
+    if 'Floor' in df.columns:
+        result['floor'] = df['Floor']
+    if 'Consistency' in df.columns:
+        result['consistency'] = df['Consistency']
+    if 'OppRank' in df.columns:
+        result['opp_rank'] = df['OppRank']
+    if 'VersusStr' in df.columns:
+        result['opponent'] = df['VersusStr']
+    if 'PPG' in df.columns:
+        result['ppg'] = df['PPG']
     
-    return standardized
+    # Add Vegas data
+    if 'VegasImplied' in df.columns:
+        result['implied_total'] = df['VegasImplied']
+    if 'Vegas' in df.columns:
+        result['vegas_spread'] = df['Vegas']
+    if 'VegasML' in df.columns:
+        result['vegas_ml'] = df['VegasML']
+    if 'VegasTotals' in df.columns:
+        result['vegas_total'] = df['VegasTotals']
+    
+    # Add Linestar-specific metrics
+    if 'Leverage' in df.columns:
+        result['linestar_leverage'] = df['Leverage']
+    if 'Safety' in df.columns:
+        result['linestar_safety'] = df['Safety']
+    if 'StartingStatus' in df.columns:
+        result['starting_status'] = df['StartingStatus']
+    if 'LineStarId' in df.columns:
+        result['linestar_id'] = df['LineStarId']
+    
+    return result
 
 
 def standardize_draftkings(df: pd.DataFrame) -> pd.DataFrame:
