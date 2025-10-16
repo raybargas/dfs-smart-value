@@ -430,8 +430,14 @@ def render_data_ingestion():
                     df = df[df['projection'] > 0].copy()
                     filtered_count = initial_count - len(df)
                     
+                    # DEBUG: Log filter results
+                    print(f"DEBUG FILTER - Initial: {initial_count}, After filter: {len(df)}, Removed: {filtered_count}")
+                    
                     if filtered_count > 0:
                         st.info(f"ℹ️ Filtered out {filtered_count} players with zero projections")
+                    
+                    # DEBUG: Verify session state will have filtered data
+                    print(f"DEBUG - About to save {len(df)} players to session_state")
                     
                     # Recalculate summary after filtering
                     summary = {
