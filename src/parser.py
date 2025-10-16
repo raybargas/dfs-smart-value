@@ -57,44 +57,45 @@ def standardize_linestar(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Standardized format with Linestar enhancements
     """
-    standardized = pd.DataFrame()
+    # Work with copy to preserve original
+    standardized = df.copy()
     
-    # Core columns (required by app)
-    standardized['player_name'] = df['Name']
-    standardized['name'] = df['Name']  # Alias for compatibility
-    standardized['position'] = df['Position']
-    standardized['team'] = df['Team']
-    standardized['salary'] = df['Salary']
-    standardized['projection'] = df['Projected']  # Professional projection!
-    standardized['ownership'] = df['ProjOwn']     # Real ownership data!
+    # Add/rename core columns (required by app)
+    standardized['player_name'] = standardized['Name']
+    standardized['name'] = standardized['Name']  # Alias for compatibility
+    standardized['position'] = standardized['Position']
+    standardized['team'] = standardized['Team']
+    standardized['salary'] = standardized['Salary']
+    standardized['projection'] = standardized['Projected']  # Professional projection!
+    standardized['ownership'] = standardized['ProjOwn']     # Real ownership data!
     
-    # Enhanced columns (Linestar-specific advantages)
-    standardized['ceiling'] = df['Ceiling']           # Pro ceiling estimate
-    standardized['floor'] = df['Floor']               # Floor for safety calc
-    standardized['consistency'] = df['Consistency']   # 0-100 reliability score
-    standardized['opp_rank'] = df['OppRank']         # Opponent rank vs position
-    standardized['opponent'] = df['VersusStr']        # Matchup detail string
-    standardized['ppg'] = df['PPG']                   # Points per game avg
+    # Add standardized names for enhanced columns (Linestar advantages)
+    standardized['ceiling'] = standardized['Ceiling']           # Pro ceiling estimate
+    standardized['floor'] = standardized['Floor']               # Floor for safety calc
+    standardized['consistency'] = standardized['Consistency']   # 0-100 reliability score
+    standardized['opp_rank'] = standardized['OppRank']         # Opponent rank vs position
+    standardized['opponent'] = standardized['VersusStr']        # Matchup detail string
+    standardized['ppg'] = standardized['PPG']                   # Points per game avg
     
-    # Vegas data (may already have via API, but good to preserve)
-    if 'VegasImplied' in df.columns:
-        standardized['implied_total'] = df['VegasImplied']
-    if 'Vegas' in df.columns:
-        standardized['vegas_spread'] = df['Vegas']
-    if 'VegasML' in df.columns:
-        standardized['vegas_ml'] = df['VegasML']
-    if 'VegasTotals' in df.columns:
-        standardized['vegas_total'] = df['VegasTotals']
+    # Vegas data (preserve with standardized names)
+    if 'VegasImplied' in standardized.columns:
+        standardized['implied_total'] = standardized['VegasImplied']
+    if 'Vegas' in standardized.columns:
+        standardized['vegas_spread'] = standardized['Vegas']
+    if 'VegasML' in standardized.columns:
+        standardized['vegas_ml'] = standardized['VegasML']
+    if 'VegasTotals' in standardized.columns:
+        standardized['vegas_total'] = standardized['VegasTotals']
     
-    # Linestar-specific metrics (for advanced analysis)
-    if 'Leverage' in df.columns:
-        standardized['linestar_leverage'] = df['Leverage']
-    if 'Safety' in df.columns:
-        standardized['linestar_safety'] = df['Safety']
-    if 'StartingStatus' in df.columns:
-        standardized['starting_status'] = df['StartingStatus']
-    if 'LineStarId' in df.columns:
-        standardized['linestar_id'] = df['LineStarId']
+    # Linestar-specific metrics (standardized names)
+    if 'Leverage' in standardized.columns:
+        standardized['linestar_leverage'] = standardized['Leverage']
+    if 'Safety' in standardized.columns:
+        standardized['linestar_safety'] = standardized['Safety']
+    if 'StartingStatus' in standardized.columns:
+        standardized['starting_status'] = standardized['StartingStatus']
+    if 'LineStarId' in standardized.columns:
+        standardized['linestar_id'] = standardized['LineStarId']
     
     return standardized
 
