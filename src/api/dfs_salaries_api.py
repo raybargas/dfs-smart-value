@@ -225,7 +225,8 @@ class DFSSalariesAPIClient(BaseAPIClient):
                 return cached_data
         
         # Extract year from season
-        year = season.split('-')[0]  # Handle both "2024" and "2024-2025-regular"
+        # Handle both int (2024) and string ("2024" or "2024-2025-regular")
+        year = str(season).split('-')[0]  # "2024-2025-regular" → "2024", 2024 → "2024"
         
         # Fetch from API
         endpoint = f"{year}-regular/week/{week}/dfs.json"
@@ -284,7 +285,8 @@ class DFSSalariesAPIClient(BaseAPIClient):
             raise ValueError(f"Invalid week {week}. Must be between 1 and 18.")
         
         # Extract year from season (MySportsFeeds wants "2024-regular", not "2024-2025-regular")
-        year = season.split('-')[0]  # "2024-2025-regular" → "2024"
+        # Handle both int (2024) and string ("2024" or "2024-2025-regular")
+        year = str(season).split('-')[0]  # "2024-2025-regular" → "2024", 2024 → "2024"
         
         # Construct endpoint
         endpoint = f"{year}-regular/week/{week}/dfs.json"
