@@ -58,7 +58,7 @@ class DFSSalariesAPIClient(BaseAPIClient):
             base_url="https://api.mysportsfeeds.com/v2.1/pull/nfl",
             api_key=api_key,
             db_path=db_path,
-            timeout=15,
+            timeout=30,  # Increased for large responses (490+ players, 33+ slates)
             max_retries=3,
             retry_delay=2.0
         )
@@ -178,6 +178,8 @@ class DFSSalariesAPIClient(BaseAPIClient):
     
     def fetch_current_week_salaries(
         self,
+        week: int,
+        season: str = '2024',
         site: str = 'draftkings',
         slate_type: str = 'classic',
         use_cache: bool = True
@@ -185,9 +187,14 @@ class DFSSalariesAPIClient(BaseAPIClient):
         """
         Fetch current week DFS salaries.
         
+        Note: MySportsFeeds "current" keyword doesn't work reliably, so we require
+        explicit week and season parameters.
+        
         Args:
+            week: Week number (1-18)
+            season: Season year (e.g., '2024') or full season string
             site: DFS site ('draftkings', 'fanduel', etc.)
-            slate_type: Slate type ('classic', 'showdown', etc.)
+            slate_type: Slate type ('classic', 'showdown', etc.) - for cache key only
             use_cache: Whether to use cached results
             
         Returns:
@@ -196,7 +203,7 @@ class DFSSalariesAPIClient(BaseAPIClient):
         
         Raises:
             APIError: If API request fails
-            ValueError: If site not supported
+            ValueError: If site not supported or invalid week
         """
         # Validate site
         site = site.lower()
@@ -205,18 +212,25 @@ class DFSSalariesAPIClient(BaseAPIClient):
                 f"Unsupported site '{site}'. Must be one of: {', '.join(self.SUPPORTED_SITES)}"
             )
         
+        # Validate week
+        if not 1 <= week <= 18:
+            raise ValueError(f"Invalid week {week}. Must be between 1 and 18.")
+        
         # Check cache
-        cache_key = f"current_{site}_{slate_type}"
+        cache_key = f"{season}_week{week}_{site}_{slate_type}"
         if use_cache and cache_key in self._cache:
             cached_data, cached_at = self._cache[cache_key]
             if datetime.now() - cached_at < self._cache_ttl:
-                self.logger.info(f"Using cached data for {site} (cached {cached_at})")
+                self.logger.info(f"Using cached data for {site} Week {week} (cached {cached_at})")
                 return cached_data
         
-        # Fetch from API - use "current" season keyword for latest week
-        endpoint = "current/week/current/dfs.json"
+        # Extract year from season
+        year = season.split('-')[0]  # Handle both "2024" and "2024-2025-regular"
+        
+        # Fetch from API
+        endpoint = f"{year}-regular/week/{week}/dfs.json"
         params = {'dfstype': site}  # Filter by DFS site
-        self.logger.info(f"Fetching current week salaries from MySportsFeeds for {site}...")
+        self.logger.info(f"Fetching Week {week} salaries from MySportsFeeds for {site}...")
         
         try:
             response_data = self._make_request(endpoint, params=params)
@@ -246,7 +260,7 @@ class DFSSalariesAPIClient(BaseAPIClient):
         Used for backtesting - load exact salaries from past weeks.
         
         Args:
-            season: Season string (e.g., '2024-2025-regular')
+            season: Season string (e.g., '2024-2025-regular' or '2024')
             week: Week number (1-18)
             site: DFS site ('draftkings', 'fanduel', etc.)
             
@@ -269,10 +283,13 @@ class DFSSalariesAPIClient(BaseAPIClient):
         if not 1 <= week <= 18:
             raise ValueError(f"Invalid week {week}. Must be between 1 and 18.")
         
+        # Extract year from season (MySportsFeeds wants "2024-regular", not "2024-2025-regular")
+        year = season.split('-')[0]  # "2024-2025-regular" → "2024"
+        
         # Construct endpoint
-        endpoint = f"{season}/week/{week}/dfs.json"
+        endpoint = f"{year}-regular/week/{week}/dfs.json"
         params = {'dfstype': site}  # Filter by DFS site
-        self.logger.info(f"Fetching historical salaries for {season} Week {week} ({site})...")
+        self.logger.info(f"Fetching historical salaries for {year} Week {week} ({site})...")
         
         try:
             response_data = self._make_request(endpoint, params=params)
@@ -293,87 +310,136 @@ class DFSSalariesAPIClient(BaseAPIClient):
         site: str = 'draftkings'
     ) -> pd.DataFrame:
         """
-        Parse MySportsFeeds DFS API response into DataFrame.
+        Parse MySportsFeeds DFS API response into a DataFrame.
         
-        Response structure:
-        {
-            "lastUpdatedOn": "2024-10-15T10:30:00.000Z",
-            "dfsPlayers": [
-                {
-                    "dfsSource": "DRAFTKINGS",
-                    "player": {
-                        "id": 12345,
-                        "firstName": "Patrick",
-                        "lastName": "Mahomes",
-                        "position": "QB",
-                        "currentTeam": {"abbreviation": "KC"}
-                    },
-                    "salary": 8500,
-                    "fantasyPointsProjection": 24.5
-                },
-                ...
-            ]
-        }
+        Correct response structure (as of 2025-10-16):
+            response['sources'][0]['slates'][i]['players']
         
         Args:
-            response_data: Raw API response
-            site: DFS site to filter by
+            response_data: Raw JSON response from API
+            site: DFS site name (for tagging)
             
         Returns:
-            DataFrame with parsed player data
+            DataFrame with standardized columns:
+                - player_id: MySportsFeeds player ID (can be None for DST)
+                - player_name: Full player name
+                - position: Position (QB, RB, WR, TE, DST)
+                - team: Team abbreviation
+                - opponent: Opponent team abbreviation
+                - salary: DFS salary
+                - projection: Projected fantasy points (0.0 if None)
+                - site: DFS site name
+                - slate_type: Slate type/label
+            
+        Raises:
+            APIError: If response format is invalid
         """
-        # Get dfsPlayers array
-        dfs_players = response_data.get('dfsPlayers', [])
+        players = []
         
-        if not dfs_players:
-            self.logger.warning("No DFS players found in response")
+        # Navigate to player data
+        if 'sources' not in response_data:
+            self.logger.warning("No 'sources' found in response")
             return pd.DataFrame(columns=[
                 'player_id', 'player_name', 'position', 'team',
                 'opponent', 'salary', 'projection'
             ])
         
-        # Map site names (API uses uppercase)
-        site_map = {
-            'draftkings': 'DRAFTKINGS',
-            'fanduel': 'FANDUEL',
-            'fantasydraft': 'FANTASYDRAFT',
-            'yahoo': 'YAHOO'
-        }
-        api_site_name = site_map.get(site.lower(), site.upper())
-        
-        # Parse players
-        parsed_players = []
-        for dfs_player in dfs_players:
-            # Skip if wrong site
-            if dfs_player.get('dfsSource') != api_site_name:
+        # Iterate through sources (usually just one: DraftKings or FanDuel)
+        for source in response_data.get('sources', []):
+            source_name = source.get('source', 'Unknown')
+            
+            if 'slates' not in source:
+                self.logger.warning(f"No slates found in source '{source_name}'")
                 continue
             
-            player = dfs_player.get('player', {})
-            team_info = player.get('currentTeam', {})
-            
-            # Build player record
-            player_record = {
-                'player_id': str(player.get('id', '')),
-                'player_name': f"{player.get('firstName', '')} {player.get('lastName', '')}".strip(),
-                'position': player.get('position', ''),
-                'team': team_info.get('abbreviation', ''),
-                'opponent': '',  # Not provided in DFS endpoint, need to join with schedule
-                'salary': dfs_player.get('salary', 0),
-                'projection': dfs_player.get('fantasyPointsProjection')
-            }
-            
-            parsed_players.append(player_record)
+            # Iterate through slates (Featured, Classic, Showdown, etc.)
+            for slate in source.get('slates', []):
+                slate_label = slate.get('label', 'Unknown')
+                slate_type = slate.get('type', 'Classic').lower()
+                slate_week = slate.get('forWeek')
+                
+                if 'players' not in slate:
+                    self.logger.warning(f"No players in slate '{slate_label}'")
+                    continue
+                
+                # Iterate through players
+                for player in slate.get('players', []):
+                    # Extract player info
+                    first_name = player.get('sourceFirstName', '')
+                    last_name = player.get('sourceLastName', '')
+                    
+                    # Build player name
+                    if last_name:
+                        player_name = f"{first_name} {last_name}".strip()
+                    else:
+                        # For DST, only sourceFirstName is set (e.g., "Broncos")
+                        player_name = first_name.strip()
+                    
+                    # Skip if no valid name
+                    if not player_name:
+                        continue
+                    
+                    # Get MySportsFeeds player ID (can be None for DST)
+                    player_obj = player.get('player')
+                    player_id = player_obj.get('id') if player_obj else None
+                    
+                    # Get position
+                    position = player.get('sourcePosition', '')
+                    
+                    # Get team (try sourceTeam first, then team.abbreviation)
+                    team = player.get('sourceTeam')
+                    if not team and 'team' in player:
+                        team = player['team'].get('abbreviation', '')
+                    
+                    # Get salary (required field)
+                    salary = player.get('salary')
+                    if salary is None:
+                        continue  # Skip players without salary
+                    
+                    # Get projection (can be null)
+                    projection = player.get('fantasyPoints')
+                    
+                    # Get opponent from game info
+                    opponent = None
+                    game = player.get('game')
+                    if game:
+                        away_team = game.get('awayTeamAbbreviation')
+                        home_team = game.get('homeTeamAbbreviation')
+                        
+                        if team == away_team:
+                            opponent = home_team
+                        elif team == home_team:
+                            opponent = away_team
+                    
+                    players.append({
+                        'player_id': player_id,
+                        'player_name': player_name,
+                        'position': position,
+                        'team': team,
+                        'opponent': opponent,
+                        'salary': salary,
+                        'projection': projection if projection is not None else 0.0,
+                        'site': site,
+                        'slate_type': slate_type,
+                        'slate_label': slate_label,
+                        'week': slate_week
+                    })
         
-        # Create DataFrame
-        df = pd.DataFrame(parsed_players)
+        if not players:
+            self.logger.warning("No players found in DFS response")
+            return pd.DataFrame(columns=[
+                'player_id', 'player_name', 'position', 'team',
+                'opponent', 'salary', 'projection'
+            ])
         
-        # Convert salary to integer
-        if not df.empty:
-            df['salary'] = df['salary'].astype(int)
-            
-            # Handle DST naming (change from "DEN" to "Broncos D/ST" or similar)
-            # This maintains consistency with manual uploads
-            
+        df = pd.DataFrame(players)
+        
+        # Clean up data types
+        df['salary'] = pd.to_numeric(df['salary'], errors='coerce')
+        df['projection'] = pd.to_numeric(df['projection'], errors='coerce').fillna(0.0)
+        
+        self.logger.info(f"Parsed {len(df)} players from {len(df['slate_label'].unique())} slates")
+        
         return df
     
     def get_supported_sites(self) -> List[str]:
@@ -397,38 +463,38 @@ class DFSSalariesAPIClient(BaseAPIClient):
 # Convenience function
 def fetch_salaries(
     api_key: str,
+    week: int,
     site: str = 'draftkings',
-    week: Optional[int] = None,
-    season: str = '2024-2025-regular',
+    season: str = '2024',
     db_path: str = "dfs_optimizer.db"
 ) -> pd.DataFrame:
     """
     Convenience function to fetch DFS salaries.
     
+    Note: MySportsFeeds "current" keyword doesn't work, so week is required.
+    
     Args:
         api_key: MySportsFeeds API key
+        week: Week number (1-18, required)
         site: DFS site ('draftkings', 'fanduel', etc.)
-        week: Week number for historical data (None = current week)
-        season: Season string (only used if week provided)
+        season: Season year (e.g., '2024') or full season string
         db_path: Path to SQLite database
         
     Returns:
         DataFrame with salary data
     
     Example:
-        # Current week
-        df = fetch_salaries(api_key, site='draftkings')
+        # Week 7 salaries
+        df = fetch_salaries(api_key, week=7, site='draftkings')
         
-        # Historical week
-        df = fetch_salaries(api_key, site='draftkings', week=10)
+        # Historical week (same method now)
+        df = fetch_salaries(api_key, week=6, site='fanduel', season='2024')
     """
     client = DFSSalariesAPIClient(api_key, db_path)
     
     try:
-        if week is None:
-            return client.fetch_current_week_salaries(site=site)
-        else:
-            return client.fetch_historical_salaries(season=season, week=week, site=site)
+        # All fetches use the same method now (historical = current with explicit week)
+        return client.fetch_historical_salaries(season=season, week=week, site=site)
     finally:
         client.close()
 
