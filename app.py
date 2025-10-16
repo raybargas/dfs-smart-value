@@ -13,24 +13,6 @@ from ui.lineup_generation import render_lineup_generation
 from ui.results import render_results
 
 
-def run_migrations():
-    """Run database migrations on app startup."""
-    import os
-    import sys
-    from pathlib import Path
-    
-    # Add migrations directory to path
-    migrations_dir = Path(__file__).parent / "migrations"
-    sys.path.insert(0, str(migrations_dir))
-    
-    try:
-        from run_migrations import main as run_migrations_main
-        run_migrations_main()
-    except Exception as e:
-        # Log but don't crash the app
-        print(f"Migration warning: {e}")
-
-
 def main():
     """Main application entry point."""
     # Page configuration
@@ -39,11 +21,6 @@ def main():
         page_icon="🏈",
         layout="wide"
     )
-    
-    # Run migrations on first load
-    if 'migrations_run' not in st.session_state:
-        run_migrations()
-        st.session_state['migrations_run'] = True
     
     # Initialize session state with persistence
     if 'page' not in st.session_state:
