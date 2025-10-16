@@ -84,6 +84,116 @@ class HistoricalDataManager:
         engine = create_engine(f'sqlite:///{db_path}')
         Session = sessionmaker(bind=engine)
         self.session = Session()
+        
+        # Auto-repair schema if needed (ensures opponent column is nullable)
+        self._ensure_schema_compatibility()
+    
+    def _ensure_schema_compatibility(self):
+        """
+        Check and fix database schema compatibility issues.
+        
+        Specifically handles the migration 006 issue where opponent column
+        may be NOT NULL on Streamlit Cloud but should be nullable.
+        
+        This provides runtime self-healing for databases where migrations
+        didn't apply correctly.
+        """
+        try:
+            # Get raw database connection
+            conn = self.session.connection().connection
+            cursor = conn.cursor()
+            
+            # Check if historical_player_pool table exists
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='historical_player_pool'
+            """)
+            
+            if not cursor.fetchone():
+                # Table doesn't exist yet, no fix needed
+                return
+            
+            # Check opponent column constraint
+            cursor.execute("PRAGMA table_info(historical_player_pool)")
+            columns = cursor.fetchall()
+            
+            opponent_is_not_null = False
+            for col in columns:
+                # col format: (cid, name, type, notnull, dflt_value, pk)
+                if col[1] == 'opponent' and col[3] == 1:  # notnull == 1
+                    opponent_is_not_null = True
+                    break
+            
+            if not opponent_is_not_null:
+                # Schema is already correct
+                return
+            
+            # Schema needs fixing - run migration 006 inline
+            print("🔧 Fixing database schema: Making opponent column nullable...")
+            
+            from pathlib import Path
+            migration_path = Path(__file__).parent.parent / "migrations" / "006_make_opponent_nullable.sql"
+            
+            if migration_path.exists():
+                with open(migration_path, 'r') as f:
+                    migration_sql = f.read()
+                
+                # Execute migration
+                cursor.executescript(migration_sql)
+                conn.commit()
+                
+                print("✅ Schema fixed successfully!")
+            else:
+                # Migration file not found, apply fix manually
+                print("⚠️ Migration file not found, applying manual fix...")
+                
+                # Manual fix: recreate table with nullable opponent
+                cursor.executescript("""
+                    PRAGMA foreign_keys=OFF;
+                    
+                    CREATE TABLE historical_player_pool_new (
+                        slate_id TEXT NOT NULL,
+                        player_id TEXT NOT NULL,
+                        player_name TEXT NOT NULL,
+                        position TEXT NOT NULL,
+                        team TEXT NOT NULL,
+                        opponent TEXT,  -- NOW NULLABLE
+                        salary INTEGER NOT NULL,
+                        projection REAL NOT NULL,
+                        ceiling REAL,
+                        ownership REAL,
+                        actual_points REAL,
+                        smart_value REAL,
+                        smart_value_profile TEXT,
+                        projection_source TEXT,
+                        ownership_source TEXT,
+                        data_source TEXT NOT NULL,
+                        fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (slate_id, player_id),
+                        FOREIGN KEY (slate_id) REFERENCES slates(slate_id)
+                    );
+                    
+                    INSERT OR IGNORE INTO historical_player_pool_new 
+                    SELECT * FROM historical_player_pool;
+                    
+                    DROP TABLE historical_player_pool;
+                    
+                    ALTER TABLE historical_player_pool_new RENAME TO historical_player_pool;
+                    
+                    CREATE INDEX IF NOT EXISTS idx_hpp_player_name ON historical_player_pool(player_name);
+                    CREATE INDEX IF NOT EXISTS idx_hpp_position ON historical_player_pool(position);
+                    CREATE INDEX IF NOT EXISTS idx_hpp_actual_points ON historical_player_pool(actual_points);
+                    CREATE INDEX IF NOT EXISTS idx_hpp_smart_value ON historical_player_pool(smart_value DESC);
+                    
+                    PRAGMA foreign_keys=ON;
+                """)
+                conn.commit()
+                
+                print("✅ Manual schema fix applied successfully!")
+                
+        except Exception as e:
+            # Non-fatal error - database may already be correct or migration not needed
+            print(f"ℹ️ Schema compatibility check: {str(e)}")
     
     def create_slate(
         self,
