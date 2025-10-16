@@ -73,14 +73,138 @@ def render_data_ingestion():
     with col2:
         st.caption(f"📅 Analyzing Week {selected_week} data")
     
-    # Upload section
-    uploaded_file = st.file_uploader(
-        "📂 Upload Player Data",
-        type=['csv', 'xlsx', 'xls'],
-        help="Upload CSV or Excel file with player data",
-        key="player_data_uploader",
-        label_visibility="visible"
-    )
+    # Upload section with auto-fetch option
+    st.markdown("""
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+        <div style="flex: 1;">
+            <p style="margin: 0; font-weight: 600; color: #1f2937;">
+                📂 Upload Player Data
+            </p>
+            <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
+                Upload CSV/Excel or fetch automatically from MySportsFeeds
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Two-column layout: Upload or Auto-Fetch
+    col_upload, col_fetch = st.columns([3, 1])
+    
+    with col_upload:
+        uploaded_file = st.file_uploader(
+            "Upload file",
+            type=['csv', 'xlsx', 'xls'],
+            help="Upload CSV or Excel file with player data",
+            key="player_data_uploader",
+            label_visibility="collapsed"
+        )
+    
+    with col_fetch:
+        if st.button(
+            "🔄 Fetch Auto",
+            help="Fetch DFS salaries automatically from MySportsFeeds API",
+            use_container_width=True,
+            type="secondary"
+        ):
+            # Check if API key is set
+            import os
+            api_key = os.getenv('MYSPORTSFEEDS_API_KEY')
+            
+            if not api_key:
+                st.error("""
+                ❌ **MySportsFeeds API Key not found**
+                
+                Set your API key:
+                ```bash
+                export MYSPORTSFEEDS_API_KEY="your_key_here"
+                ```
+                
+                Or provide it manually in the sidebar.
+                """)
+            else:
+                with st.spinner(f"🔄 Fetching Week {selected_week} salaries from MySportsFeeds..."):
+                    try:
+                        # Import Wednesday data prep workflow
+                        from historical_data_manager import HistoricalDataManager
+                        from api.dfs_salaries_api import fetch_salaries
+                        
+                        # Fetch salaries
+                        df_salaries = fetch_salaries(
+                            api_key=api_key,
+                            week=selected_week,
+                            season=2024,
+                            site='draftkings'
+                        )
+                        
+                        if df_salaries is not None and not df_salaries.empty:
+                            # Create slate and store (for historical tracking)
+                            manager = HistoricalDataManager()
+                            try:
+                                # Extract games from data
+                                games = []
+                                if 'opponent' in df_salaries.columns:
+                                    teams = df_salaries['team'].unique().tolist()
+                                    for i in range(0, len(teams), 2):
+                                        if i + 1 < len(teams):
+                                            games.append(f"{teams[i]}@{teams[i+1]}")
+                                
+                                # Create slate
+                                slate_id = manager.create_slate(
+                                    week=selected_week,
+                                    season=2024,
+                                    site='DraftKings',
+                                    contest_type='Classic',
+                                    games=games
+                                )
+                                
+                                # Store player pool
+                                manager.store_player_pool_snapshot(
+                                    slate_id=slate_id,
+                                    player_data=df_salaries,
+                                    smart_value_profile=None,
+                                    projection_source='mysportsfeeds_dfs',
+                                    ownership_source='pending'
+                                )
+                                
+                                st.success(f"✅ Created slate: {slate_id}")
+                            except ValueError as e:
+                                if "already exists" in str(e):
+                                    st.info(f"ℹ️ Slate already exists for Week {selected_week}")
+                                else:
+                                    st.warning(f"⚠️ Could not create slate: {e}")
+                            finally:
+                                manager.close()
+                            
+                            # Parse and validate (same as manual upload)
+                            summary = {
+                                'total_players': len(df_salaries),
+                                'positions': df_salaries['position'].value_counts().to_dict(),
+                                'salary_min': int(df_salaries['salary'].min()),
+                                'salary_max': int(df_salaries['salary'].max()),
+                                'salary_avg': int(df_salaries['salary'].mean()),
+                                'teams': df_salaries['team'].nunique()
+                            }
+                            
+                            # Store in session state
+                            st.session_state['player_data'] = df_salaries
+                            st.session_state['data_summary'] = summary
+                            st.session_state['data_source'] = 'api'
+                            
+                            st.success(f"✅ Fetched {len(df_salaries)} players from MySportsFeeds API!")
+                            st.rerun()
+                        else:
+                            st.error("❌ No salary data found for this week")
+                    
+                    except Exception as e:
+                        st.error(f"❌ Failed to fetch data: {str(e)}")
+                        st.info("""
+                        **Troubleshooting**:
+                        - Verify your MySportsFeeds API key is correct
+                        - Ensure you have the "DFS" addon in your subscription
+                        - Check that Week {selected_week} salaries are available
+                        
+                        **Manual fallback**: Upload CSV/Excel file instead.
+                        """.format(selected_week=selected_week))
     
     # Track if this is a manual upload (from file uploader widget)
     is_manual_upload = uploaded_file is not None

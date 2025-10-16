@@ -109,7 +109,7 @@ def verify_migration(db_path: str = "dfs_optimizer.db") -> bool:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # Check for expected tables (Phase 2A + Phase 2C)
+        # Check for expected tables (Phase 2A + Phase 2C + Phase 2D)
         expected_tables = [
             # Phase 2A tables
             'player_projections',
@@ -124,7 +124,13 @@ def verify_migration(db_path: str = "dfs_optimizer.db") -> bool:
             'vegas_lines',
             'injury_reports',
             'narrative_flags',
-            'api_call_log'
+            'api_call_log',
+            # Phase 2D tables (Historical Intelligence)
+            'slates',
+            'historical_player_pool',
+            'smart_value_profiles_history',
+            'injury_patterns',
+            'backtest_results'
         ]
         
         print("\n🔍 Verifying migration...")

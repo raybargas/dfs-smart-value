@@ -16,7 +16,11 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from .base_client import BaseAPIClient, APIError
-from ..database_models import create_session
+
+try:
+    from ..database_models import create_session
+except ImportError:
+    from database_models import create_session
 
 
 class BoxscoreAPIClient(BaseAPIClient):

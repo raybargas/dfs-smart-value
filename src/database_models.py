@@ -314,6 +314,243 @@ class APICallLog(Base):
         return self.status_code == 429
 
 
+# ============================================================================
+# PHASE 2D: HISTORICAL INTELLIGENCE MODELS
+# ============================================================================
+
+class Slate(Base):
+    """
+    Multi-site, multi-contest slate metadata.
+    
+    Stores information about DFS slates (contest types, sites, weeks).
+    Enables DK vs FD comparison, Classic vs Showdown analysis.
+    
+    Attributes:
+        slate_id: Primary key (e.g., "2024-W6-DK-CLASSIC")
+        week: NFL week number
+        season: NFL season year
+        site: DFS site name ('DraftKings', 'FanDuel')
+        contest_type: Contest type ('Classic', 'Showdown', 'Thanksgiving')
+        slate_date: Date of the slate
+        games_in_slate: JSON array of game IDs
+        created_at: Timestamp of slate creation
+    """
+    __tablename__ = 'slates'
+    
+    slate_id = Column(String, primary_key=True)
+    week = Column(Integer, nullable=False)
+    season = Column(Integer, nullable=False)
+    site = Column(String, nullable=False)
+    contest_type = Column(String, nullable=False)
+    slate_date = Column(DateTime, nullable=False)
+    games_in_slate = Column(Text)  # JSON array
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    def __repr__(self) -> str:
+        return (
+            f"<Slate(id='{self.slate_id}', week={self.week}, "
+            f"site='{self.site}', type='{self.contest_type}')>"
+        )
+
+
+class HistoricalPlayerPool(Base):
+    """
+    Complete weekly player pool snapshot for perfect replay.
+    
+    Stores all player data for a specific slate, enabling backtesting
+    and time-travel analysis. Tracks projections, salaries, ownership,
+    and actual results.
+    
+    Attributes:
+        slate_id: Foreign key to slates table
+        player_id: Player identifier
+        player_name: Player full name
+        position: Player position (QB, RB, WR, TE, DST)
+        team: Player team abbreviation
+        opponent: Opponent team abbreviation
+        salary: DFS salary
+        projection: Projected fantasy points
+        ceiling: Projected ceiling
+        ownership: Projected ownership %
+        actual_points: Actual fantasy points (fetched Monday)
+        smart_value: Calculated Smart Value score
+        smart_value_profile: Profile used for calculation
+        projection_source: Source of projection data
+        ownership_source: Source of ownership data
+        data_source: How data was obtained
+        fetched_at: Timestamp of data fetch
+    """
+    __tablename__ = 'historical_player_pool'
+    
+    slate_id = Column(String, primary_key=True)
+    player_id = Column(String, primary_key=True)
+    player_name = Column(String, nullable=False)
+    position = Column(String, nullable=False)
+    team = Column(String, nullable=False)
+    opponent = Column(String, nullable=False)
+    salary = Column(Integer, nullable=False)
+    projection = Column(Float, nullable=False)
+    ceiling = Column(Float)
+    ownership = Column(Float)
+    actual_points = Column(Float)
+    smart_value = Column(Float)
+    smart_value_profile = Column(String)
+    projection_source = Column(String)
+    ownership_source = Column(String)
+    data_source = Column(String, nullable=False)
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+    
+    def __repr__(self) -> str:
+        return (
+            f"<HistoricalPlayerPool(slate='{self.slate_id}', "
+            f"player='{self.player_name}', pos={self.position}, "
+            f"salary=${self.salary}, proj={self.projection})>"
+        )
+
+
+class SmartValueProfileHistory(Base):
+    """
+    Smart Value profile versioning and performance tracking.
+    
+    Stores each profile version used and tracks its performance
+    across weeks. Enables profile comparison and optimization.
+    
+    Attributes:
+        profile_id: Primary key (e.g., "GPP_Balanced_v3.0_W10")
+        profile_name: Profile name
+        version: Version string
+        week_used: Week number when profile was used
+        season: Season year
+        weights: JSON of full weight configuration
+        performance_score: Average % of optimal lineup
+        avg_lineup_score: Average actual points
+        top_lineup_score: Best lineup actual points
+        lineups_generated: Number of lineups generated
+        created_at: Timestamp of profile creation
+    """
+    __tablename__ = 'smart_value_profiles_history'
+    
+    profile_id = Column(String, primary_key=True)
+    profile_name = Column(String, nullable=False)
+    version = Column(String, nullable=False)
+    week_used = Column(Integer, nullable=False)
+    season = Column(Integer, nullable=False)
+    weights = Column(Text, nullable=False)  # JSON
+    performance_score = Column(Float)
+    avg_lineup_score = Column(Float)
+    top_lineup_score = Column(Float)
+    lineups_generated = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    def __repr__(self) -> str:
+        return (
+            f"<SmartValueProfileHistory(id='{self.profile_id}', "
+            f"name='{self.profile_name}', version={self.version}, "
+            f"week={self.week_used}, score={self.performance_score})>"
+        )
+
+
+class InjuryPattern(Base):
+    """
+    Learned injury intelligence patterns.
+    
+    Accumulates injury outcomes over time to learn typical impacts
+    by injury type, position, and practice status. Enables data-driven
+    injury decisions.
+    
+    Attributes:
+        pattern_id: Primary key (e.g., "ankle_sprain_WR_LP-FP")
+        injury_type: Type of injury
+        position: Player position
+        practice_status: Practice participation pattern
+        games_played: Count of times played through injury
+        games_missed: Count of times sat out
+        total_projection_diff: Sum of (actual - projection)
+        avg_points_impact: Calculated average impact
+        sample_size: Total games (played + missed)
+        last_updated: Last update timestamp
+    """
+    __tablename__ = 'injury_patterns'
+    
+    pattern_id = Column(String, primary_key=True)
+    injury_type = Column(String, nullable=False)
+    position = Column(String, nullable=False)
+    practice_status = Column(String)
+    games_played = Column(Integer, default=0)
+    games_missed = Column(Integer, default=0)
+    total_projection_diff = Column(Float, default=0.0)
+    avg_points_impact = Column(Float)
+    sample_size = Column(Integer, default=0)
+    last_updated = Column(DateTime, default=datetime.utcnow)
+    
+    def __repr__(self) -> str:
+        return (
+            f"<InjuryPattern(id='{self.pattern_id}', "
+            f"injury='{self.injury_type}', pos={self.position}, "
+            f"impact={self.avg_points_impact}, n={self.sample_size})>"
+        )
+    
+    def update_pattern(self, played: bool, projection_diff: float = 0.0):
+        """
+        Update pattern with new data point.
+        
+        Args:
+            played: True if player played, False if sat out
+            projection_diff: actual_points - projection (if played)
+        """
+        if played:
+            self.games_played += 1
+            self.total_projection_diff += projection_diff
+            self.avg_points_impact = self.total_projection_diff / self.games_played
+        else:
+            self.games_missed += 1
+        
+        self.sample_size = self.games_played + self.games_missed
+        self.last_updated = datetime.utcnow()
+
+
+class BacktestResult(Base):
+    """
+    Backtest run artifacts and results.
+    
+    Stores results from backtesting runs, enabling comparison of
+    different Smart Value profiles across multiple weeks.
+    
+    Attributes:
+        backtest_id: Primary key (UUID)
+        run_timestamp: When backtest was run
+        weeks_tested: JSON array of weeks tested
+        profile_name: Profile name
+        profile_weights: JSON of profile weights
+        week_results: JSON array of per-week results
+        overall_avg_score: Average score across all weeks
+        overall_top_score: Best score across all weeks
+        overall_optimal_score: Perfect hindsight score
+        avg_gap_from_optimal: Average % below optimal
+        notes: User notes
+    """
+    __tablename__ = 'backtest_results'
+    
+    backtest_id = Column(String, primary_key=True)
+    run_timestamp = Column(DateTime, default=datetime.utcnow)
+    weeks_tested = Column(Text, nullable=False)  # JSON array
+    profile_name = Column(String, nullable=False)
+    profile_weights = Column(Text, nullable=False)  # JSON
+    week_results = Column(Text, nullable=False)  # JSON array
+    overall_avg_score = Column(Float)
+    overall_top_score = Column(Float)
+    overall_optimal_score = Column(Float)
+    avg_gap_from_optimal = Column(Float)
+    notes = Column(Text)
+    
+    def __repr__(self) -> str:
+        return (
+            f"<BacktestResult(id='{self.backtest_id}', "
+            f"profile='{self.profile_name}', "
+            f"avg={self.overall_avg_score}, gap={self.avg_gap_from_optimal}%)>"
+        )
+
+
 # Database session factory
 def create_session(db_path: str = "dfs_optimizer.db"):
     """

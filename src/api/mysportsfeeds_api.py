@@ -12,7 +12,11 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from .base_client import BaseAPIClient, APIError
-from ..database_models import InjuryReport
+
+try:
+    from ..database_models import InjuryReport
+except ImportError:
+    from database_models import InjuryReport
 
 
 class MySportsFeedsClient(BaseAPIClient):

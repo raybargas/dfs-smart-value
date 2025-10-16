@@ -10,7 +10,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from .base_client import BaseAPIClient, APIError
-from ..database_models import VegasLine
+
+try:
+    from ..database_models import VegasLine
+except ImportError:
+    from database_models import VegasLine
 
 
 class OddsAPIClient(BaseAPIClient):

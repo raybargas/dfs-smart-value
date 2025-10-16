@@ -10,7 +10,10 @@ import requests
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from ..database_models import APICallLog
+try:
+    from ..database_models import APICallLog
+except ImportError:
+    from database_models import APICallLog
 
 # Custom exceptions
 class APIError(Exception):
