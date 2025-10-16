@@ -164,6 +164,7 @@ def render_optimization_config():
         filter_strategy = st.radio(
             "Filter Strategy",
             options=['simple', 'positional', 'portfolio'],
+            index=2,  # Default to 'portfolio'
             format_func=lambda x: {
                 'simple': '🎯 Simple (One threshold)',
                 'positional': '📊 Positional (Per position)',
@@ -276,7 +277,7 @@ def render_optimization_config():
                     "Minimum Lineup Average Smart Value",
                     min_value=30,
                     max_value=90,
-                    value=60,
+                    value=65,
                     step=5,
                     help="The 9-player lineup's average Smart Value must meet this threshold",
                     key="portfolio_avg_sv"
@@ -383,12 +384,6 @@ def render_optimization_config():
     # 5. Validation (before displaying constraints and buttons)
     validation_result = validate_configuration(
         pool_df, lineup_count, uniqueness_pct, max_ownership_enabled, max_ownership_pct
-    )
-    
-    # 6. Constraints Summary Panel (Task 4.2)
-    display_constraints_summary(
-        pool_df, lineup_count, uniqueness_pct, 
-        max_ownership_enabled, max_ownership_pct, validation_result
     )
     
     # ULTRA-COMPACT Navigation: Single row with Back and Generate
