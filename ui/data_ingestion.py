@@ -112,10 +112,10 @@ def render_data_ingestion():
                         del st.session_state['data_summary']
             except Exception as e:
                 # If historical load fails, just clear the data
-                if 'player_data' in st.session_state:
-                    del st.session_state['player_data']
-                if 'data_summary' in st.session_state:
-                    del st.session_state['data_summary']
+            if 'player_data' in st.session_state:
+                del st.session_state['player_data']
+            if 'data_summary' in st.session_state:
+                del st.session_state['data_summary']
             
             st.rerun()
     
@@ -126,11 +126,11 @@ def render_data_ingestion():
     col_upload, col_fetch = st.columns([3, 1])
     
     with col_upload:
-        uploaded_file = st.file_uploader(
+    uploaded_file = st.file_uploader(
             "Upload file",
-            type=['csv', 'xlsx', 'xls'],
-            help="Upload CSV or Excel file with player data",
-            key="player_data_uploader",
+        type=['csv', 'xlsx', 'xls'],
+        help="Upload CSV or Excel file with player data",
+        key="player_data_uploader",
             label_visibility="collapsed"
         )
     
@@ -267,10 +267,68 @@ def render_data_ingestion():
     # Track if this is a manual upload (from file uploader widget)
     is_manual_upload = uploaded_file is not None
     
-    # Auto-load saved dataset on first visit (if no data in session and no manual upload)
+    # Auto-load data on first visit (if no data in session and no manual upload)
     if 'player_data' not in st.session_state or st.session_state['player_data'] is None:
         if not is_manual_upload and 'auto_loaded' not in st.session_state:
-            # Try to auto-load the saved dataset
+            # PRIORITY 1: Try to load historical data for current week from database
+            try:
+                from historical_data_manager import HistoricalDataManager
+                import datetime
+                
+                manager = HistoricalDataManager()
+                historical_df = manager.load_historical_snapshot(
+                    week=selected_week,
+                    season=2024,
+                    site='DraftKings'
+                )
+                
+                if historical_df is not None and not historical_df.empty:
+                    # Found historical data - load it
+                    summary = {
+                        'total_players': len(historical_df),
+                        'positions': historical_df['position'].value_counts().to_dict(),
+                        'salary_min': int(historical_df['salary'].min()),
+                        'salary_max': int(historical_df['salary'].max()),
+                        'salary_avg': int(historical_df['salary'].mean()),
+                        'teams': historical_df['team'].nunique()
+                    }
+                    
+                    # Get metadata
+                    slate_meta = manager.get_slate_metadata(
+                        week=selected_week,
+                        season=2024,
+                        site='DraftKings'
+                    )
+                    
+                    st.session_state['player_data'] = historical_df
+                    st.session_state['data_summary'] = summary
+                    st.session_state['data_source'] = 'historical'
+                    st.session_state['data_week'] = selected_week
+                    
+                    if slate_meta and 'created_at' in slate_meta:
+                        st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
+                    
+                    st.session_state['auto_loaded'] = True
+                    manager.close()
+                else:
+                    manager.close()
+                    # PRIORITY 2: Fallback to old CSV file if no historical data
+                    import os
+                    import io
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
+                    
+                    if os.path.exists(test_file_path):
+                        try:
+                            with open(test_file_path, 'rb') as f:
+                                file_content = f.read()
+                                uploaded_file = io.BytesIO(file_content)
+                                uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
+                                st.session_state['auto_loaded'] = True
+                        except Exception:
+                            pass
+            except Exception:
+                # If historical load fails, try CSV fallback
             import os
             import io
             current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -401,23 +459,23 @@ def display_success_message(summary: Dict[str, Any], is_from_auto_load: bool = F
     data_source = st.session_state.get('data_source', 'unknown')
     data_loaded_at = st.session_state.get('data_loaded_at')
     data_week = st.session_state.get('data_week', st.session_state.get('current_week', 7))
-    
-    # Calculate time ago
+                
+                # Calculate time ago
     last_updated_text = "recently"
     if data_loaded_at:
-        now = datetime.datetime.now()
+                now = datetime.datetime.now()
         diff = now - data_loaded_at
-        
-        if diff.days > 0:
-            last_updated_text = f"{diff.days}d ago"
-        elif diff.seconds >= 3600:
-            hours = diff.seconds // 3600
-            last_updated_text = f"{hours}h ago"
-        elif diff.seconds >= 60:
-            minutes = diff.seconds // 60
-            last_updated_text = f"{minutes}m ago"
-        else:
-            last_updated_text = "Just now"
+                
+                if diff.days > 0:
+                    last_updated_text = f"{diff.days}d ago"
+                elif diff.seconds >= 3600:
+                    hours = diff.seconds // 3600
+                    last_updated_text = f"{hours}h ago"
+                elif diff.seconds >= 60:
+                    minutes = diff.seconds // 60
+                    last_updated_text = f"{minutes}m ago"
+                else:
+                    last_updated_text = "Just now"
     
     # Build source-specific caption
     if data_source == 'api':
