@@ -199,13 +199,18 @@ class HistoricalDataManager:
                 player_id = str(raw_player_id)
             
             # Create player record
+            # Handle opponent field (can be None/NaN for some players)
+            opponent_value = row.get('opponent')
+            if pd.isna(opponent_value) or opponent_value is None or opponent_value == '':
+                opponent_value = None
+            
             player = HistoricalPlayerPool(
                 slate_id=slate_id,
                 player_id=player_id,
                 player_name=row['player_name'],
                 position=row['position'],
                 team=row['team'],
-                opponent=row.get('opponent', ''),
+                opponent=opponent_value,
                 salary=int(row['salary']),
                 projection=float(row['projection']),
                 ceiling=float(row['ceiling']) if pd.notna(row.get('ceiling')) else None,

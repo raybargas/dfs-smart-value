@@ -387,7 +387,7 @@ class HistoricalPlayerPool(Base):
     player_name = Column(String, nullable=False)
     position = Column(String, nullable=False)
     team = Column(String, nullable=False)
-    opponent = Column(String, nullable=False)
+    opponent = Column(String, nullable=True)  # Optional - may be missing from API
     salary = Column(Integer, nullable=False)
     projection = Column(Float, nullable=False)
     ceiling = Column(Float)
