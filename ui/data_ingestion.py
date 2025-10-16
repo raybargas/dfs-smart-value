@@ -339,6 +339,15 @@ def render_data_ingestion():
                 )
                 
                 if historical_df is not None and not historical_df.empty:
+                    # Filter out zero projections from historical data
+                    if 'projection' in historical_df.columns:
+                        initial_count = len(historical_df)
+                        historical_df = historical_df[historical_df['projection'] > 0].copy()
+                        filtered_count = initial_count - len(historical_df)
+                        
+                        if filtered_count > 0:
+                            st.info(f"ℹ️ Filtered out {filtered_count} players with zero projections from database")
+                    
                     # Found historical data - load it
                     summary = {
                         'total_players': len(historical_df),
@@ -377,6 +386,13 @@ def render_data_ingestion():
     if 'player_data' in st.session_state and st.session_state['player_data'] is not None and uploaded_file is None:
         # Display previously loaded data
         df = st.session_state['player_data']
+        
+        # Safety check: Filter out zero projections if they somehow exist
+        # (Protects against old unfiltered data in session)
+        if 'projection' in df.columns:
+            df = df[df['projection'] > 0].copy()
+            st.session_state['player_data'] = df  # Update session with filtered data
+        
         summary = st.session_state.get('data_summary', {})
         if summary:
             # Show save status if available (from API fetch)
