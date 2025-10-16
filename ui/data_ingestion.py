@@ -224,17 +224,17 @@ def render_data_ingestion():
                                 
                                 manager.close()
                                 slate_saved = True
-                                st.info(f"💾 Saved to database: {slate_id}")
+                                save_message = f"💾 Saved to database: {slate_id}"
                             except ValueError as e:
                                 if "already exists" in str(e):
-                                    st.info(f"ℹ️ Data already in database for Week {selected_week}")
                                     slate_saved = True  # Data exists, that's fine
+                                    save_message = f"ℹ️ Data already in database for Week {selected_week}"
                                 else:
-                                    st.warning(f"⚠️ Database save failed: {e}")
-                                    st.warning("📝 Data will only persist in this session")
+                                    slate_saved = False
+                                    save_message = f"⚠️ Database save failed: {e} - Data will only persist in this session"
                             except Exception as e:
-                                st.warning(f"⚠️ Database save failed: {str(e)}")
-                                st.warning("📝 Data will only persist in this session")
+                                slate_saved = False
+                                save_message = f"⚠️ Database save failed: {str(e)} - Data will only persist in this session"
                             
                             # Parse and validate (same as manual upload)
                             summary = {
@@ -253,8 +253,8 @@ def render_data_ingestion():
                             st.session_state['data_source'] = 'api'
                             st.session_state['data_loaded_at'] = datetime.datetime.now()
                             st.session_state['data_week'] = selected_week
+                            st.session_state['save_status'] = save_message  # Store for display after rerun
                             
-                            st.success(f"✅ Fetched {len(df_salaries)} players from MySportsFeeds API!")
                             st.rerun()
                         else:
                             st.error("❌ No salary data found for this week")
@@ -356,6 +356,16 @@ def render_data_ingestion():
         df = st.session_state['player_data']
         summary = st.session_state.get('data_summary', {})
         if summary:
+            # Show save status if available (from API fetch)
+            if 'save_status' in st.session_state:
+                save_msg = st.session_state['save_status']
+                if '💾' in save_msg or 'ℹ️' in save_msg:
+                    st.info(save_msg)
+                else:
+                    st.warning(save_msg)
+                # Clear it so it doesn't show again
+                del st.session_state['save_status']
+            
             display_success_message(summary)
             display_data_summary(summary)
             display_continue_button()
@@ -380,7 +390,17 @@ def render_data_ingestion():
                 st.session_state['data_summary'] = summary
                 st.session_state['data_source'] = 'csv'
                 st.session_state['data_loaded_at'] = datetime.datetime.now()
-                st.session_state['data_week'] = selected_week
+                
+                # Detect week from filename if auto-loaded, otherwise use selected week
+                if is_from_auto_load and hasattr(uploaded_file, 'name') and 'Week' in uploaded_file.name:
+                    import re
+                    week_match = re.search(r'Week(\d+)', uploaded_file.name)
+                    if week_match:
+                        st.session_state['data_week'] = int(week_match.group(1))
+                    else:
+                        st.session_state['data_week'] = selected_week
+                else:
+                    st.session_state['data_week'] = selected_week
                 
                 # Save uploaded file as new default dataset (only if manually uploaded)
                 if is_manual_upload:
