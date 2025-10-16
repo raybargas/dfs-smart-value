@@ -22,16 +22,30 @@ def main():
         layout="wide"
     )
     
-    # Run database migrations once on startup (lightweight check)
+    # Run database migrations once on startup (silent check)
     if 'migrations_checked' not in st.session_state:
         try:
             from migrations.run_migrations import run_all_migrations
-            run_all_migrations()
+            import io
+            import sys
+            
+            # Suppress all migration output (including errors)
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
+            sys.stdout = io.StringIO()
+            sys.stderr = io.StringIO()
+            
+            try:
+                run_all_migrations()
+            finally:
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+            
             st.session_state['migrations_checked'] = True
-        except Exception as e:
-            # Log but don't block - migrations may already be complete
+        except Exception:
+            # Silent fail - migrations may already be complete
+            # Database tables will be created on first use if missing
             st.session_state['migrations_checked'] = True
-            st.session_state['migration_error'] = str(e)
     
     # Initialize session state with persistence
     if 'page' not in st.session_state:

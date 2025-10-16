@@ -14,12 +14,13 @@ from typing import Optional
 import streamlit as st
 
 
-def run_migrations(db_path: str = "dfs_optimizer.db") -> bool:
+def run_migrations(db_path: str = "dfs_optimizer.db", silent: bool = False) -> bool:
     """
     Run all database migrations to create tables.
     
     Args:
         db_path: Path to SQLite database
+        silent: If True, don't display error messages to UI (default: False)
     
     Returns:
         True if successful, False otherwise
@@ -43,7 +44,9 @@ def run_migrations(db_path: str = "dfs_optimizer.db") -> bool:
         return True
         
     except Exception as e:
-        st.error(f"Error running migrations: {e}")
+        # Only show errors if not in silent mode
+        if not silent:
+            st.error(f"Error running migrations: {e}")
         return False
 
 
