@@ -204,6 +204,20 @@ def render_data_ingestion():
                             try:
                                 manager = HistoricalDataManager()
                                 
+                                # Generate slate_id first to check if it exists
+                                slate_id = manager._generate_slate_id(
+                                    week=selected_week,
+                                    season=2024,
+                                    site='DraftKings',
+                                    contest_type='Classic'
+                                )
+                                
+                                # Delete existing slate if present (allows re-fetch with fresh data)
+                                try:
+                                    manager.delete_slate(slate_id)
+                                except:
+                                    pass  # Slate doesn't exist yet, that's fine
+                                
                                 # Extract games from data
                                 games = []
                                 if 'opponent' in df_salaries.columns:
@@ -212,7 +226,7 @@ def render_data_ingestion():
                                         if i + 1 < len(teams):
                                             games.append(f"{teams[i]}@{teams[i+1]}")
                                 
-                                # Create slate
+                                # Create fresh slate
                                 slate_id = manager.create_slate(
                                     week=selected_week,
                                     season=2024,
@@ -233,13 +247,6 @@ def render_data_ingestion():
                                 manager.close()
                                 slate_saved = True
                                 save_message = f"💾 Saved to database: {slate_id}"
-                            except ValueError as e:
-                                if "already exists" in str(e):
-                                    slate_saved = True  # Data exists, that's fine
-                                    save_message = f"ℹ️ Data already in database for Week {selected_week}"
-                                else:
-                                    slate_saved = False
-                                    save_message = f"⚠️ Database save failed: {e} - Data will only persist in this session"
                             except Exception as e:
                                 slate_saved = False
                                 save_message = f"⚠️ Database save failed: {str(e)} - Data will only persist in this session"
