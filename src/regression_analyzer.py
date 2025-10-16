@@ -13,6 +13,7 @@ This module:
 from typing import Dict, List, Optional, Tuple
 import sqlite3
 from pathlib import Path
+import pandas as pd
 
 
 def calculate_dk_fantasy_points(stats: Dict) -> float:
@@ -235,4 +236,125 @@ def check_regression_risk(
     }
     
     return (is_at_risk, dk_points, stats_summary)
+
+
+def check_regression_risk_batch(
+    player_names: List[str],
+    week: int = 6,
+    threshold: float = 20.0,
+    db_path: str = "dfs_optimizer.db"
+) -> Dict[str, Tuple[bool, Optional[float], Optional[Dict]]]:
+    """
+    Batch version of check_regression_risk - queries all players in ONE database call.
+    
+    PERFORMANCE OPTIMIZATION: Eliminates N+1 query problem by fetching all player
+    data in a single query, then processing results in memory.
+    
+    Args:
+        player_names: List of player names to check
+        week: Prior week to check (default: 5)
+        threshold: Points threshold for regression risk (default: 20.0)
+        db_path: Path to database
+    
+    Returns:
+        Dict mapping player_name -> (is_at_risk, prior_week_points, stats_summary)
+        Players not found in database will have (False, None, None)
+    
+    Example:
+        results = check_regression_risk_batch(['Lamar Jackson', 'Justin Jefferson'], week=5)
+        is_at_risk, points, stats = results['Lamar Jackson']
+    """
+    db_file = Path(db_path)
+    if not db_file.exists():
+        # Return empty results for all players
+        return {name: (False, None, None) for name in player_names}
+    
+    if not player_names:
+        return {}
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Create placeholders for IN clause (?, ?, ?, ...)
+        placeholders = ','.join('?' * len(player_names))
+        
+        # Query all players at once
+        query = f"""
+        SELECT 
+            p.player_name,
+            p.team,
+            p.position,
+            p.pass_yards,
+            p.pass_touchdowns,
+            p.pass_interceptions,
+            p.rush_yards,
+            p.rush_touchdowns,
+            p.receptions,
+            p.receiving_yards,
+            p.receiving_touchdowns
+        FROM player_game_stats p
+        JOIN game_boxscores g ON p.game_id = g.game_id
+        WHERE g.week = ?
+        AND LOWER(p.player_name) IN ({placeholders})
+        """
+        
+        # Lowercase all player names for case-insensitive matching
+        lowercase_names = [name.lower() for name in player_names]
+        
+        cursor.execute(query, [week] + lowercase_names)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # Build results dictionary
+        results = {}
+        
+        # First, initialize all players with no data found
+        for name in player_names:
+            results[name] = (False, None, None)
+        
+        # Then, process found players
+        for row in rows:
+            raw_stats = {
+                'pass_yards': row['pass_yards'] or 0,
+                'pass_touchdowns': row['pass_touchdowns'] or 0,
+                'pass_interceptions': row['pass_interceptions'] or 0,
+                'rush_yards': row['rush_yards'] or 0,
+                'rush_touchdowns': row['rush_touchdowns'] or 0,
+                'receptions': row['receptions'] or 0,
+                'receiving_yards': row['receiving_yards'] or 0,
+                'receiving_touchdowns': row['receiving_touchdowns'] or 0
+            }
+            
+            dk_points = calculate_dk_fantasy_points(raw_stats)
+            is_at_risk = dk_points >= threshold
+            
+            stats_summary = {
+                'pass_yards': raw_stats['pass_yards'],
+                'pass_td': raw_stats['pass_touchdowns'],
+                'pass_int': raw_stats['pass_interceptions'],
+                'rush_yards': raw_stats['rush_yards'],
+                'rush_td': raw_stats['rush_touchdowns'],
+                'receptions': raw_stats['receptions'],
+                'rec_yards': raw_stats['receiving_yards'],
+                'rec_td': raw_stats['receiving_touchdowns']
+            }
+            
+            # Find original name with matching case
+            player_name = row['player_name']
+            original_name = None
+            for name in player_names:
+                if name.lower() == player_name.lower():
+                    original_name = name
+                    break
+            
+            if original_name:
+                results[original_name] = (is_at_risk, dk_points, stats_summary)
+        
+        return results
+        
+    except Exception as e:
+        # On error, return empty results for all players
+        return {name: (False, None, None) for name in player_names}
 

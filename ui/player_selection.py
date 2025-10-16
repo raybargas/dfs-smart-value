@@ -17,7 +17,7 @@ parent_path = Path(__file__).parent.parent
 sys.path.insert(0, str(parent_path))
 
 from src.models import PlayerSelection
-from src.regression_analyzer import check_regression_risk
+from src.regression_analyzer import check_regression_risk, check_regression_risk_batch
 from src.opponent_lookup import add_opponents_to_dataframe
 from src.season_stats_analyzer import analyze_season_stats, format_trend_display, format_consistency_display, format_momentum_display, format_variance_display
 from src.smart_value_calculator import calculate_smart_value, get_available_profiles
@@ -98,6 +98,10 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     
     # Calculate 80/20 Regression Risk with detailed tooltips
     # Check each player's prior week performance
+    # PERFORMANCE OPTIMIZATION: Use batch query to fetch all players in ONE database call
+    player_names = df['name'].tolist()
+    regression_results = check_regression_risk_batch(player_names, week=5, threshold=20.0, db_path="dfs_optimizer.db")
+    
     regression_risks = []
     prior_week_points = []
     regression_tooltips = []
@@ -105,11 +109,11 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     # Also calculate leverage tooltips
     leverage_tooltips = []
     for idx, row in df.iterrows():
-        # Regression analysis
+        # Regression analysis - lookup from batch results
         player_name = row['name']
         try:
-            # Check PRIOR week data (Week 5 is prior to Week 6)
-            is_at_risk, points, stats = check_regression_risk(player_name, week=5, threshold=20.0, db_path="dfs_optimizer.db")
+            # Get pre-fetched data from batch query
+            is_at_risk, points, stats = regression_results.get(player_name, (False, None, None))
             
             if is_at_risk and stats:
                 regression_risks.append('✓')  # Checkmark indicates regression risk
