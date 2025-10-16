@@ -475,10 +475,15 @@ def render_data_ingestion():
                         except:
                             pass  # Slate doesn't exist yet, that's fine
                         
+                        # Standardize column names for database (CSV uses 'name', DB expects 'player_name')
+                        df_for_db = df.copy()
+                        if 'name' in df_for_db.columns and 'player_name' not in df_for_db.columns:
+                            df_for_db['player_name'] = df_for_db['name']
+                        
                         # Extract games from data (if opponent column exists)
                         games = []
-                        if 'opponent' in df.columns:
-                            teams = df['team'].unique().tolist()
+                        if 'opponent' in df_for_db.columns:
+                            teams = df_for_db['team'].unique().tolist()
                             for i in range(0, len(teams), 2):
                                 if i + 1 < len(teams):
                                     games.append(f"{teams[i]}@{teams[i+1]}")
@@ -495,7 +500,7 @@ def render_data_ingestion():
                         # Store player pool snapshot
                         manager.store_player_pool_snapshot(
                             slate_id=slate_id,
-                            player_data=df,
+                            player_data=df_for_db,
                             smart_value_profile=None,
                             projection_source='csv_upload',
                             ownership_source='csv_upload'
