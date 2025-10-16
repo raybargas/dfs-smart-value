@@ -41,7 +41,7 @@ def render_data_ingestion():
     <div style="padding: 0.5rem 0; margin-bottom: 0.75rem;">
         <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">
             🏈 <span class="gradient-text">DFS Lineup Optimizer</span>
-            <span style="font-size: 0.7rem; color: #666; margin-left: 0.5rem;">v2.0-linestar</span>
+            <span style="font-size: 0.7rem; color: #666; margin-left: 0.5rem;">v2.1</span>
         </h2>
     </div>
     """, unsafe_allow_html=True)
@@ -549,9 +549,7 @@ def render_data_ingestion():
             # Display success and summary
             display_success_message(summary, is_from_auto_load)
             
-            # Show Linestar info badge if detected
-            if st.session_state.get('is_linestar', False):
-                st.success("✨ **Linestar Data Detected** - Using professional projections with ceiling/floor, real ownership, consistency scores, and matchup ranks")
+            # Linestar detection handled in display_success_message via source_icon
             
             display_data_summary(summary)
             display_continue_button()
