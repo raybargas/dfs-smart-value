@@ -190,8 +190,13 @@ class HistoricalDataManager:
         players_stored = 0
         
         for idx, row in player_data.iterrows():
-            # Generate player_id if not provided
-            player_id = str(row.get('player_id', f"{row['player_name']}_{row['team']}"))
+            # Generate player_id if not provided or is nan
+            raw_player_id = row.get('player_id')
+            if pd.isna(raw_player_id) or raw_player_id is None or str(raw_player_id).lower() == 'nan':
+                # Use player_name_team as unique identifier (for DST and players without IDs)
+                player_id = f"{row['player_name']}_{row['team']}"
+            else:
+                player_id = str(raw_player_id)
             
             # Create player record
             player = HistoricalPlayerPool(
