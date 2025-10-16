@@ -64,10 +64,10 @@ def render_data_ingestion():
             
             manager = HistoricalDataManager()
             
-            # Generate slate_id (format: 2024-W7-DK-CLASSIC)
+            # Generate slate_id (format: 2025-W7-DK-CLASSIC)
             slate_id = manager._generate_slate_id(
                 week=selected_week,
-                season=2024,
+                season=2025,
                 site='DraftKings',
                 contest_type='Classic'
             )
@@ -171,7 +171,7 @@ def render_data_ingestion():
                         df_salaries = fetch_salaries(
                             api_key=api_key,
                             week=selected_week,
-                            season=2024,
+                            season=2025,
                             site='draftkings'
                         )
                         
@@ -207,7 +207,7 @@ def render_data_ingestion():
                                 # Generate slate_id first to check if it exists
                                 slate_id = manager._generate_slate_id(
                                     week=selected_week,
-                                    season=2024,
+                                    season=2025,
                                     site='DraftKings',
                                     contest_type='Classic'
                                 )
@@ -229,7 +229,7 @@ def render_data_ingestion():
                                 # Create fresh slate
                                 slate_id = manager.create_slate(
                                     week=selected_week,
-                                    season=2024,
+                                    season=2025,
                                     site='DraftKings',
                                     contest_type='Classic',
                                     games=games
@@ -301,10 +301,10 @@ def render_data_ingestion():
                 
                 manager = HistoricalDataManager()
                 
-                # Generate slate_id (format: 2024-W7-DK-CLASSIC)
+                # Generate slate_id (format: 2025-W7-DK-CLASSIC)
                 slate_id = manager._generate_slate_id(
                     week=selected_week,
-                    season=2024,
+                    season=2025,
                     site='DraftKings',
                     contest_type='Classic'
                 )
@@ -330,9 +330,7 @@ def render_data_ingestion():
                     # Get metadata
                     manager2 = HistoricalDataManager()
                     slate_meta = manager2.get_slate_metadata(
-                        week=selected_week,
-                        season=2024,
-                        site='DraftKings'
+                        slate_id=slate_id
                     )
                     manager2.close()
                     
