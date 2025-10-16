@@ -137,6 +137,28 @@ def render_data_ingestion():
                         )
                         
                         if df_salaries is not None and not df_salaries.empty:
+                            # Filter to main slate only (Featured or Classic)
+                            # MySportsFeeds returns ALL slates (33+), but we only want the main one
+                            original_count = len(df_salaries)
+                            if 'slate_label' in df_salaries.columns:
+                                # Prioritize Featured slate, fallback to Classic
+                                if 'Featured' in df_salaries['slate_label'].values:
+                                    df_salaries = df_salaries[df_salaries['slate_label'] == 'Featured'].copy()
+                                elif 'Classic' in df_salaries['slate_label'].values:
+                                    df_salaries = df_salaries[df_salaries['slate_label'] == 'Classic'].copy()
+                                else:
+                                    # Use the first slate if neither Featured nor Classic exists
+                                    first_slate = df_salaries['slate_label'].iloc[0]
+                                    df_salaries = df_salaries[df_salaries['slate_label'] == first_slate].copy()
+                                
+                                st.info(f"🎯 Filtered to main slate: {original_count} → {len(df_salaries)} players")
+                            
+                            # Remove duplicate players (keep first occurrence)
+                            if 'player_name' in df_salaries.columns:
+                                df_salaries = df_salaries.drop_duplicates(subset=['player_name'], keep='first')
+                                st.info(f"📊 Removed duplicates: {len(df_salaries)} unique players")
+                        
+                        if df_salaries is not None and not df_salaries.empty:
                             # Create slate and store (for historical tracking)
                             manager = HistoricalDataManager()
                             try:
