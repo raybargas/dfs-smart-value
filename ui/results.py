@@ -113,6 +113,10 @@ def calculate_lineup_actual_score(lineup: Lineup, historical_scores: Dict[str, f
     total_score = 0.0
     missing_players = []
     
+    # Debug: Print first few historical scores for comparison
+    debug_keys = list(historical_scores.keys())[:5]
+    st.write(f"🔍 Debug: First 5 historical score keys: {debug_keys}")
+    
     for player in lineup.players:
         # Try multiple matching strategies
         player_score = None
@@ -133,11 +137,14 @@ def calculate_lineup_actual_score(lineup: Lineup, historical_scores: Dict[str, f
         
         if player_score is not None:
             total_score += player_score
+            st.write(f"✅ Found {player.name}: {player_score} pts")
         else:
             missing_players.append(player.name)
+            st.write(f"❌ Missing {player.name}")
     
-    # Return None if any players are missing from historical data
+    # Debug: Show missing players
     if missing_players:
+        st.write(f"🔍 Debug: Missing players: {missing_players}")
         return None
         
     return round(total_score, 2)
