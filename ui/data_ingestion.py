@@ -480,6 +480,10 @@ def render_data_ingestion():
                         if 'name' in df_for_db.columns and 'player_name' not in df_for_db.columns:
                             df_for_db['player_name'] = df_for_db['name']
                         
+                        # Ensure opponent column exists (may be missing from some CSV files)
+                        if 'opponent' not in df_for_db.columns:
+                            df_for_db['opponent'] = None  # Will be set as NULL in database
+                        
                         # Extract games from data (if opponent column exists)
                         games = []
                         if 'opponent' in df_for_db.columns:
