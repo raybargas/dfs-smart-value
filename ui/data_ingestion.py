@@ -158,6 +158,15 @@ def render_data_ingestion():
                                 df_salaries = df_salaries.drop_duplicates(subset=['player_name'], keep='first')
                                 if before_dedup > len(df_salaries):
                                     st.info(f"📊 Removed {before_dedup - len(df_salaries)} duplicates → {len(df_salaries)} unique players")
+                            
+                            # Filter to only players with projections > 0
+                            if 'projection' in df_salaries.columns:
+                                before_proj_filter = len(df_salaries)
+                                df_salaries = df_salaries[df_salaries['projection'] > 0].copy()
+                                players_without_proj = before_proj_filter - len(df_salaries)
+                                if players_without_proj > 0:
+                                    st.info(f"🎯 Filtered to players with projections: {before_proj_filter} → {len(df_salaries)} players")
+                                    st.info(f"❌ Excluded {players_without_proj} players without projections")
                         
                         if df_salaries is not None and not df_salaries.empty:
                             # Create slate and store (for historical tracking)
