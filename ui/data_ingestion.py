@@ -407,6 +407,26 @@ def render_data_ingestion():
                 # Parse and validate
                 df, summary = load_and_validate_player_data(uploaded_file)
                 
+                # Filter out players with zero or missing projections
+                # (These players can't be optimized and cause errors in lineup generation)
+                if 'projection' in df.columns:
+                    initial_count = len(df)
+                    df = df[df['projection'] > 0].copy()
+                    filtered_count = initial_count - len(df)
+                    
+                    if filtered_count > 0:
+                        st.info(f"ℹ️ Filtered out {filtered_count} players with zero projections")
+                    
+                    # Recalculate summary after filtering
+                    summary = {
+                        'total_players': len(df),
+                        'positions': df['position'].value_counts().to_dict(),
+                        'salary_min': int(df['salary'].min()),
+                        'salary_max': int(df['salary'].max()),
+                        'salary_avg': int(df['salary'].mean()),
+                        'teams': df['team'].nunique()
+                    }
+                
                 # Store in session state with metadata
                 import datetime
                 st.session_state['player_data'] = df
