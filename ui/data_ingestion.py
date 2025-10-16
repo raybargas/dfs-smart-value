@@ -183,8 +183,10 @@ def render_data_ingestion():
                         
                         if df_salaries is not None and not df_salaries.empty:
                             # Create slate and store (for historical tracking)
-                            manager = HistoricalDataManager()
+                            slate_saved = False
                             try:
+                                manager = HistoricalDataManager()
+                                
                                 # Extract games from data
                                 games = []
                                 if 'opponent' in df_salaries.columns:
@@ -211,14 +213,19 @@ def render_data_ingestion():
                                     ownership_source='pending'
                                 )
                                 
-                                st.success(f"✅ Created slate: {slate_id}")
+                                manager.close()
+                                slate_saved = True
+                                st.info(f"💾 Saved to database: {slate_id}")
                             except ValueError as e:
                                 if "already exists" in str(e):
-                                    st.info(f"ℹ️ Slate already exists for Week {selected_week}")
+                                    st.info(f"ℹ️ Data already in database for Week {selected_week}")
+                                    slate_saved = True  # Data exists, that's fine
                                 else:
-                                    st.warning(f"⚠️ Could not create slate: {e}")
-                            finally:
-                                manager.close()
+                                    st.warning(f"⚠️ Database save failed: {e}")
+                                    st.warning("📝 Data will only persist in this session")
+                            except Exception as e:
+                                st.warning(f"⚠️ Database save failed: {str(e)}")
+                                st.warning("📝 Data will only persist in this session")
                             
                             # Parse and validate (same as manual upload)
                             summary = {
