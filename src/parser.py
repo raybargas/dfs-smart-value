@@ -57,59 +57,48 @@ def standardize_linestar(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Standardized format with Linestar enhancements
     """
-    # Work with copy to preserve original
+    # Work with copy and rename columns directly
     standardized = df.copy()
     
-    # Verify required Linestar columns exist
-    required_linestar_cols = {
+    # Define column mapping (Linestar → Internal format)
+    column_mapping = {
+        # Core columns (required)
         'Name': 'name',
         'Position': 'position',
         'Team': 'team',
         'Salary': 'salary',
         'Projected': 'projection',
-        'ProjOwn': 'ownership'
+        'ProjOwn': 'ownership',
+        # Enhanced columns
+        'Ceiling': 'ceiling',
+        'Floor': 'floor',
+        'Consistency': 'consistency',
+        'OppRank': 'opp_rank',
+        'VersusStr': 'opponent',
+        'PPG': 'ppg',
+        'VegasImplied': 'implied_total',
+        'Vegas': 'vegas_spread',
+        'VegasML': 'vegas_ml',
+        'VegasTotals': 'vegas_total',
+        'Leverage': 'linestar_leverage',
+        'Safety': 'linestar_safety',
+        'StartingStatus': 'starting_status',
+        'LineStarId': 'linestar_id'
     }
     
-    for source_col, target_col in required_linestar_cols.items():
-        if source_col not in standardized.columns:
-            raise ValueError(f"Missing required Linestar column: {source_col}. Found columns: {standardized.columns.tolist()}")
+    # Verify required columns exist
+    required_cols = ['Name', 'Position', 'Team', 'Salary', 'Projected', 'ProjOwn']
+    missing = [col for col in required_cols if col not in standardized.columns]
+    if missing:
+        raise ValueError(f"Missing required Linestar columns: {missing}. Found: {standardized.columns.tolist()}")
     
-    # Add/rename core columns (required by app)
-    standardized['player_name'] = standardized['Name'].copy()
-    standardized['name'] = standardized['Name'].copy()  # Alias for compatibility
-    standardized['position'] = standardized['Position'].copy()
-    standardized['team'] = standardized['Team'].copy()
-    standardized['salary'] = standardized['Salary'].copy()
-    standardized['projection'] = standardized['Projected'].copy()  # Professional projection!
-    standardized['ownership'] = standardized['ProjOwn'].copy()     # Real ownership data!
+    # Rename columns that exist in the DataFrame
+    rename_dict = {k: v for k, v in column_mapping.items() if k in standardized.columns}
+    standardized = standardized.rename(columns=rename_dict)
     
-    # Add standardized names for enhanced columns (Linestar advantages)
-    standardized['ceiling'] = standardized['Ceiling']           # Pro ceiling estimate
-    standardized['floor'] = standardized['Floor']               # Floor for safety calc
-    standardized['consistency'] = standardized['Consistency']   # 0-100 reliability score
-    standardized['opp_rank'] = standardized['OppRank']         # Opponent rank vs position
-    standardized['opponent'] = standardized['VersusStr']        # Matchup detail string
-    standardized['ppg'] = standardized['PPG']                   # Points per game avg
-    
-    # Vegas data (preserve with standardized names)
-    if 'VegasImplied' in standardized.columns:
-        standardized['implied_total'] = standardized['VegasImplied']
-    if 'Vegas' in standardized.columns:
-        standardized['vegas_spread'] = standardized['Vegas']
-    if 'VegasML' in standardized.columns:
-        standardized['vegas_ml'] = standardized['VegasML']
-    if 'VegasTotals' in standardized.columns:
-        standardized['vegas_total'] = standardized['VegasTotals']
-    
-    # Linestar-specific metrics (standardized names)
-    if 'Leverage' in standardized.columns:
-        standardized['linestar_leverage'] = standardized['Leverage']
-    if 'Safety' in standardized.columns:
-        standardized['linestar_safety'] = standardized['Safety']
-    if 'StartingStatus' in standardized.columns:
-        standardized['starting_status'] = standardized['StartingStatus']
-    if 'LineStarId' in standardized.columns:
-        standardized['linestar_id'] = standardized['LineStarId']
+    # Add player_name as alias for name (required by some parts of app)
+    if 'name' in standardized.columns:
+        standardized['player_name'] = standardized['name']
     
     return standardized
 
