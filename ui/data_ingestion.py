@@ -120,271 +120,285 @@ def render_data_ingestion():
         
         st.rerun()
     
-    # Two-column layout: Upload or Auto-Fetch
-    col_upload, col_fetch = st.columns([3, 1])
+    # Manual upload only (API fetch temporarily disabled)
+    uploaded_file = st.file_uploader(
+        "Upload file",
+        type=['csv', 'xlsx', 'xls'],
+        help="Upload CSV or Excel file with player data",
+        key="player_data_uploader",
+        label_visibility="collapsed"
+    )
     
-    with col_upload:
-        uploaded_file = st.file_uploader(
-            "Upload file",
-            type=['csv', 'xlsx', 'xls'],
-            help="Upload CSV or Excel file with player data",
-            key="player_data_uploader",
-            label_visibility="collapsed"
-        )
+    # API FETCH TEMPORARILY DISABLED
+    # Uncomment below to re-enable API fetching from MySportsFeeds
     
-    with col_fetch:
-        if st.button(
-            "📡 Fetch from API",
-            help="Fetch DFS salaries from MySportsFeeds API for selected week",
-            use_container_width=True,
-            type="secondary"
-        ):
-            # Check if API key is set
-            import os
-            api_key = os.getenv('MYSPORTSFEEDS_API_KEY')
-            
-            if not api_key:
-                st.error("""
-                ❌ **MySportsFeeds API Key not found**
-                
-                Set your API key:
-                ```bash
-                export MYSPORTSFEEDS_API_KEY="your_key_here"
-                ```
-                
-                Or provide it manually in the sidebar.
-                """)
-            else:
-                with st.spinner(f"🔄 Fetching Week {selected_week} salaries from MySportsFeeds..."):
-                    try:
-                        # Import Wednesday data prep workflow
-                        from historical_data_manager import HistoricalDataManager
-                        from api.dfs_salaries_api import fetch_salaries
-                        import time
-                        import datetime
-                        
-                        # Show timestamp to prove fresh fetch
-                        fetch_start = time.time()
-                        fetch_time_display = datetime.datetime.now().strftime("%I:%M:%S %p")
-                        
-                        # Fetch salaries - using 2025 season (2025-2026-regular)
-                        df_salaries = fetch_salaries(
-                            api_key=api_key,
-                            week=selected_week,
-                            season=2025,
-                            site='draftkings'
-                        )
-                        
-                        fetch_duration = time.time() - fetch_start
-                        st.info(f"⏱️ API call completed at {fetch_time_display} ({fetch_duration:.2f}s)")
-                        
-                        # Display actual season/week from API response
-                        if df_salaries is not None and not df_salaries.empty:
-                            api_season = df_salaries['api_season'].iloc[0] if 'api_season' in df_salaries.columns else '2025-2026-regular'
-                            api_week = df_salaries['api_week'].iloc[0] if 'api_week' in df_salaries.columns else selected_week
-                            slate_label = df_salaries['slate_label'].iloc[0] if 'slate_label' in df_salaries.columns else 'Unknown'
-                            
-                            # Validate week matches (only warn if API explicitly returned different week)
-                            if 'api_week' in df_salaries.columns and api_week != selected_week:
-                                st.warning(f"⚠️ Week mismatch: Requested Week {selected_week}, API returned Week {api_week}")
-                            
-                            st.success(f"✅ {api_season}, Week {api_week} - Slate: '{slate_label}' ({len(df_salaries)} players)")
-                        else:
-                            st.info(f"📡 Requested: 2025-2026-regular/week/{selected_week}/dfs.json")
-                        
-                        if df_salaries is not None and not df_salaries.empty:
-                            # Filter to SUNDAY MAIN SLATE ONLY
-                            # MySportsFeeds returns ALL slates (33+) for the entire week
-                            # We want the biggest slate = Sunday afternoon main slate (~10-14 games)
-                            original_count = len(df_salaries)
-                            
-                            if 'slate_label' in df_salaries.columns:
-                                # Count players per slate to find the biggest one (= main Sunday slate)
-                                slate_counts = df_salaries.groupby('slate_label').size()
-                                main_slate = slate_counts.idxmax()  # Slate with most players = main slate
-                                df_salaries = df_salaries[df_salaries['slate_label'] == main_slate].copy()
-                            
-                            # Remove duplicate players (keep first occurrence)
-                            if 'player_name' in df_salaries.columns:
-                                df_salaries = df_salaries.drop_duplicates(subset=['player_name'], keep='first')
-                            
-                            # Filter to only players with projections > 0
-                            if 'projection' in df_salaries.columns:
-                                df_salaries = df_salaries[df_salaries['projection'] > 0].copy()
-                        
-                        if df_salaries is not None and not df_salaries.empty:
-                            # Create slate and store (for historical tracking)
-                            slate_saved = False
-                            try:
-                                manager = HistoricalDataManager()
-                                
-                                # Generate slate_id first to check if it exists
-                                slate_id = manager._generate_slate_id(
-                                    week=selected_week,
-                                    season=2025,
-                                    site='DraftKings',
-                                    contest_type='Classic'
-                                )
-                                
-                                # Delete existing slate if present (allows re-fetch with fresh data)
-                                try:
-                                    manager.delete_slate(slate_id)
-                                except:
-                                    pass  # Slate doesn't exist yet, that's fine
-                                
-                                # Extract games from data
-                                games = []
-                                if 'opponent' in df_salaries.columns:
-                                    teams = df_salaries['team'].unique().tolist()
-                                    for i in range(0, len(teams), 2):
-                                        if i + 1 < len(teams):
-                                            games.append(f"{teams[i]}@{teams[i+1]}")
-                                
-                                # Create fresh slate
-                                slate_id = manager.create_slate(
-                                    week=selected_week,
-                                    season=2025,
-                                    site='DraftKings',
-                                    contest_type='Classic',
-                                    games=games
-                                )
-                                
-                                # Store player pool
-                                manager.store_player_pool_snapshot(
-                                    slate_id=slate_id,
-                                    player_data=df_salaries,
-                                    smart_value_profile=None,
-                                    projection_source='mysportsfeeds_dfs',
-                                    ownership_source='pending'
-                                )
-                                
-                                manager.close()
-                                slate_saved = True
-                                save_message = f"💾 Saved to database: {slate_id}"
-                            except Exception as e:
-                                slate_saved = False
-                                save_message = f"⚠️ Database save failed: {str(e)} - Data will only persist in this session"
-                            
-                            # Parse and validate (same as manual upload)
-                            summary = {
-                                'total_players': len(df_salaries),
-                                'positions': df_salaries['position'].value_counts().to_dict(),
-                                'salary_min': int(df_salaries['salary'].min()),
-                                'salary_max': int(df_salaries['salary'].max()),
-                                'salary_avg': int(df_salaries['salary'].mean()),
-                                'teams': df_salaries['team'].nunique()
-                            }
-                            
-                            # Store in session state with timestamp and week
-                            import datetime
-                            st.session_state['player_data'] = df_salaries
-                            st.session_state['data_summary'] = summary
-                            st.session_state['data_source'] = 'api'
-                            st.session_state['data_loaded_at'] = datetime.datetime.now()
-                            st.session_state['data_week'] = selected_week
-                            st.session_state['save_status'] = save_message  # Store for display after rerun
-                            
-                            st.rerun()
-                        else:
-                            st.error("❌ No salary data found for this week")
-                    
-                    except Exception as e:
-                        st.error(f"❌ Failed to fetch data: {str(e)}")
-                        st.info("""
-                        **Troubleshooting**:
-                        - Verify your MySportsFeeds API key is correct
-                        - Ensure you have the "DFS" addon in your subscription
-                        - Check that Week {selected_week} salaries are available
-                        
-                        **Manual fallback**: Upload CSV/Excel file instead.
-                        """.format(selected_week=selected_week))
+    # col_upload, col_fetch = st.columns([3, 1])
+    # 
+    # with col_upload:
+    #     uploaded_file = st.file_uploader(
+    #         "Upload file",
+    #         type=['csv', 'xlsx', 'xls'],
+    #         help="Upload CSV or Excel file with player data",
+    #         key="player_data_uploader",
+    #         label_visibility="collapsed"
+    #     )
+    # 
+    # with col_fetch:
+    #     if st.button(
+    #         "📡 Fetch from API",
+    #         help="Fetch DFS salaries from MySportsFeeds API for selected week",
+    #         use_container_width=True,
+    #         type="secondary"
+    #     ):
+    #         # Check if API key is set
+    #         import os
+    #         api_key = os.getenv('MYSPORTSFEEDS_API_KEY')
+    #         
+    #         if not api_key:
+    #             st.error("""
+    #             ❌ **MySportsFeeds API Key not found**
+    #             
+    #             Set your API key:
+    #             ```bash
+    #             export MYSPORTSFEEDS_API_KEY="your_key_here"
+    #             ```
+    #             
+    #             Or provide it manually in the sidebar.
+    #             """)
+    #         else:
+    #             with st.spinner(f"🔄 Fetching Week {selected_week} salaries from MySportsFeeds..."):
+    #                 try:
+    #                     # Import Wednesday data prep workflow
+    #                     from historical_data_manager import HistoricalDataManager
+    #                     from api.dfs_salaries_api import fetch_salaries
+    #                     import time
+    #                     import datetime
+    #                     
+    #                     # Show timestamp to prove fresh fetch
+    #                     fetch_start = time.time()
+    #                     fetch_time_display = datetime.datetime.now().strftime("%I:%M:%S %p")
+    #                     
+    #                     # Fetch salaries - using 2025 season (2025-2026-regular)
+    #                     df_salaries = fetch_salaries(
+    #                         api_key=api_key,
+    #                         week=selected_week,
+    #                         season=2025,
+    #                         site='draftkings'
+    #                     )
+    #                     
+    #                     fetch_duration = time.time() - fetch_start
+    #                     st.info(f"⏱️ API call completed at {fetch_time_display} ({fetch_duration:.2f}s)")
+    #                     
+    #                     # Display actual season/week from API response
+    #                     if df_salaries is not None and not df_salaries.empty:
+    #                         api_season = df_salaries['api_season'].iloc[0] if 'api_season' in df_salaries.columns else '2025-2026-regular'
+    #                         api_week = df_salaries['api_week'].iloc[0] if 'api_week' in df_salaries.columns else selected_week
+    #                         slate_label = df_salaries['slate_label'].iloc[0] if 'slate_label' in df_salaries.columns else 'Unknown'
+    #                         
+    #                         # Validate week matches (only warn if API explicitly returned different week)
+    #                         if 'api_week' in df_salaries.columns and api_week != selected_week:
+    #                             st.warning(f"⚠️ Week mismatch: Requested Week {selected_week}, API returned Week {api_week}")
+    #                         
+    #                         st.success(f"✅ {api_season}, Week {api_week} - Slate: '{slate_label}' ({len(df_salaries)} players)")
+    #                     else:
+    #                         st.info(f"📡 Requested: 2025-2026-regular/week/{selected_week}/dfs.json")
+    #                     
+    #                     if df_salaries is not None and not df_salaries.empty:
+    #                         # Filter to SUNDAY MAIN SLATE ONLY
+    #                         # MySportsFeeds returns ALL slates (33+) for the entire week
+    #                         # We want the biggest slate = Sunday afternoon main slate (~10-14 games)
+    #                         original_count = len(df_salaries)
+    #                         
+    #                         if 'slate_label' in df_salaries.columns:
+    #                             # Count players per slate to find the biggest one (= main Sunday slate)
+    #                             slate_counts = df_salaries.groupby('slate_label').size()
+    #                             main_slate = slate_counts.idxmax()  # Slate with most players = main slate
+    #                             df_salaries = df_salaries[df_salaries['slate_label'] == main_slate].copy()
+    #                         
+    #                         # Remove duplicate players (keep first occurrence)
+    #                         if 'player_name' in df_salaries.columns:
+    #                             df_salaries = df_salaries.drop_duplicates(subset=['player_name'], keep='first')
+    #                         
+    #                         # Filter to only players with projections > 0
+    #                         if 'projection' in df_salaries.columns:
+    #                             df_salaries = df_salaries[df_salaries['projection'] > 0].copy()
+    #                     
+    #                     if df_salaries is not None and not df_salaries.empty:
+    #                         # Create slate and store (for historical tracking)
+    #                         slate_saved = False
+    #                         try:
+    #                             manager = HistoricalDataManager()
+    #                             
+    #                             # Generate slate_id first to check if it exists
+    #                             slate_id = manager._generate_slate_id(
+    #                                 week=selected_week,
+    #                                 season=2025,
+    #                                 site='DraftKings',
+    #                                 contest_type='Classic'
+    #                             )
+    #                             
+    #                             # Delete existing slate if present (allows re-fetch with fresh data)
+    #                             try:
+    #                                 manager.delete_slate(slate_id)
+    #                             except:
+    #                                 pass  # Slate doesn't exist yet, that's fine
+    #                             
+    #                             # Extract games from data
+    #                             games = []
+    #                             if 'opponent' in df_salaries.columns:
+    #                                 teams = df_salaries['team'].unique().tolist()
+    #                                 for i in range(0, len(teams), 2):
+    #                                     if i + 1 < len(teams):
+    #                                         games.append(f"{teams[i]}@{teams[i+1]}")
+    #                             
+    #                             # Create fresh slate
+    #                             slate_id = manager.create_slate(
+    #                                 week=selected_week,
+    #                                 season=2025,
+    #                                 site='DraftKings',
+    #                                 contest_type='Classic',
+    #                                 games=games
+    #                             )
+    #                             
+    #                             # Store player pool
+    #                             manager.store_player_pool_snapshot(
+    #                                 slate_id=slate_id,
+    #                                 player_data=df_salaries,
+    #                                 smart_value_profile=None,
+    #                                 projection_source='mysportsfeeds_dfs',
+    #                                 ownership_source='pending'
+    #                             )
+    #                             
+    #                             manager.close()
+    #                             slate_saved = True
+    #                             save_message = f"💾 Saved to database: {slate_id}"
+    #                         except Exception as e:
+    #                             slate_saved = False
+    #                             save_message = f"⚠️ Database save failed: {str(e)} - Data will only persist in this session"
+    #                         
+    #                         # Parse and validate (same as manual upload)
+    #                         summary = {
+    #                             'total_players': len(df_salaries),
+    #                             'positions': df_salaries['position'].value_counts().to_dict(),
+    #                             'salary_min': int(df_salaries['salary'].min()),
+    #                             'salary_max': int(df_salaries['salary'].max()),
+    #                             'salary_avg': int(df_salaries['salary'].mean()),
+    #                             'teams': df_salaries['team'].nunique()
+    #                         }
+    #                         
+    #                         # Store in session state with timestamp and week
+    #                         import datetime
+    #                         st.session_state['player_data'] = df_salaries
+    #                         st.session_state['data_summary'] = summary
+    #                         st.session_state['data_source'] = 'api'
+    #                         st.session_state['data_loaded_at'] = datetime.datetime.now()
+    #                         st.session_state['data_week'] = selected_week
+    #                         st.session_state['save_status'] = save_message  # Store for display after rerun
+    #                         
+    #                         st.rerun()
+    #                     else:
+    #                         st.error("❌ No salary data found for this week")
+    #                 
+    #                 except Exception as e:
+    #                     st.error(f"❌ Failed to fetch data: {str(e)}")
+    #                     st.info("""
+    #                     **Troubleshooting**:
+    #                     - Verify your MySportsFeeds API key is correct
+    #                     - Ensure you have the "DFS" addon in your subscription
+    #                     - Check that Week {selected_week} salaries are available
+    #                     
+    #                     **Manual fallback**: Upload CSV/Excel file instead.
+    #                     """.format(selected_week=selected_week))
     
     # Track if this is a manual upload (from file uploader widget)
     is_manual_upload = uploaded_file is not None
     
-    # Auto-load data on first visit (if no data in session and no manual upload)
-    if 'player_data' not in st.session_state or st.session_state['player_data'] is None:
-        if not is_manual_upload and 'auto_loaded' not in st.session_state:
-            # PRIORITY 1: Try to load historical data for current week from database
-            db_load_success = False
-            db_error = None
-            
-            try:
-                from historical_data_manager import HistoricalDataManager
-                import datetime
-                
-                manager = HistoricalDataManager()
-                
-                # Generate slate_id (format: 2025-W7-DK-CLASSIC)
-                slate_id = manager._generate_slate_id(
-                    week=selected_week,
-                    season=2025,
-                    site='DraftKings',
-                    contest_type='Classic'
-                )
-                
-                # Load historical snapshot
-                historical_df = manager.load_historical_snapshot(
-                    slate_id=slate_id,
-                    include_actuals=False
-                )
-                manager.close()
-                
-                if historical_df is not None and not historical_df.empty:
-                    # Found historical data - load it
-                    summary = {
-                        'total_players': len(historical_df),
-                        'positions': historical_df['position'].value_counts().to_dict(),
-                        'salary_min': int(historical_df['salary'].min()),
-                        'salary_max': int(historical_df['salary'].max()),
-                        'salary_avg': int(historical_df['salary'].mean()),
-                        'teams': historical_df['team'].nunique()
-                    }
-                    
-                    # Get metadata
-                    manager2 = HistoricalDataManager()
-                    slate_meta = manager2.get_slate_metadata(
-                        slate_id=slate_id
-                    )
-                    manager2.close()
-                    
-                    st.session_state['player_data'] = historical_df
-                    st.session_state['data_summary'] = summary
-                    st.session_state['data_source'] = 'historical'
-                    st.session_state['data_week'] = selected_week
-                    
-                    if slate_meta and 'created_at' in slate_meta:
-                        st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
-                    
-                    st.session_state['auto_loaded'] = True
-                    db_load_success = True
-                    
-            except ValueError as e:
-                # Slate doesn't exist in database - this is normal, not an error
-                if "No data found" in str(e):
-                    db_error = f"No Week {selected_week} data in database yet"
-                else:
-                    db_error = str(e)
-            except Exception as e:
-                # Unexpected error - log it
-                db_error = f"Database error: {str(e)}"
-            
-            # PRIORITY 2: Fallback to old CSV file ONLY if database load failed or empty
-            if not db_load_success:
-                import os
-                import io
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
-                
-                if os.path.exists(test_file_path):
-                    try:
-                        with open(test_file_path, 'rb') as f:
-                            file_content = f.read()
-                            uploaded_file = io.BytesIO(file_content)
-                            uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
-                            st.session_state['auto_loaded'] = True
-                    except Exception:
-                        pass
+    # AUTO-LOAD DISABLED (manual upload only)
+    # To re-enable, uncomment the following block:
+    
+    # # Auto-load data on first visit (if no data in session and no manual upload)
+    # if 'player_data' not in st.session_state or st.session_state['player_data'] is None:
+    #     if not is_manual_upload and 'auto_loaded' not in st.session_state:
+    #         # PRIORITY 1: Try to load historical data for current week from database
+    #         db_load_success = False
+    #         db_error = None
+    #         
+    #         try:
+    #             from historical_data_manager import HistoricalDataManager
+    #             import datetime
+    #             
+    #             manager = HistoricalDataManager()
+    #             
+    #             # Generate slate_id (format: 2025-W7-DK-CLASSIC)
+    #             slate_id = manager._generate_slate_id(
+    #                 week=selected_week,
+    #                 season=2025,
+    #                 site='DraftKings',
+    #                 contest_type='Classic'
+    #             )
+    #             
+    #             # Load historical snapshot
+    #             historical_df = manager.load_historical_snapshot(
+    #                 slate_id=slate_id,
+    #                 include_actuals=False
+    #             )
+    #             manager.close()
+    #             
+    #             if historical_df is not None and not historical_df.empty:
+    #                 # Found historical data - load it
+    #                 summary = {
+    #                     'total_players': len(historical_df),
+    #                     'positions': historical_df['position'].value_counts().to_dict(),
+    #                     'salary_min': int(historical_df['salary'].min()),
+    #                     'salary_max': int(historical_df['salary'].max()),
+    #                     'salary_avg': int(historical_df['salary'].mean()),
+    #                     'teams': historical_df['team'].nunique()
+    #                 }
+    #                 
+    #                 # Get metadata
+    #                 manager2 = HistoricalDataManager()
+    #                 slate_meta = manager2.get_slate_metadata(
+    #                     slate_id=slate_id
+    #                 )
+    #                 manager2.close()
+    #                 
+    #                 st.session_state['player_data'] = historical_df
+    #                 st.session_state['data_summary'] = summary
+    #                 st.session_state['data_source'] = 'historical'
+    #                 st.session_state['data_week'] = selected_week
+    #                 
+    #                 if slate_meta and 'created_at' in slate_meta:
+    #                     st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
+    #                 
+    #                 st.session_state['auto_loaded'] = True
+    #                 db_load_success = True
+    #                 
+    #         except ValueError as e:
+    #             # Slate doesn't exist in database - this is normal, not an error
+    #             if "No data found" in str(e):
+    #                 db_error = f"No Week {selected_week} data in database yet"
+    #             else:
+    #                 db_error = str(e)
+    #         except Exception as e:
+    #             # Unexpected error - log it
+    #             db_error = f"Database error: {str(e)}"
+    #         
+    #         # PRIORITY 2: Fallback to old CSV file ONLY if database load failed or empty
+    #         if not db_load_success:
+    #             import os
+    #             import io
+    #             current_dir = os.path.dirname(os.path.abspath(__file__))
+    #             test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
+    #             
+    #             if os.path.exists(test_file_path):
+    #                 try:
+    #                     with open(test_file_path, 'rb') as f:
+    #                         file_content = f.read()
+    #                         uploaded_file = io.BytesIO(file_content)
+    #                         uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
+    #                         st.session_state['auto_loaded'] = True
+    #                 except Exception:
+    #                     pass
     
     # Check if we already have loaded data and should just display it
     if 'player_data' in st.session_state and st.session_state['player_data'] is not None and uploaded_file is None:
