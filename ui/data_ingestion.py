@@ -36,91 +36,81 @@ def render_data_ingestion():
     st.markdown(get_card_styles(), unsafe_allow_html=True)
     st.markdown(get_badge_styles(), unsafe_allow_html=True)
     
-    # ULTRA-COMPACT Header: Single line, inline everything
+    # Header
     st.markdown("""
-    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; margin-bottom: 0.75rem;">
-        <div style="display: flex; align-items: baseline; gap: 1rem;">
-            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; display: inline;">
-                🏈 <span class="gradient-text">DFS Lineup Optimizer</span>
-            </h2>
-            <span style="color: #707070; font-size: 0.875rem;">Smart Value-Driven Builder</span>
-        </div>
+    <div style="padding: 0.5rem 0; margin-bottom: 0.75rem;">
+        <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700;">
+            🏈 <span class="gradient-text">DFS Lineup Optimizer</span>
+        </h2>
     </div>
     """, unsafe_allow_html=True)
     
     # Week selector
-    col1, col2 = st.columns([1, 3])
+    selected_week = st.selectbox(
+        "NFL Week",
+        options=list(range(1, 19)),
+        index=st.session_state.get('current_week', 7) - 1,
+        key="week_selector"
+    )
     
-    with col1:
-        selected_week = st.selectbox(
-            "NFL Week",
-            options=list(range(1, 19)),
-            index=st.session_state.get('current_week', 7) - 1,
-            help="Select the NFL week for analysis",
-            key="week_selector"
-        )
+    # Update session state if week changed
+    if selected_week != st.session_state.get('current_week', 7):
+        st.session_state['current_week'] = selected_week
         
-        # Update session state if week changed
-        if selected_week != st.session_state.get('current_week', 7):
-            st.session_state['current_week'] = selected_week
+        # Try to load historical data for this week from database
+        try:
+            from historical_data_manager import HistoricalDataManager
+            import datetime
             
-            # Try to load historical data for this week from database
-            try:
-                from historical_data_manager import HistoricalDataManager
-                import datetime
+            manager = HistoricalDataManager()
+            historical_df = manager.load_historical_snapshot(
+                week=selected_week,
+                season=2024,
+                site='DraftKings'
+            )
+            manager.close()
+            
+            if historical_df is not None and not historical_df.empty:
+                # Found historical data for this week - load it
+                summary = {
+                    'total_players': len(historical_df),
+                    'positions': historical_df['position'].value_counts().to_dict(),
+                    'salary_min': int(historical_df['salary'].min()),
+                    'salary_max': int(historical_df['salary'].max()),
+                    'salary_avg': int(historical_df['salary'].mean()),
+                    'teams': historical_df['team'].nunique()
+                }
                 
-                manager = HistoricalDataManager()
-                historical_df = manager.load_historical_snapshot(
+                # Get metadata from slate
+                slate_meta = manager.get_slate_metadata(
                     week=selected_week,
                     season=2024,
                     site='DraftKings'
                 )
-                manager.close()
                 
-                if historical_df is not None and not historical_df.empty:
-                    # Found historical data for this week - load it
-                    summary = {
-                        'total_players': len(historical_df),
-                        'positions': historical_df['position'].value_counts().to_dict(),
-                        'salary_min': int(historical_df['salary'].min()),
-                        'salary_max': int(historical_df['salary'].max()),
-                        'salary_avg': int(historical_df['salary'].mean()),
-                        'teams': historical_df['team'].nunique()
-                    }
-                    
-                    # Get metadata from slate
-                    slate_meta = manager.get_slate_metadata(
-                        week=selected_week,
-                        season=2024,
-                        site='DraftKings'
-                    )
-                    
-                    st.session_state['player_data'] = historical_df
-                    st.session_state['data_summary'] = summary
-                    st.session_state['data_source'] = 'historical'
-                    st.session_state['data_week'] = selected_week
-                    
-                    if slate_meta and 'created_at' in slate_meta:
-                        st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
-                    
-                    st.info(f"📚 Loaded historical data for Week {selected_week}")
-                else:
-                    # No historical data - clear session
-                    if 'player_data' in st.session_state:
-                        del st.session_state['player_data']
-                    if 'data_summary' in st.session_state:
-                        del st.session_state['data_summary']
-            except Exception as e:
-                # If historical load fails, just clear the data
+                st.session_state['player_data'] = historical_df
+                st.session_state['data_summary'] = summary
+                st.session_state['data_source'] = 'historical'
+                st.session_state['data_week'] = selected_week
+                
+                if slate_meta and 'created_at' in slate_meta:
+                    st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
+                
+                st.info(f"📚 Loaded historical data for Week {selected_week}")
+            else:
+                # No historical data - clear session
                 if 'player_data' in st.session_state:
                     del st.session_state['player_data']
                 if 'data_summary' in st.session_state:
                     del st.session_state['data_summary']
-            
-            st.rerun()
-    
-    with col2:
-        st.caption(f"📅 Analyzing Week {selected_week} data")
+        except Exception as e:
+            # If historical load fails, just clear the data
+            if 'player_data' in st.session_state:
+                del st.session_state['player_data']
+            if 'data_summary' in st.session_state:
+                del st.session_state['data_summary']
+        
+        st.rerun()
     
     # Two-column layout: Upload or Auto-Fetch
     col_upload, col_fetch = st.columns([3, 1])
