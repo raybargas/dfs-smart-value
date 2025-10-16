@@ -607,8 +607,8 @@ def display_success_message(summary: Dict[str, Any], is_from_auto_load: bool = F
     
     # Build source-specific caption
     if is_linestar:
-        source_text = f"✨ Linestar · Week {data_week}"
-        caption_text = f"{source_text} · {last_updated_text}"
+        source_icon = "✨"
+        source_text = f"Linestar · Week {data_week}"
     elif data_source == 'api':
         source_icon = "📡"
         source_text = f"Fetched from API · Week {data_week}"
