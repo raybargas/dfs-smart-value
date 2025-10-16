@@ -60,14 +60,28 @@ def standardize_linestar(df: pd.DataFrame) -> pd.DataFrame:
     # Work with copy to preserve original
     standardized = df.copy()
     
+    # Verify required Linestar columns exist
+    required_linestar_cols = {
+        'Name': 'name',
+        'Position': 'position',
+        'Team': 'team',
+        'Salary': 'salary',
+        'Projected': 'projection',
+        'ProjOwn': 'ownership'
+    }
+    
+    for source_col, target_col in required_linestar_cols.items():
+        if source_col not in standardized.columns:
+            raise ValueError(f"Missing required Linestar column: {source_col}. Found columns: {standardized.columns.tolist()}")
+    
     # Add/rename core columns (required by app)
-    standardized['player_name'] = standardized['Name']
-    standardized['name'] = standardized['Name']  # Alias for compatibility
-    standardized['position'] = standardized['Position']
-    standardized['team'] = standardized['Team']
-    standardized['salary'] = standardized['Salary']
-    standardized['projection'] = standardized['Projected']  # Professional projection!
-    standardized['ownership'] = standardized['ProjOwn']     # Real ownership data!
+    standardized['player_name'] = standardized['Name'].copy()
+    standardized['name'] = standardized['Name'].copy()  # Alias for compatibility
+    standardized['position'] = standardized['Position'].copy()
+    standardized['team'] = standardized['Team'].copy()
+    standardized['salary'] = standardized['Salary'].copy()
+    standardized['projection'] = standardized['Projected'].copy()  # Professional projection!
+    standardized['ownership'] = standardized['ProjOwn'].copy()     # Real ownership data!
     
     # Add standardized names for enhanced columns (Linestar advantages)
     standardized['ceiling'] = standardized['Ceiling']           # Pro ceiling estimate
