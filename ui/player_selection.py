@@ -55,6 +55,10 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     
+    # Standardize column names (API uses 'player_name', manual upload uses 'name')
+    if 'player_name' in df.columns and 'name' not in df.columns:
+        df['name'] = df['player_name']
+    
     # Ensure opponent column exists (fill with empty string if missing)
     if 'opponent' not in df.columns:
         df['opponent'] = ''
