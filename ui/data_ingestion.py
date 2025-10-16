@@ -152,6 +152,12 @@ def render_data_ingestion():
                         # Import Wednesday data prep workflow
                         from historical_data_manager import HistoricalDataManager
                         from api.dfs_salaries_api import fetch_salaries
+                        import time
+                        import datetime
+                        
+                        # Show timestamp to prove fresh fetch
+                        fetch_start = time.time()
+                        fetch_time_display = datetime.datetime.now().strftime("%I:%M:%S %p")
                         
                         # Fetch salaries
                         df_salaries = fetch_salaries(
@@ -160,6 +166,9 @@ def render_data_ingestion():
                             season=2024,
                             site='draftkings'
                         )
+                        
+                        fetch_duration = time.time() - fetch_start
+                        st.info(f"⏱️ API call completed at {fetch_time_display} ({fetch_duration:.2f}s)")
                         
                         if df_salaries is not None and not df_salaries.empty:
                             # Filter to SUNDAY MAIN SLATE ONLY
