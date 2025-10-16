@@ -63,12 +63,20 @@ def render_data_ingestion():
             import datetime
             
             manager = HistoricalDataManager()
-            historical_df = manager.load_historical_snapshot(
+            
+            # Generate slate_id (format: 2024-W7-DK-CLASSIC)
+            slate_id = manager._generate_slate_id(
                 week=selected_week,
                 season=2024,
-                site='DraftKings'
+                site='DraftKings',
+                contest_type='Classic'
             )
-            manager.close()
+            
+            # Load historical snapshot
+            historical_df = manager.load_historical_snapshot(
+                slate_id=slate_id,
+                include_actuals=False
+            )
             
             if historical_df is not None and not historical_df.empty:
                 # Found historical data for this week - load it
@@ -83,10 +91,9 @@ def render_data_ingestion():
                 
                 # Get metadata from slate
                 slate_meta = manager.get_slate_metadata(
-                    week=selected_week,
-                    season=2024,
-                    site='DraftKings'
+                    slate_id=slate_id
                 )
+                manager.close()
                 
                 st.session_state['player_data'] = historical_df
                 st.session_state['data_summary'] = summary
@@ -97,14 +104,15 @@ def render_data_ingestion():
                     st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
                 
                 st.info(f"📚 Loaded historical data for Week {selected_week}")
-            else:
-                # No historical data - clear session
-                if 'player_data' in st.session_state:
-                    del st.session_state['player_data']
-                if 'data_summary' in st.session_state:
-                    del st.session_state['data_summary']
+        except ValueError as e:
+            # Slate doesn't exist - normal, just clear data
+            if 'player_data' in st.session_state:
+                del st.session_state['player_data']
+            if 'data_summary' in st.session_state:
+                del st.session_state['data_summary']
         except Exception as e:
-            # If historical load fails, just clear the data
+            # Unexpected error - log and clear data
+            st.warning(f"⚠️ Database error: {str(e)}")
             if 'player_data' in st.session_state:
                 del st.session_state['player_data']
             if 'data_summary' in st.session_state:
@@ -277,16 +285,29 @@ def render_data_ingestion():
     if 'player_data' not in st.session_state or st.session_state['player_data'] is None:
         if not is_manual_upload and 'auto_loaded' not in st.session_state:
             # PRIORITY 1: Try to load historical data for current week from database
+            db_load_success = False
+            db_error = None
+            
             try:
                 from historical_data_manager import HistoricalDataManager
                 import datetime
                 
                 manager = HistoricalDataManager()
-                historical_df = manager.load_historical_snapshot(
+                
+                # Generate slate_id (format: 2024-W7-DK-CLASSIC)
+                slate_id = manager._generate_slate_id(
                     week=selected_week,
                     season=2024,
-                    site='DraftKings'
+                    site='DraftKings',
+                    contest_type='Classic'
                 )
+                
+                # Load historical snapshot
+                historical_df = manager.load_historical_snapshot(
+                    slate_id=slate_id,
+                    include_actuals=False
+                )
+                manager.close()
                 
                 if historical_df is not None and not historical_df.empty:
                     # Found historical data - load it
@@ -300,11 +321,13 @@ def render_data_ingestion():
                     }
                     
                     # Get metadata
-                    slate_meta = manager.get_slate_metadata(
+                    manager2 = HistoricalDataManager()
+                    slate_meta = manager2.get_slate_metadata(
                         week=selected_week,
                         season=2024,
                         site='DraftKings'
                     )
+                    manager2.close()
                     
                     st.session_state['player_data'] = historical_df
                     st.session_state['data_summary'] = summary
@@ -315,26 +338,20 @@ def render_data_ingestion():
                         st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
                     
                     st.session_state['auto_loaded'] = True
-                    manager.close()
-                else:
-                    manager.close()
-                    # PRIORITY 2: Fallback to old CSV file if no historical data
-                    import os
-                    import io
-                    current_dir = os.path.dirname(os.path.abspath(__file__))
-                    test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
+                    db_load_success = True
                     
-                    if os.path.exists(test_file_path):
-                        try:
-                            with open(test_file_path, 'rb') as f:
-                                file_content = f.read()
-                                uploaded_file = io.BytesIO(file_content)
-                                uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
-                                st.session_state['auto_loaded'] = True
-                        except Exception:
-                            pass
-            except Exception:
-                # If historical load fails, try CSV fallback
+            except ValueError as e:
+                # Slate doesn't exist in database - this is normal, not an error
+                if "No data found" in str(e):
+                    db_error = f"No Week {selected_week} data in database yet"
+                else:
+                    db_error = str(e)
+            except Exception as e:
+                # Unexpected error - log it
+                db_error = f"Database error: {str(e)}"
+            
+            # PRIORITY 2: Fallback to old CSV file ONLY if database load failed or empty
+            if not db_load_success:
                 import os
                 import io
                 current_dir = os.path.dirname(os.path.abspath(__file__))
