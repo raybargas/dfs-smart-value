@@ -167,17 +167,17 @@ def render_data_ingestion():
                         fetch_start = time.time()
                         fetch_time_display = datetime.datetime.now().strftime("%I:%M:%S %p")
                         
-                        # Fetch salaries
+                        # Fetch salaries - use "current" to get whatever season MySportsFeeds has available
                         df_salaries = fetch_salaries(
                             api_key=api_key,
                             week=selected_week,
-                            season=2025,
+                            season='current',
                             site='draftkings'
                         )
                         
                         fetch_duration = time.time() - fetch_start
                         st.info(f"⏱️ API call completed at {fetch_time_display} ({fetch_duration:.2f}s)")
-                        st.info(f"📡 Endpoint: 2025-2026-regular/week/{selected_week}/dfs.json")
+                        st.info(f"📡 Endpoint: current/week/{selected_week}/dfs.json")
                         
                         if df_salaries is not None and not df_salaries.empty:
                             # Filter to SUNDAY MAIN SLATE ONLY

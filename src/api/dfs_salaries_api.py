@@ -224,11 +224,21 @@ class DFSSalariesAPIClient(BaseAPIClient):
                 self.logger.info(f"Using cached data for {site} Week {week} (cached {cached_at})")
                 return cached_data
         
-        # Extract year from season and construct proper season string
-        # MySportsFeeds format: {start_year}-{end_year}-regular (e.g., "2025-2026-regular")
-        year = str(season).split('-')[0]  # "2024-2025-regular" → "2024", 2025 → "2025"
-        next_year = int(year) + 1
-        season_str = f"{year}-{next_year}-regular"
+        # MySportsFeeds season format
+        # Option 1: Use "current" keyword for current in-progress season
+        # Option 2: Use explicit year format: {start_year}-{end_year}-regular
+        
+        # Check if season is already a keyword or full string
+        if str(season).lower() in ['current', 'latest', 'upcoming']:
+            season_str = str(season).lower()
+        elif '-' in str(season) and 'regular' in str(season).lower():
+            # Already formatted (e.g., "2024-2025-regular")
+            season_str = str(season)
+        else:
+            # Convert year to full format (e.g., 2025 → "2025-2026-regular")
+            year = str(season).split('-')[0]
+            next_year = int(year) + 1
+            season_str = f"{year}-{next_year}-regular"
         
         # Fetch from API
         endpoint = f"{season_str}/week/{week}/dfs.json"
