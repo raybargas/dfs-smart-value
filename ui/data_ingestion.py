@@ -137,26 +137,27 @@ def render_data_ingestion():
                         )
                         
                         if df_salaries is not None and not df_salaries.empty:
-                            # Filter to main slate only (Featured or Classic)
-                            # MySportsFeeds returns ALL slates (33+), but we only want the main one
+                            # Filter to SUNDAY MAIN SLATE ONLY
+                            # MySportsFeeds returns ALL slates (33+) for the entire week
+                            # We want the biggest slate = Sunday afternoon main slate (~10-14 games)
                             original_count = len(df_salaries)
+                            
                             if 'slate_label' in df_salaries.columns:
-                                # Prioritize Featured slate, fallback to Classic
-                                if 'Featured' in df_salaries['slate_label'].values:
-                                    df_salaries = df_salaries[df_salaries['slate_label'] == 'Featured'].copy()
-                                elif 'Classic' in df_salaries['slate_label'].values:
-                                    df_salaries = df_salaries[df_salaries['slate_label'] == 'Classic'].copy()
-                                else:
-                                    # Use the first slate if neither Featured nor Classic exists
-                                    first_slate = df_salaries['slate_label'].iloc[0]
-                                    df_salaries = df_salaries[df_salaries['slate_label'] == first_slate].copy()
+                                # Count players per slate to find the biggest one (= main Sunday slate)
+                                slate_counts = df_salaries.groupby('slate_label').size()
+                                main_slate = slate_counts.idxmax()  # Slate with most players = main slate
                                 
-                                st.info(f"🎯 Filtered to main slate: {original_count} → {len(df_salaries)} players")
+                                df_salaries = df_salaries[df_salaries['slate_label'] == main_slate].copy()
+                                
+                                st.info(f"🎯 Filtered to MAIN SLATE ONLY: {original_count} → {len(df_salaries)} players")
+                                st.info(f"📅 Selected slate: '{main_slate}' (largest slate = Sunday main)")
                             
                             # Remove duplicate players (keep first occurrence)
                             if 'player_name' in df_salaries.columns:
+                                before_dedup = len(df_salaries)
                                 df_salaries = df_salaries.drop_duplicates(subset=['player_name'], keep='first')
-                                st.info(f"📊 Removed duplicates: {len(df_salaries)} unique players")
+                                if before_dedup > len(df_salaries):
+                                    st.info(f"📊 Removed {before_dedup - len(df_salaries)} duplicates → {len(df_salaries)} unique players")
                         
                         if df_salaries is not None and not df_salaries.empty:
                             # Create slate and store (for historical tracking)
