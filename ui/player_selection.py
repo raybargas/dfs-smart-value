@@ -65,6 +65,10 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     # Calculate Position Rank (rank by value within position)
     df['pos_rank'] = df.groupby('position')['value'].rank(ascending=False, method='min').astype(int)
     
+    # Add ownership column if it doesn't exist (API data doesn't have ownership)
+    if 'ownership' not in df.columns:
+        df['ownership'] = 10.0  # Default to 10% ownership for all players
+    
     # Calculate Leverage Score (handle edge cases)
     # Treat ownership < 1% as 1% to avoid extreme outliers
     safe_ownership = df['ownership'].apply(lambda x: max(x, 1.0) if pd.notna(x) and x > 0 else 1.0)
