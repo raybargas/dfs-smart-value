@@ -410,7 +410,16 @@ def render_data_ingestion():
                 import datetime
                 st.session_state['player_data'] = df
                 st.session_state['data_summary'] = summary
-                st.session_state['data_source'] = 'csv'
+                
+                # Detect data source type (Linestar vs standard CSV)
+                if hasattr(df, 'attrs') and 'data_source' in df.attrs:
+                    detected_source = df.attrs['data_source']
+                    st.session_state['data_source'] = detected_source
+                    st.session_state['is_linestar'] = (detected_source == 'linestar')
+                else:
+                    st.session_state['data_source'] = 'csv'
+                    st.session_state['is_linestar'] = False
+                
                 st.session_state['data_loaded_at'] = datetime.datetime.now()
                 
                 # Detect week from filename if auto-loaded, otherwise use selected week
@@ -538,6 +547,11 @@ def render_data_ingestion():
             
             # Display success and summary
             display_success_message(summary, is_from_auto_load)
+            
+            # Show Linestar info badge if detected
+            if st.session_state.get('is_linestar', False):
+                st.success("✨ **Linestar Data Detected** - Using professional projections with ceiling/floor, real ownership, consistency scores, and matchup ranks")
+            
             display_data_summary(summary)
             display_continue_button()
             
@@ -587,8 +601,14 @@ def display_success_message(summary: Dict[str, Any], is_from_auto_load: bool = F
         else:
             last_updated_text = "Just now"
     
+    # Check if Linestar data
+    is_linestar = st.session_state.get('is_linestar', False)
+    
     # Build source-specific caption
-    if data_source == 'api':
+    if is_linestar:
+        source_text = f"✨ Linestar · Week {data_week}"
+        caption_text = f"{source_text} · {last_updated_text}"
+    elif data_source == 'api':
         source_icon = "📡"
         source_text = f"Fetched from API · Week {data_week}"
     elif data_source == 'csv':

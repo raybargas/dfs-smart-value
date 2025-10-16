@@ -7,8 +7,142 @@ for the DFS Lineup Optimizer.
 
 import pandas as pd
 import numpy as np
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from pathlib import Path
+
+
+def detect_and_standardize_data_source(df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
+    """
+    Detect data source format and standardize to internal format.
+    
+    Supports:
+    - Linestar: Professional projections with ceiling/floor, ownership, consistency
+    - DraftKings: Standard CSV format
+    
+    Args:
+        df: Raw DataFrame from file
+        
+    Returns:
+        Tuple of (standardized_df, source_type)
+        source_type: 'linestar' or 'draftkings'
+    """
+    # Detect Linestar format
+    linestar_signature_cols = ['LineStarId', 'Ceiling', 'Floor', 'ProjOwn', 'Consistency']
+    if all(col in df.columns for col in linestar_signature_cols):
+        return standardize_linestar(df), 'linestar'
+    
+    # Detect DraftKings or generic format
+    elif 'Name' in df.columns and 'Salary' in df.columns:
+        return standardize_draftkings(df), 'draftkings'
+    
+    # Unknown format - treat as DraftKings and let column detection handle it
+    else:
+        return standardize_draftkings(df), 'draftkings'
+
+
+def standardize_linestar(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Map Linestar columns to internal format and preserve rich data.
+    
+    Linestar provides professional-grade data:
+    - Projected: Pro projection
+    - ProjOwn: Real ownership projections
+    - Ceiling/Floor: Accurate GPP ranges
+    - Consistency: 0-100 reliability score
+    - OppRank: Position-specific matchup quality
+    
+    Args:
+        df: Raw Linestar DataFrame
+        
+    Returns:
+        pd.DataFrame: Standardized format with Linestar enhancements
+    """
+    standardized = pd.DataFrame()
+    
+    # Core columns (required by app)
+    standardized['player_name'] = df['Name']
+    standardized['name'] = df['Name']  # Alias for compatibility
+    standardized['position'] = df['Position']
+    standardized['team'] = df['Team']
+    standardized['salary'] = df['Salary']
+    standardized['projection'] = df['Projected']  # Professional projection!
+    standardized['ownership'] = df['ProjOwn']     # Real ownership data!
+    
+    # Enhanced columns (Linestar-specific advantages)
+    standardized['ceiling'] = df['Ceiling']           # Pro ceiling estimate
+    standardized['floor'] = df['Floor']               # Floor for safety calc
+    standardized['consistency'] = df['Consistency']   # 0-100 reliability score
+    standardized['opp_rank'] = df['OppRank']         # Opponent rank vs position
+    standardized['opponent'] = df['VersusStr']        # Matchup detail string
+    standardized['ppg'] = df['PPG']                   # Points per game avg
+    
+    # Vegas data (may already have via API, but good to preserve)
+    if 'VegasImplied' in df.columns:
+        standardized['implied_total'] = df['VegasImplied']
+    if 'Vegas' in df.columns:
+        standardized['vegas_spread'] = df['Vegas']
+    if 'VegasML' in df.columns:
+        standardized['vegas_ml'] = df['VegasML']
+    if 'VegasTotals' in df.columns:
+        standardized['vegas_total'] = df['VegasTotals']
+    
+    # Linestar-specific metrics (for advanced analysis)
+    if 'Leverage' in df.columns:
+        standardized['linestar_leverage'] = df['Leverage']
+    if 'Safety' in df.columns:
+        standardized['linestar_safety'] = df['Safety']
+    if 'StartingStatus' in df.columns:
+        standardized['starting_status'] = df['StartingStatus']
+    if 'LineStarId' in df.columns:
+        standardized['linestar_id'] = df['LineStarId']
+    
+    return standardized
+
+
+def standardize_draftkings(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Standardize DraftKings/generic CSV format.
+    
+    Adds defaults for Linestar-specific columns to maintain
+    compatibility across both data sources.
+    
+    Args:
+        df: Raw DraftKings DataFrame
+        
+    Returns:
+        pd.DataFrame: Standardized format with estimated values
+    """
+    standardized = df.copy()
+    
+    # Add Linestar-specific columns with estimated defaults
+    # (These will be overridden if they exist in the source data)
+    
+    if 'ceiling' not in standardized.columns:
+        # Estimate ceiling as 1.5x projection (rough GPP upside estimate)
+        if 'projection' in standardized.columns:
+            standardized['ceiling'] = standardized['projection'] * 1.5
+        elif 'Projection' in standardized.columns:
+            standardized['ceiling'] = standardized['Projection'] * 1.5
+    
+    if 'floor' not in standardized.columns:
+        # Estimate floor as 0.5x projection (rough downside estimate)
+        if 'projection' in standardized.columns:
+            standardized['floor'] = standardized['projection'] * 0.5
+        elif 'Projection' in standardized.columns:
+            standardized['floor'] = standardized['Projection'] * 0.5
+    
+    if 'consistency' not in standardized.columns:
+        # Default to 70 (neutral consistency score)
+        standardized['consistency'] = 70.0
+    
+    if 'ownership' not in standardized.columns:
+        # Default to 10% ownership (current behavior)
+        standardized['ownership'] = 10.0
+    
+    # Mark as non-Linestar source
+    standardized['linestar_id'] = None
+    
+    return standardized
 
 
 def parse_file(uploaded_file: Any) -> pd.DataFrame:
@@ -17,6 +151,10 @@ def parse_file(uploaded_file: Any) -> pd.DataFrame:
     
     Accepts CSV and Excel files, detects column names, and returns
     a standardized DataFrame with validated structure.
+    
+    Supports multiple data sources:
+    - Linestar (professional projections, ownership, ceiling/floor)
+    - DraftKings (standard CSV format)
     
     Args:
         uploaded_file: Streamlit UploadedFile object or file-like object
@@ -56,14 +194,21 @@ def parse_file(uploaded_file: Any) -> pd.DataFrame:
             f"Supported formats: CSV (.csv), Excel (.xlsx, .xls)"
         )
     
-    # 3. Detect and normalize column names
-    column_mapping = detect_columns(df)
-    df = df.rename(columns=column_mapping)
+    # 3. Detect data source (Linestar vs DraftKings) and standardize
+    df, data_source = detect_and_standardize_data_source(df)
     
-    # 4. Validate required columns present
+    # Store data source in DataFrame for UI display
+    df.attrs['data_source'] = data_source
+    
+    # 4. Detect and normalize column names (for non-Linestar sources)
+    if data_source != 'linestar':
+        column_mapping = detect_columns(df)
+        df = df.rename(columns=column_mapping)
+    
+    # 5. Validate required columns present
     validate_required_columns(df)
     
-    # 5. Convert data types
+    # 6. Convert data types
     df = convert_data_types(df)
     
     return df
