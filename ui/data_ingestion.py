@@ -112,10 +112,10 @@ def render_data_ingestion():
                         del st.session_state['data_summary']
             except Exception as e:
                 # If historical load fails, just clear the data
-            if 'player_data' in st.session_state:
-                del st.session_state['player_data']
-            if 'data_summary' in st.session_state:
-                del st.session_state['data_summary']
+                if 'player_data' in st.session_state:
+                    del st.session_state['player_data']
+                if 'data_summary' in st.session_state:
+                    del st.session_state['data_summary']
             
             st.rerun()
     
@@ -126,11 +126,11 @@ def render_data_ingestion():
     col_upload, col_fetch = st.columns([3, 1])
     
     with col_upload:
-    uploaded_file = st.file_uploader(
+        uploaded_file = st.file_uploader(
             "Upload file",
-        type=['csv', 'xlsx', 'xls'],
-        help="Upload CSV or Excel file with player data",
-        key="player_data_uploader",
+            type=['csv', 'xlsx', 'xls'],
+            help="Upload CSV or Excel file with player data",
+            key="player_data_uploader",
             label_visibility="collapsed"
         )
     
@@ -459,23 +459,23 @@ def display_success_message(summary: Dict[str, Any], is_from_auto_load: bool = F
     data_source = st.session_state.get('data_source', 'unknown')
     data_loaded_at = st.session_state.get('data_loaded_at')
     data_week = st.session_state.get('data_week', st.session_state.get('current_week', 7))
-                
-                # Calculate time ago
+    
+    # Calculate time ago
     last_updated_text = "recently"
     if data_loaded_at:
-                now = datetime.datetime.now()
+        now = datetime.datetime.now()
         diff = now - data_loaded_at
-                
-                if diff.days > 0:
-                    last_updated_text = f"{diff.days}d ago"
-                elif diff.seconds >= 3600:
-                    hours = diff.seconds // 3600
-                    last_updated_text = f"{hours}h ago"
-                elif diff.seconds >= 60:
-                    minutes = diff.seconds // 60
-                    last_updated_text = f"{minutes}m ago"
-                else:
-                    last_updated_text = "Just now"
+        
+        if diff.days > 0:
+            last_updated_text = f"{diff.days}d ago"
+        elif diff.seconds >= 3600:
+            hours = diff.seconds // 3600
+            last_updated_text = f"{hours}h ago"
+        elif diff.seconds >= 60:
+            minutes = diff.seconds // 60
+            last_updated_text = f"{minutes}m ago"
+        else:
+            last_updated_text = "Just now"
     
     # Build source-specific caption
     if data_source == 'api':
