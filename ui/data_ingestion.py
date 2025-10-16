@@ -180,14 +180,15 @@ def render_data_ingestion():
                         
                         # Display actual season/week from API response
                         if df_salaries is not None and not df_salaries.empty:
-                            api_season = df_salaries['api_season'].iloc[0] if 'api_season' in df_salaries.columns else 'unknown'
-                            api_week = df_salaries['api_week'].iloc[0] if 'api_week' in df_salaries.columns else 'unknown'
+                            api_season = df_salaries['api_season'].iloc[0] if 'api_season' in df_salaries.columns else '2025-2026-regular'
+                            api_week = df_salaries['api_week'].iloc[0] if 'api_week' in df_salaries.columns else selected_week
+                            slate_label = df_salaries['slate_label'].iloc[0] if 'slate_label' in df_salaries.columns else 'Unknown'
                             
-                            # Validate week matches
-                            if api_week != selected_week and api_week != 'unknown':
-                                st.warning(f"⚠️ Week mismatch: Requested Week {selected_week}, got Week {api_week}")
+                            # Validate week matches (only warn if API explicitly returned different week)
+                            if 'api_week' in df_salaries.columns and api_week != selected_week:
+                                st.warning(f"⚠️ Week mismatch: Requested Week {selected_week}, API returned Week {api_week}")
                             
-                            st.success(f"✅ Received: {api_season}, Week {api_week} ({len(df_salaries)} total players from API)")
+                            st.success(f"✅ {api_season}, Week {api_week} - Slate: '{slate_label}' ({len(df_salaries)} players)")
                         else:
                             st.info(f"📡 Requested: 2025-2026-regular/week/{selected_week}/dfs.json")
                         

@@ -256,10 +256,15 @@ class DFSSalariesAPIClient(BaseAPIClient):
             metadata['requested_week'] = week
             metadata['requested_season'] = season_str
             
+            # Use requested values if API doesn't provide them
+            actual_season = metadata.get('season') if metadata.get('season') != 'unknown' else season_str
+            actual_week = metadata.get('week') if metadata.get('week') else week
+            
             # Add metadata columns to DataFrame
             if not df.empty:
-                df['api_season'] = metadata.get('season', 'unknown')
-                df['api_week'] = metadata.get('week', week)
+                df['api_season'] = actual_season
+                df['api_week'] = actual_week
+                df['slate_label'] = metadata.get('slate_labels', ['unknown'])[0] if metadata.get('slate_labels') else 'unknown'
             
             # Cache result
             self._cache[cache_key] = (df, datetime.now())
@@ -350,38 +355,62 @@ class DFSSalariesAPIClient(BaseAPIClient):
             'season': 'unknown',
             'week': None,
             'slates_count': 0,
-            'players_count': 0
+            'players_count': 0,
+            'slate_labels': []
         }
         
         if 'sources' not in response_data:
+            self.logger.warning("No 'sources' in response for metadata extraction")
             return metadata
         
         for source in response_data.get('sources', []):
             if 'slates' not in source:
                 continue
             
-            metadata['slates_count'] = len(source.get('slates', []))
+            slates = source.get('slates', [])
+            metadata['slates_count'] = len(slates)
+            self.logger.info(f"Found {len(slates)} slates in response")
             
-            for slate in source.get('slates', []):
-                # Extract week from slate
-                if 'forWeek' in slate and slate['forWeek']:
-                    metadata['week'] = slate['forWeek']
+            for slate_idx, slate in enumerate(slates):
+                # Log all slate keys for debugging
+                if slate_idx == 0:
+                    self.logger.info(f"Slate keys available: {list(slate.keys())}")
+                
+                # Extract slate label
+                slate_label = slate.get('label', 'Unknown')
+                metadata['slate_labels'].append(slate_label)
+                
+                # Try multiple field names for week
+                week_value = (
+                    slate.get('forWeek') or
+                    slate.get('week') or
+                    slate.get('Week') or
+                    slate.get('weekNumber')
+                )
+                if week_value:
+                    metadata['week'] = int(week_value)
+                    self.logger.info(f"Found week: {week_value} in slate '{slate_label}'")
+                
+                # Try multiple field names for season
+                season_value = (
+                    slate.get('forSeason') or
+                    slate.get('season') or
+                    slate.get('Season')
+                )
+                if season_value:
+                    metadata['season'] = season_value
+                    self.logger.info(f"Found season: {season_value} in slate '{slate_label}'")
                 
                 # Count players
                 if 'players' in slate:
-                    metadata['players_count'] += len(slate['players'])
-                
-                # Try to extract season info if available
-                if 'forSeason' in slate:
-                    metadata['season'] = slate['forSeason']
-                
-                # If we found week info, we can break
-                if metadata['week']:
-                    break
+                    player_count = len(slate['players'])
+                    metadata['players_count'] += player_count
+                    if slate_idx == 0:
+                        self.logger.info(f"Slate '{slate_label}' has {player_count} players")
             
-            if metadata['week']:
-                break
+            break  # Only process first source
         
+        self.logger.info(f"Metadata extracted: season={metadata['season']}, week={metadata['week']}, players={metadata['players_count']}")
         return metadata
     
     def _parse_dfs_response(
