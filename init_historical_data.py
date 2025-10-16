@@ -89,13 +89,26 @@ def init_historical_data():
             'Cowboys': ('DAL', '20241013-DAL-PHI')
         }
         
+        # Default game assignment for unmapped players
+        default_games = [
+            '20241013-NO-NE', '20241013-SF-CLE', '20241013-TB-DET', 
+            '20241013-SEA-JAX', '20241013-LAR-LV', '20241013-ARI-LAC',
+            '20241013-DAL-PHI', '20241013-MIA-BUF', '20241013-GB-CIN', 
+            '20241013-CAR-DAL'
+        ]
+        
         inserted_count = 0
-        for player_name, dk_points in player_scores.items():
+        for i, (player_name, dk_points) in enumerate(player_scores.items()):
             # Clean player name (remove trailing spaces)
             player_name = player_name.strip()
             
-            # Try to find team mapping, fallback to generic
-            team, game_id = team_map.get(player_name, ('UNK', '20241013-UNK-UNK'))
+            # Try to find team mapping, fallback to default game assignment
+            if player_name in team_map:
+                team, game_id = team_map[player_name]
+            else:
+                # Assign to a default game to ensure all players are included
+                game_id = default_games[i % len(default_games)]
+                team = 'UNK'
             
             # Determine position based on common patterns
             if any(pos in player_name.lower() for pos in ['qb', 'quarterback']):
