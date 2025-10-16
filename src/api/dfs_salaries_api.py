@@ -224,14 +224,16 @@ class DFSSalariesAPIClient(BaseAPIClient):
                 self.logger.info(f"Using cached data for {site} Week {week} (cached {cached_at})")
                 return cached_data
         
-        # Extract year from season
-        # Handle both int (2024) and string ("2024" or "2024-2025-regular")
-        year = str(season).split('-')[0]  # "2024-2025-regular" → "2024", 2024 → "2024"
+        # Extract year from season and construct proper season string
+        # MySportsFeeds format: {start_year}-{end_year}-regular (e.g., "2025-2026-regular")
+        year = str(season).split('-')[0]  # "2024-2025-regular" → "2024", 2025 → "2025"
+        next_year = int(year) + 1
+        season_str = f"{year}-{next_year}-regular"
         
         # Fetch from API
-        endpoint = f"{year}-regular/week/{week}/dfs.json"
+        endpoint = f"{season_str}/week/{week}/dfs.json"
         params = {'dfstype': site}  # Filter by DFS site
-        self.logger.info(f"Fetching Week {week} salaries from MySportsFeeds for {site}...")
+        self.logger.info(f"Fetching Week {week} salaries from MySportsFeeds ({season_str}) for {site}...")
         
         try:
             response_data = self._make_request(endpoint, params=params)
@@ -284,14 +286,16 @@ class DFSSalariesAPIClient(BaseAPIClient):
         if not 1 <= week <= 18:
             raise ValueError(f"Invalid week {week}. Must be between 1 and 18.")
         
-        # Extract year from season (MySportsFeeds wants "2024-regular", not "2024-2025-regular")
-        # Handle both int (2024) and string ("2024" or "2024-2025-regular")
-        year = str(season).split('-')[0]  # "2024-2025-regular" → "2024", 2024 → "2024"
+        # Extract year from season and construct proper season string
+        # MySportsFeeds format: {start_year}-{end_year}-regular (e.g., "2025-2026-regular")
+        year = str(season).split('-')[0]  # "2025-2026-regular" → "2025", 2025 → "2025"
+        next_year = int(year) + 1
+        season_str = f"{year}-{next_year}-regular"
         
         # Construct endpoint
-        endpoint = f"{year}-regular/week/{week}/dfs.json"
+        endpoint = f"{season_str}/week/{week}/dfs.json"
         params = {'dfstype': site}  # Filter by DFS site
-        self.logger.info(f"Fetching historical salaries for {year} Week {week} ({site})...")
+        self.logger.info(f"Fetching historical salaries for {season_str} Week {week} ({site})...")
         
         try:
             response_data = self._make_request(endpoint, params=params)
