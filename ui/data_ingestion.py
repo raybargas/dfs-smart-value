@@ -63,11 +63,60 @@ def render_data_ingestion():
         # Update session state if week changed
         if selected_week != st.session_state.get('current_week', 7):
             st.session_state['current_week'] = selected_week
-            # Clear cached data when week changes
-            if 'player_data' in st.session_state:
-                del st.session_state['player_data']
-            if 'data_summary' in st.session_state:
-                del st.session_state['data_summary']
+            
+            # Try to load historical data for this week from database
+            try:
+                from historical_data_manager import HistoricalDataManager
+                import datetime
+                
+                manager = HistoricalDataManager()
+                historical_df = manager.load_historical_snapshot(
+                    week=selected_week,
+                    season=2024,
+                    site='DraftKings'
+                )
+                manager.close()
+                
+                if historical_df is not None and not historical_df.empty:
+                    # Found historical data for this week - load it
+                    summary = {
+                        'total_players': len(historical_df),
+                        'positions': historical_df['position'].value_counts().to_dict(),
+                        'salary_min': int(historical_df['salary'].min()),
+                        'salary_max': int(historical_df['salary'].max()),
+                        'salary_avg': int(historical_df['salary'].mean()),
+                        'teams': historical_df['team'].nunique()
+                    }
+                    
+                    # Get metadata from slate
+                    slate_meta = manager.get_slate_metadata(
+                        week=selected_week,
+                        season=2024,
+                        site='DraftKings'
+                    )
+                    
+                    st.session_state['player_data'] = historical_df
+                    st.session_state['data_summary'] = summary
+                    st.session_state['data_source'] = 'historical'
+                    st.session_state['data_week'] = selected_week
+                    
+                    if slate_meta and 'created_at' in slate_meta:
+                        st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
+                    
+                    st.info(f"📚 Loaded historical data for Week {selected_week}")
+                else:
+                    # No historical data - clear session
+                    if 'player_data' in st.session_state:
+                        del st.session_state['player_data']
+                    if 'data_summary' in st.session_state:
+                        del st.session_state['data_summary']
+            except Exception as e:
+                # If historical load fails, just clear the data
+                if 'player_data' in st.session_state:
+                    del st.session_state['player_data']
+                if 'data_summary' in st.session_state:
+                    del st.session_state['data_summary']
+            
             st.rerun()
     
     with col2:
@@ -101,8 +150,8 @@ def render_data_ingestion():
     
     with col_fetch:
         if st.button(
-            "🔄 Fetch Auto",
-            help="Fetch DFS salaries automatically from MySportsFeeds API",
+            "📡 Fetch from API",
+            help="Fetch DFS salaries from MySportsFeeds API for selected week",
             use_container_width=True,
             type="secondary"
         ):
@@ -217,10 +266,13 @@ def render_data_ingestion():
                                 'teams': df_salaries['team'].nunique()
                             }
                             
-                            # Store in session state
+                            # Store in session state with timestamp and week
+                            import datetime
                             st.session_state['player_data'] = df_salaries
                             st.session_state['data_summary'] = summary
                             st.session_state['data_source'] = 'api'
+                            st.session_state['data_loaded_at'] = datetime.datetime.now()
+                            st.session_state['data_week'] = selected_week
                             
                             st.success(f"✅ Fetched {len(df_salaries)} players from MySportsFeeds API!")
                             st.rerun()
@@ -284,9 +336,13 @@ def render_data_ingestion():
                 # Parse and validate
                 df, summary = load_and_validate_player_data(uploaded_file)
                 
-                # Store in session state
+                # Store in session state with metadata
+                import datetime
                 st.session_state['player_data'] = df
                 st.session_state['data_summary'] = summary
+                st.session_state['data_source'] = 'csv'
+                st.session_state['data_loaded_at'] = datetime.datetime.now()
+                st.session_state['data_week'] = selected_week
                 
                 # Save uploaded file as new default dataset (only if manually uploaded)
                 if is_manual_upload:
@@ -359,54 +415,54 @@ def render_data_ingestion():
 
 def display_success_message(summary: Dict[str, Any], is_from_auto_load: bool = False) -> None:
     """Display success message with player count - compact inline."""
+    import datetime
+    
     total = summary['total_players']
     position_breakdown = summary.get('position_breakdown', {})
     
     # Compact inline summary with position counts
     positions_text = " · ".join([f"{pos}: {count}" for pos, count in sorted(position_breakdown.items())])
     
-    # Get timestamp info from file (always try to read it)
-    import os
-    import datetime
-    last_updated_text = ""
+    # Get timestamp and source from session state (new method)
+    data_source = st.session_state.get('data_source', 'unknown')
+    data_loaded_at = st.session_state.get('data_loaded_at')
+    data_week = st.session_state.get('data_week', st.session_state.get('current_week', 7))
     
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    timestamp_file = os.path.join(current_dir, "..", "last_upload_timestamp.txt")
+    # Calculate time ago
+    last_updated_text = "recently"
+    if data_loaded_at:
+        now = datetime.datetime.now()
+        diff = now - data_loaded_at
+        
+        if diff.days > 0:
+            last_updated_text = f"{diff.days}d ago"
+        elif diff.seconds >= 3600:
+            hours = diff.seconds // 3600
+            last_updated_text = f"{hours}h ago"
+        elif diff.seconds >= 60:
+            minutes = diff.seconds // 60
+            last_updated_text = f"{minutes}m ago"
+        else:
+            last_updated_text = "Just now"
     
-    if os.path.exists(timestamp_file):
-        try:
-            with open(timestamp_file, 'r') as f:
-                timestamp_str = f.read().strip()
-                upload_time = datetime.datetime.fromisoformat(timestamp_str)
-                
-                # Calculate time ago
-                now = datetime.datetime.now()
-                diff = now - upload_time
-                
-                if diff.days > 0:
-                    last_updated_text = f"{diff.days}d ago"
-                elif diff.seconds >= 3600:
-                    hours = diff.seconds // 3600
-                    last_updated_text = f"{hours}h ago"
-                elif diff.seconds >= 60:
-                    minutes = diff.seconds // 60
-                    last_updated_text = f"{minutes}m ago"
-                else:
-                    last_updated_text = "Just now"
-        except:
-            last_updated_text = "recently"
+    # Build source-specific caption
+    if data_source == 'api':
+        source_icon = "📡"
+        source_text = f"Fetched from API · Week {data_week}"
+    elif data_source == 'csv':
+        source_icon = "📂"
+        source_text = f"CSV Upload · Week {data_week}"
+    elif data_source == 'historical':
+        source_icon = "📚"
+        source_text = f"Historical Data · Week {data_week}"
+    else:
+        source_icon = "💾"
+        source_text = f"Loaded · Week {data_week}"
     
     col1, col2 = st.columns([3, 1])
     with col1:
         st.success(f"✅ Loaded **{total} players** · {positions_text}")
-        if last_updated_text:
-            if is_from_auto_load:
-                st.caption(f"🕒 Dataset from {last_updated_text}")
-            else:
-                st.caption(f"💾 Saved as default dataset · {last_updated_text}")
-        else:
-            # Fallback if no timestamp file
-            st.caption("💾 Saved as default dataset · Just now")
+        st.caption(f"{source_icon} {source_text} · {last_updated_text}")
     with col2:
         if st.button("▶️ Continue", 
                      type="primary", 
