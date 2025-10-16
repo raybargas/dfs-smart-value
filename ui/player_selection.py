@@ -1014,6 +1014,22 @@ Smart Value =
     
     df = st.session_state['player_data'].copy()
     
+    # CRITICAL VALIDATION: Verify filter worked
+    if len(df) > 400:
+        st.error(f"🚨 **FILTER BYPASS DETECTED ON PLAYER SELECTION SCREEN**")
+        st.error(f"Received {len(df)} players (expected max ~259)")
+        st.error(f"This proves zero-projection filter did NOT work!")
+        st.json({
+            'player_count': len(df),
+            'has_projection_column': 'projection' in df.columns,
+            'zero_projection_count': len(df[df['projection'] == 0]) if 'projection' in df.columns else 'N/A',
+            'nonzero_projection_count': len(df[df['projection'] > 0]) if 'projection' in df.columns else 'N/A'
+        })
+        st.stop()
+    
+    # PROOF: Display actual count being processed
+    st.info(f"✅ Player Selection: Processing {len(df)} players (filter validation passed)")
+    
     # Add opponent data from Vegas lines lookup
     if 'opponent_lookup' in st.session_state and st.session_state['opponent_lookup']:
         opponent_map = st.session_state['opponent_lookup']

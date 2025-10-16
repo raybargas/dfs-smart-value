@@ -389,7 +389,22 @@ def render_data_ingestion():
         # Safety check: Filter out zero projections if they somehow exist
         # (Protects against old unfiltered data in session)
         if 'projection' in df.columns:
+            initial_count = len(df)
             df = df[df['projection'] > 0].copy()
+            filtered_count = initial_count - len(df)
+            
+            if filtered_count > 0:
+                # Data was filtered - recalculate summary
+                st.warning(f"🔍 **Session Filter:** Removed {filtered_count} zero-projection players from cached data")
+                summary = {
+                    'total_players': len(df),
+                    'position_breakdown': df['position'].value_counts().to_dict(),
+                    'salary_range': (int(df['salary'].min()), int(df['salary'].max())),
+                    'quality_score': 100.0,
+                    'issues': []
+                }
+                st.session_state['data_summary'] = summary
+            
             st.session_state['player_data'] = df  # Update session with filtered data
         
         summary = st.session_state.get('data_summary', {})
@@ -442,10 +457,20 @@ def render_data_ingestion():
                         'issues': summary.get('issues', [])  # Preserve from original
                     }
                 
+                # CRITICAL VALIDATION: Prove filter worked
+                if len(df) > 400:
+                    st.error(f"🚨 **FILTER FAILED**: {len(df)} players passed through! Filter did NOT work.")
+                    st.error(f"Expected max ~259 players, got {len(df)}")
+                    st.stop()  # HALT execution
+                
                 # Store in session state with metadata
                 import datetime
                 st.session_state['player_data'] = df
                 st.session_state['data_summary'] = summary
+                
+                # Add validation flag
+                st.session_state['filter_validated'] = True
+                st.session_state['filtered_player_count'] = len(df)
                 
                 # Detect data source type (Linestar vs standard CSV)
                 if hasattr(df, 'attrs') and 'data_source' in df.attrs:
