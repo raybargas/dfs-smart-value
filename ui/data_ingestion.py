@@ -64,7 +64,7 @@ def render_data_ingestion():
             
             manager = HistoricalDataManager()
             
-            # Generate slate_id (format: 2025-W7-DK-CLASSIC)
+            # Generate slate_id (format: 2025-W7-DK-CLASSIC) for 2025-2026 season
             slate_id = manager._generate_slate_id(
                 week=selected_week,
                 season=2025,
@@ -167,17 +167,29 @@ def render_data_ingestion():
                         fetch_start = time.time()
                         fetch_time_display = datetime.datetime.now().strftime("%I:%M:%S %p")
                         
-                        # Fetch salaries - use "current" to get whatever season MySportsFeeds has available
+                        # Fetch salaries - using 2025 season (2025-2026-regular)
                         df_salaries = fetch_salaries(
                             api_key=api_key,
                             week=selected_week,
-                            season='current',
+                            season=2025,
                             site='draftkings'
                         )
                         
                         fetch_duration = time.time() - fetch_start
                         st.info(f"⏱️ API call completed at {fetch_time_display} ({fetch_duration:.2f}s)")
-                        st.info(f"📡 Endpoint: current/week/{selected_week}/dfs.json")
+                        
+                        # Display actual season/week from API response
+                        if df_salaries is not None and not df_salaries.empty:
+                            api_season = df_salaries['api_season'].iloc[0] if 'api_season' in df_salaries.columns else 'unknown'
+                            api_week = df_salaries['api_week'].iloc[0] if 'api_week' in df_salaries.columns else 'unknown'
+                            
+                            # Validate week matches
+                            if api_week != selected_week and api_week != 'unknown':
+                                st.warning(f"⚠️ Week mismatch: Requested Week {selected_week}, got Week {api_week}")
+                            
+                            st.success(f"✅ Received: {api_season}, Week {api_week} ({len(df_salaries)} total players from API)")
+                        else:
+                            st.info(f"📡 Requested: 2025-2026-regular/week/{selected_week}/dfs.json")
                         
                         if df_salaries is not None and not df_salaries.empty:
                             # Filter to SUNDAY MAIN SLATE ONLY

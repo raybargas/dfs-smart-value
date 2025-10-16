@@ -248,13 +248,23 @@ class DFSSalariesAPIClient(BaseAPIClient):
         try:
             response_data = self._make_request(endpoint, params=params)
             
-            # Parse response
+            # Parse response and extract metadata
             df = self._parse_dfs_response(response_data, site)
+            
+            # Extract actual season/week from response for validation
+            metadata = self._extract_response_metadata(response_data)
+            metadata['requested_week'] = week
+            metadata['requested_season'] = season_str
+            
+            # Add metadata columns to DataFrame
+            if not df.empty:
+                df['api_season'] = metadata.get('season', 'unknown')
+                df['api_week'] = metadata.get('week', week)
             
             # Cache result
             self._cache[cache_key] = (df, datetime.now())
             
-            self.logger.info(f"✅ Fetched {len(df)} players for {site}")
+            self.logger.info(f"✅ Fetched {len(df)} players for {site} (Season: {metadata.get('season', 'unknown')}, Week: {metadata.get('week', week)})")
             return df
             
         except APIError as e:
@@ -319,6 +329,60 @@ class DFSSalariesAPIClient(BaseAPIClient):
         except APIError as e:
             self.logger.error(f"Failed to fetch historical salaries: {e}")
             raise
+    
+    def _extract_response_metadata(
+        self,
+        response_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Extract season and week metadata from MySportsFeeds response.
+        
+        MySportsFeeds includes season/week info in the response that we can use
+        to validate we got the correct data.
+        
+        Args:
+            response_data: Raw JSON response from API
+            
+        Returns:
+            Dictionary with 'season' and 'week' keys
+        """
+        metadata = {
+            'season': 'unknown',
+            'week': None,
+            'slates_count': 0,
+            'players_count': 0
+        }
+        
+        if 'sources' not in response_data:
+            return metadata
+        
+        for source in response_data.get('sources', []):
+            if 'slates' not in source:
+                continue
+            
+            metadata['slates_count'] = len(source.get('slates', []))
+            
+            for slate in source.get('slates', []):
+                # Extract week from slate
+                if 'forWeek' in slate and slate['forWeek']:
+                    metadata['week'] = slate['forWeek']
+                
+                # Count players
+                if 'players' in slate:
+                    metadata['players_count'] += len(slate['players'])
+                
+                # Try to extract season info if available
+                if 'forSeason' in slate:
+                    metadata['season'] = slate['forSeason']
+                
+                # If we found week info, we can break
+                if metadata['week']:
+                    break
+            
+            if metadata['week']:
+                break
+        
+        return metadata
     
     def _parse_dfs_response(
         self,
