@@ -313,92 +313,64 @@ def render_data_ingestion():
     # Track if this is a manual upload (from file uploader widget)
     is_manual_upload = uploaded_file is not None
     
-    # AUTO-LOAD DISABLED (manual upload only)
-    # To re-enable, uncomment the following block:
-    
-    # # Auto-load data on first visit (if no data in session and no manual upload)
-    # if 'player_data' not in st.session_state or st.session_state['player_data'] is None:
-    #     if not is_manual_upload and 'auto_loaded' not in st.session_state:
-    #         # PRIORITY 1: Try to load historical data for current week from database
-    #         db_load_success = False
-    #         db_error = None
-    #         
-    #         try:
-    #             from historical_data_manager import HistoricalDataManager
-    #             import datetime
-    #             
-    #             manager = HistoricalDataManager()
-    #             
-    #             # Generate slate_id (format: 2025-W7-DK-CLASSIC)
-    #             slate_id = manager._generate_slate_id(
-    #                 week=selected_week,
-    #                 season=2025,
-    #                 site='DraftKings',
-    #                 contest_type='Classic'
-    #             )
-    #             
-    #             # Load historical snapshot
-    #             historical_df = manager.load_historical_snapshot(
-    #                 slate_id=slate_id,
-    #                 include_actuals=False
-    #             )
-    #             manager.close()
-    #             
-    #             if historical_df is not None and not historical_df.empty:
-    #                 # Found historical data - load it
-    #                 summary = {
-    #                     'total_players': len(historical_df),
-    #                     'positions': historical_df['position'].value_counts().to_dict(),
-    #                     'salary_min': int(historical_df['salary'].min()),
-    #                     'salary_max': int(historical_df['salary'].max()),
-    #                     'salary_avg': int(historical_df['salary'].mean()),
-    #                     'teams': historical_df['team'].nunique()
-    #                 }
-    #                 
-    #                 # Get metadata
-    #                 manager2 = HistoricalDataManager()
-    #                 slate_meta = manager2.get_slate_metadata(
-    #                     slate_id=slate_id
-    #                 )
-    #                 manager2.close()
-    #                 
-    #                 st.session_state['player_data'] = historical_df
-    #                 st.session_state['data_summary'] = summary
-    #                 st.session_state['data_source'] = 'historical'
-    #                 st.session_state['data_week'] = selected_week
-    #                 
-    #                 if slate_meta and 'created_at' in slate_meta:
-    #                     st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
-    #                 
-    #                 st.session_state['auto_loaded'] = True
-    #                 db_load_success = True
-    #                 
-    #         except ValueError as e:
-    #             # Slate doesn't exist in database - this is normal, not an error
-    #             if "No data found" in str(e):
-    #                 db_error = f"No Week {selected_week} data in database yet"
-    #             else:
-    #                 db_error = str(e)
-    #         except Exception as e:
-    #             # Unexpected error - log it
-    #             db_error = f"Database error: {str(e)}"
-    #         
-    #         # PRIORITY 2: Fallback to old CSV file ONLY if database load failed or empty
-    #         if not db_load_success:
-    #             import os
-    #             import io
-    #             current_dir = os.path.dirname(os.path.abspath(__file__))
-    #             test_file_path = os.path.join(current_dir, "..", "DKSalaries_Week6_2025.xlsx")
-    #             
-    #             if os.path.exists(test_file_path):
-    #                 try:
-    #                     with open(test_file_path, 'rb') as f:
-    #                         file_content = f.read()
-    #                         uploaded_file = io.BytesIO(file_content)
-    #                         uploaded_file.name = "DKSalaries_Week6_2025.xlsx"
-    #                         st.session_state['auto_loaded'] = True
-    #                 except Exception:
-    #                     pass
+    # Auto-load data on first visit (if no data in session and no manual upload)
+    if 'player_data' not in st.session_state or st.session_state['player_data'] is None:
+        if not is_manual_upload and 'auto_loaded' not in st.session_state:
+            # Try to load historical data for current week from database
+            try:
+                from historical_data_manager import HistoricalDataManager
+                import datetime
+                
+                manager = HistoricalDataManager()
+                
+                # Generate slate_id (format: 2025-W7-DK-CLASSIC)
+                slate_id = manager._generate_slate_id(
+                    week=selected_week,
+                    season=2025,
+                    site='DraftKings',
+                    contest_type='Classic'
+                )
+                
+                # Load historical snapshot
+                historical_df = manager.load_historical_snapshot(
+                    slate_id=slate_id,
+                    include_actuals=False
+                )
+                
+                if historical_df is not None and not historical_df.empty:
+                    # Found historical data - load it
+                    summary = {
+                        'total_players': len(historical_df),
+                        'positions': historical_df['position'].value_counts().to_dict(),
+                        'salary_min': int(historical_df['salary'].min()),
+                        'salary_max': int(historical_df['salary'].max()),
+                        'salary_avg': int(historical_df['salary'].mean()),
+                        'teams': historical_df['team'].nunique()
+                    }
+                    
+                    # Get metadata
+                    slate_meta = manager.get_slate_metadata(slate_id=slate_id)
+                    manager.close()
+                    
+                    st.session_state['player_data'] = historical_df
+                    st.session_state['data_summary'] = summary
+                    st.session_state['data_source'] = 'historical'
+                    st.session_state['data_week'] = selected_week
+                    
+                    if slate_meta and 'created_at' in slate_meta:
+                        st.session_state['data_loaded_at'] = datetime.datetime.fromisoformat(slate_meta['created_at'])
+                    
+                    st.session_state['auto_loaded'] = True
+                    st.info(f"📚 Loaded saved data for Week {selected_week}")
+                else:
+                    manager.close()
+                    
+            except ValueError:
+                # Slate doesn't exist in database - normal, user needs to upload
+                pass
+            except Exception:
+                # Unexpected error - silently fail, user can upload manually
+                pass
     
     # Check if we already have loaded data and should just display it
     if 'player_data' in st.session_state and st.session_state['player_data'] is not None and uploaded_file is None:
@@ -481,6 +453,59 @@ def render_data_ingestion():
                         # Show error but don't fail the upload
                         st.warning(f"⚠️ Could not save as default dataset: {save_error}")
                         st.session_state['manual_upload_saved'] = False
+                
+                # Save to database for historical tracking (if manually uploaded)
+                if is_manual_upload:
+                    try:
+                        from historical_data_manager import HistoricalDataManager
+                        
+                        manager = HistoricalDataManager()
+                        
+                        # Generate slate_id for the selected week
+                        slate_id = manager._generate_slate_id(
+                            week=selected_week,
+                            season=2025,
+                            site='DraftKings',
+                            contest_type='Classic'
+                        )
+                        
+                        # Delete existing slate if present (allows overwrite with fresh data)
+                        try:
+                            manager.delete_slate(slate_id)
+                        except:
+                            pass  # Slate doesn't exist yet, that's fine
+                        
+                        # Extract games from data (if opponent column exists)
+                        games = []
+                        if 'opponent' in df.columns:
+                            teams = df['team'].unique().tolist()
+                            for i in range(0, len(teams), 2):
+                                if i + 1 < len(teams):
+                                    games.append(f"{teams[i]}@{teams[i+1]}")
+                        
+                        # Create slate
+                        slate_id = manager.create_slate(
+                            week=selected_week,
+                            season=2025,
+                            site='DraftKings',
+                            contest_type='Classic',
+                            games=games
+                        )
+                        
+                        # Store player pool snapshot
+                        manager.store_player_pool_snapshot(
+                            slate_id=slate_id,
+                            player_data=df,
+                            smart_value_profile=None,
+                            projection_source='csv_upload',
+                            ownership_source='csv_upload'
+                        )
+                        
+                        manager.close()
+                        st.success(f"💾 Saved Week {selected_week} data to database")
+                    except Exception as db_error:
+                        # Non-fatal error - data still loaded in session
+                        st.info(f"ℹ️ Could not save to database: {str(db_error)}")
                 
                 # Build opponent lookup from Vegas lines for selected week
                 # This creates a clean team -> opponent mapping
