@@ -122,20 +122,6 @@ def render_data_ingestion():
     with col2:
         st.caption(f"📅 Analyzing Week {selected_week} data")
     
-    # Upload section with auto-fetch option
-    st.markdown("""
-    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
-        <div style="flex: 1;">
-            <p style="margin: 0; font-weight: 600; color: #1f2937;">
-                📂 Upload Player Data
-            </p>
-            <p style="margin: 0; font-size: 0.875rem; color: #6b7280;">
-                Upload CSV/Excel or fetch automatically from MySportsFeeds
-            </p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
     # Two-column layout: Upload or Auto-Fetch
     col_upload, col_fetch = st.columns([3, 1])
     
