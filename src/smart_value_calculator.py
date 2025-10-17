@@ -898,9 +898,7 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df['_pos_min'] = df.groupby('position')['smart_value_raw'].transform('min')
         df['_pos_max'] = df.groupby('position')['smart_value_raw'].transform('max')
         
-        # Calculate position-specific 0-100 scores
-        
-        # FIX: Use transform() instead of apply() + reset_index() to preserve index alignment
+        # Calculate position-specific 0-100 scores using transform() to preserve index alignment
         def scale_position_transform(group):
             group_min = group.min()
             group_max = group.max()
