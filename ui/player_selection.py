@@ -1106,6 +1106,10 @@ Smart Value =
             # Get current week for Vegas lines lookup
             current_week = st.session_state.get('current_week', 7)
             df = calculate_smart_value(df, profile='balanced', custom_weights=custom_weights, position_weights=position_weights, sub_weights=sub_weights, week=current_week)
+            
+            # DEBUG: Check what's actually in smart_value column
+            st.info(f"🐛 DEBUG: Sample smart_value column values:\n{df[['name', 'position', 'smart_value', 'smart_value_global']].head(10).to_string()}")
+            
             st.session_state['smart_value_data'] = df
             st.session_state['smart_value_calculated'] = True
     else:
