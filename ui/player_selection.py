@@ -1232,12 +1232,19 @@ Smart Value =
                     else:
                         st.session_state['selections'][player_key] = PlayerSelection.NORMAL.value
                 
-                # Write debug log to file
+                # Write debug log to file (only if writable - skip on cloud)
                 if debug_log:
-                    with open('/Users/raybargas/Desktop/Gauntlet_Flow/DFS/filter_debug.txt', 'w') as f:
-                        f.write(f"Threshold: {smart_threshold}\n")
-                        f.write(f"RB Filtering Results:\n")
-                        f.write("\n".join(debug_log))
+                    try:
+                        import tempfile
+                        import os
+                        # Use temp directory that works on both local and cloud
+                        debug_file = os.path.join(tempfile.gettempdir(), 'dfs_filter_debug.txt')
+                        with open(debug_file, 'w') as f:
+                            f.write(f"Threshold: {smart_threshold}\n")
+                            f.write(f"RB Filtering Results:\n")
+                            f.write("\n".join(debug_log))
+                    except:
+                        pass  # Silently fail on Streamlit Cloud if can't write
                 
                 # Store to player_selections as well for navigation
                 st.session_state['player_selections'] = st.session_state['selections'].copy()
