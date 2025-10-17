@@ -898,6 +898,10 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
         df['_pos_min'] = df.groupby('position')['smart_value_raw'].transform('min')
         df['_pos_max'] = df.groupby('position')['smart_value_raw'].transform('max')
         
+        # DIAGNOSTIC: Log DataFrame state before groupby
+        print(f"🔍 DIAGNOSTIC: DataFrame indices before groupby: {df.index.tolist()[:10]}...")
+        print(f"🔍 DIAGNOSTIC: DataFrame shape: {df.shape}")
+        
         # Calculate position-specific 0-100 scores
         def scale_position_group(group):
             group_min = group['smart_value_raw'].min()
@@ -909,9 +913,21 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
                 # If all scores in position are the same, set to 50
                 scaled_values = pd.Series([50.0] * len(group), index=group.index)
             
+            # DIAGNOSTIC: Log what scale_position_group returns
+            print(f"🔍 DIAGNOSTIC: Position {group['position'].iloc[0]} group indices: {group.index.tolist()}")
+            print(f"🔍 DIAGNOSTIC: Position {group['position'].iloc[0]} scaled values: {scaled_values.tolist()}")
+            
             return scaled_values
         
-        df['smart_value'] = df.groupby('position', group_keys=False).apply(scale_position_group).reset_index(drop=True)
+        # DIAGNOSTIC: Capture result before reset_index
+        position_scaled = df.groupby('position', group_keys=False).apply(scale_position_group)
+        print(f"🔍 DIAGNOSTIC: Result indices before reset_index: {position_scaled.index.tolist()[:10]}...")
+        
+        # DIAGNOSTIC: Capture result after reset_index
+        position_scaled_reset = position_scaled.reset_index(drop=True)
+        print(f"🔍 DIAGNOSTIC: Result indices after reset_index: {position_scaled_reset.index.tolist()[:10]}...")
+        
+        df['smart_value'] = position_scaled_reset
     else:
         # Fallback: global scaling if no position column
         df['_pos_min'] = df['smart_value_raw'].min()
@@ -937,6 +953,45 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
     # Round both scores for cleaner display
     df['smart_value'] = df['smart_value'].round(1)
     df['smart_value_global'] = df['smart_value_global'].round(1)
+    
+    # DIAGNOSTIC: Validate Position SV consistency
+    def validate_position_sv_consistency(df):
+        """
+        Verify that Position SV rankings match Global SV rankings within each position.
+        If player A has higher Global SV than player B in same position,
+        player A MUST have higher Position SV.
+        """
+        print("🔍 DIAGNOSTIC: Validating Position SV consistency...")
+        
+        for position in df['position'].unique():
+            pos_df = df[df['position'] == position].sort_values('smart_value_global', ascending=False)
+            
+            if len(pos_df) < 2:
+                continue
+                
+            # Check if Position SV is also descending
+            pos_sv_values = pos_df['smart_value'].tolist()
+            global_sv_values = pos_df['smart_value_global'].tolist()
+            
+            print(f"🔍 DIAGNOSTIC: {position} rankings:")
+            for i, (idx, row) in enumerate(pos_df.iterrows()):
+                print(f"  {i+1}. {row['name']}: Global SV={row['smart_value_global']:.1f}, Pos SV={row['smart_value']:.1f}")
+            
+            # Check for ranking mismatches
+            for i in range(len(pos_sv_values) - 1):
+                if pos_sv_values[i] < pos_sv_values[i+1]:
+                    print(f"🚨 BUG DETECTED: Position {position} ranking mismatch!")
+                    print(f"   Player {i+1} has higher Global SV ({global_sv_values[i]:.1f} > {global_sv_values[i+1]:.1f})")
+                    print(f"   But LOWER Position SV ({pos_sv_values[i]:.1f} < {pos_sv_values[i+1]:.1f})")
+                    return False, f"Position {position}: Ranking mismatch detected"
+        
+        print("✅ DIAGNOSTIC: Position SV rankings are consistent")
+        return True, "Position SV rankings are consistent"
+    
+    # Run validation
+    is_consistent, message = validate_position_sv_consistency(df)
+    if not is_consistent:
+        print(f"🚨 CRITICAL BUG: {message}")
     
     # Build tooltip breakdown
     def build_tooltip(row):
