@@ -447,24 +447,30 @@ def get_player_pool() -> pd.DataFrame:
         st.info("💡 **Tip:** Click 'Player Pool Selection' in the sidebar to reload the enriched data.")
         st.stop()
     
+    # Create player key column if it doesn't exist (for backward compatibility)
+    if '_player_key' not in df.columns:
+        df['_player_key'] = df['name'] + '_' + df['team']
+    
     selections = st.session_state['selections']
     
-    # Get indices of players in pool (EXCLUDED = eligible, LOCKED = must include)
+    # Get player keys of players in pool (EXCLUDED = eligible, LOCKED = must include)
     # Note: EXCLUDED is repurposed to mean "in pool, eligible"
-    pool_indices = [idx for idx, state in selections.items() 
-                    if state in [PlayerSelection.EXCLUDED.value, PlayerSelection.LOCKED.value]]
+    selected_player_keys = [key for key, state in selections.items() 
+                           if state in [PlayerSelection.EXCLUDED.value, PlayerSelection.LOCKED.value]]
     
-    if not pool_indices:
+    if not selected_player_keys:
         return pd.DataFrame()  # Empty pool
     
-    pool_df = df.loc[pool_indices].copy()
+    # Filter df by player keys instead of indices
+    pool_df = df[df['_player_key'].isin(selected_player_keys)].copy()
     
     # Ensure opponent column exists (fallback for cached data)
     if 'opponent' not in pool_df.columns:
         pool_df['opponent'] = "-"
     
     # Add selection state to the DataFrame so optimizer knows which are locked
-    pool_df['selection_state'] = pool_df.index.map(selections)
+    # Map using player_key instead of index
+    pool_df['selection_state'] = pool_df['_player_key'].map(selections)
     
     return pool_df
 

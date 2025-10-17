@@ -771,7 +771,7 @@ def render_player_selection():
                 )
                 opp_rz = st.slider(
                     "RZ Targets",
-                    0.0, 1.0, st.session_state['smart_value_sub_weights']['opp_redzone'],
+                    0.0, 1.0, st.session_state['smart_value_sub_weights'].get('opp_rz_targets', st.session_state['smart_value_sub_weights'].get('opp_redzone', 0.20)),
                     0.05, key='opp_rz_slider',
                     help="Weight for red zone targets in Opportunity score"
                 )
@@ -829,7 +829,7 @@ def render_player_selection():
                 st.session_state['smart_value_sub_weights'] = {
                     'opp_target_share': opp_tgt / opp_total if opp_total > 0 else 0.60,
                     'opp_snap_pct': opp_snap / opp_total if opp_total > 0 else 0.30,
-                    'opp_redzone': opp_rz / opp_total if opp_total > 0 else 0.20,
+                    'opp_rz_targets': opp_rz / opp_total if opp_total > 0 else 0.20,  # Changed from 'opp_redzone' to match smart_value_calculator.py
                     'trend_momentum': trends_mom / trends_total if trends_total > 0 else 0.40,
                     'trend_role_growth': trends_trend / trends_total if trends_total > 0 else 0.35,
                     'trend_recent_fp': trends_fpg / trends_total if trends_total > 0 else 0.25,
@@ -1130,9 +1130,19 @@ Smart Value =
     # Store enriched data (with opponents + DFS metrics + season stats + smart value + injury flags) for optimizer
     st.session_state['enriched_player_data'] = df.copy()
     
-    # Initialize selections if not exists
+    # Create unique player keys (name_team) for stable selection tracking
+    # This prevents index mismatch issues when data is cached/sorted
+    df['_player_key'] = df['name'] + '_' + df['team']
+    
+    # Initialize selections if not exists - use player keys instead of DataFrame index
     if 'selections' not in st.session_state:
-        st.session_state['selections'] = {idx: PlayerSelection.NORMAL.value for idx in df.index}
+        st.session_state['selections'] = {row['_player_key']: PlayerSelection.NORMAL.value for idx, row in df.iterrows()}
+    
+    # Ensure all current players have selection state (handles new data loads)
+    for idx, row in df.iterrows():
+        player_key = row['_player_key']
+        if player_key not in st.session_state['selections']:
+            st.session_state['selections'][player_key] = PlayerSelection.NORMAL.value
     
     selections = st.session_state['selections']
     
@@ -1142,15 +1152,15 @@ Smart Value =
         Check if selected players meet minimum DFS roster requirements.
         Returns: (is_valid, error_message)
         """
-        # Get selected player indices (EXCLUDED or LOCKED)
-        selected_indices = [idx for idx, state in selections.items() 
-                          if state in [PlayerSelection.EXCLUDED.value, PlayerSelection.LOCKED.value]]
+        # Get selected players by player key (EXCLUDED or LOCKED)
+        selected_player_keys = [key for key, state in selections.items() 
+                               if state in [PlayerSelection.EXCLUDED.value, PlayerSelection.LOCKED.value]]
         
-        if not selected_indices:
+        if not selected_player_keys:
             return False, "No players selected. Please add players to your pool."
         
-        # Count positions for selected players
-        selected_players = df.loc[selected_indices]
+        # Count positions for selected players - filter by player keys
+        selected_players = df[df['_player_key'].isin(selected_player_keys)]
         position_counts = selected_players['position'].value_counts().to_dict()
         
         # DFS roster minimum requirements (DraftKings format)
@@ -1204,13 +1214,14 @@ Smart Value =
                 # Store threshold for next run
                 st.session_state['last_threshold'] = smart_threshold
                 
-                # Select players at or above threshold
-                for idx in df.index:
-                    player_smart_value = df.loc[idx, 'smart_value'] if 'smart_value' in df.columns else 0
+                # Select players at or above threshold - use player_key instead of index
+                for idx, row in df.iterrows():
+                    player_key = row['_player_key']
+                    player_smart_value = row['smart_value'] if 'smart_value' in df.columns else 0
                     if player_smart_value >= smart_threshold:
-                        st.session_state['selections'][idx] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
+                        st.session_state['selections'][player_key] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
                     else:
-                        st.session_state['selections'][idx] = PlayerSelection.NORMAL.value
+                        st.session_state['selections'][player_key] = PlayerSelection.NORMAL.value
                 
                 # Store to player_selections as well for navigation
                 st.session_state['player_selections'] = st.session_state['selections'].copy()
@@ -1227,7 +1238,8 @@ Smart Value =
     with col2:
         st.markdown('<div style="padding-top: 1.5rem;">', unsafe_allow_html=True)
         if st.button("✕ Clear", use_container_width=True, key="deselect_all", help="Deselect all players"):
-            st.session_state['selections'] = {idx: PlayerSelection.NORMAL.value for idx in df.index}
+            # Clear all selections - use player keys
+            st.session_state['selections'] = {row['_player_key']: PlayerSelection.NORMAL.value for idx, row in df.iterrows()}
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1272,12 +1284,11 @@ Smart Value =
     locked_count = sum(1 for s in selections.values() if s == PlayerSelection.LOCKED.value)
     in_pool_count = sum(1 for s in selections.values() if s != PlayerSelection.NORMAL.value)
     
-    # Debug: Show position counts
-    selected_indices = [idx for idx, state in selections.items() 
-                       if state in [PlayerSelection.EXCLUDED.value, PlayerSelection.LOCKED.value]]
-    if selected_indices:
-        selected_df = df.loc[selected_indices]
-        pos_counts = selected_df['position'].value_counts().to_dict()
+    # Debug: Show position counts - filter by player keys now
+    selected_players = df[df['_player_key'].isin([key for key, state in selections.items() 
+                                                    if state in [PlayerSelection.EXCLUDED.value, PlayerSelection.LOCKED.value]])]
+    if len(selected_players) > 0:
+        pos_counts = selected_players['position'].value_counts().to_dict()
         pos_summary = " | ".join([f"{pos}: {count}" for pos, count in sorted(pos_counts.items())])
     else:
         pos_summary = "None selected"
@@ -1293,7 +1304,8 @@ Smart Value =
     # Prepare data for AgGrid
     display_data = []
     for idx, row in df.iterrows():
-        current_selection = selections.get(idx, PlayerSelection.NORMAL.value)
+        player_key = row['_player_key']
+        current_selection = selections.get(player_key, PlayerSelection.NORMAL.value)
         is_in_pool = current_selection != PlayerSelection.NORMAL.value
         is_locked = current_selection == PlayerSelection.LOCKED.value
         
@@ -1781,21 +1793,28 @@ Smart Value =
             is_in_pool = row['Pool']
             is_locked = row['Lock']
             
+            # Get player_key from the original df using the stored index
+            if idx in df.index:
+                player_key = df.loc[idx, '_player_key']
+            else:
+                # Fallback: construct key from row data
+                player_key = f"{row['Player']}_{row['Team']}"
+            
             # If Lock is checked but Pool isn't, we need to auto-check Pool
             if is_locked and not is_in_pool:
                 is_in_pool = True
                 needs_rerun = True  # Trigger rerun to update UI
             
-            # Update selection state
+            # Update selection state using player_key
             if is_locked:
                 # Locked players are automatically in pool
-                selections[idx] = PlayerSelection.LOCKED.value
+                selections[player_key] = PlayerSelection.LOCKED.value
             elif is_in_pool:
                 # In pool but not locked - use EXCLUDED as "eligible" marker
-                selections[idx] = PlayerSelection.EXCLUDED.value
+                selections[player_key] = PlayerSelection.EXCLUDED.value
             else:
                 # Not in pool at all
-                selections[idx] = PlayerSelection.NORMAL.value
+                selections[player_key] = PlayerSelection.NORMAL.value
         
         # Rerun if we auto-checked any Pool checkboxes
         if needs_rerun:
