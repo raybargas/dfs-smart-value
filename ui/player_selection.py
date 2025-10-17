@@ -1215,20 +1215,41 @@ Smart Value =
                 st.session_state['last_threshold'] = smart_threshold
                 
                 # Select players at or above threshold - use player_key instead of index
+                # DEBUG: Log RB filtering to file to see what's happening
+                import os
+                debug_log = []
                 for idx, row in df.iterrows():
                     player_key = row['_player_key']
                     player_smart_value = row['smart_value'] if 'smart_value' in df.columns else 0
+                    
+                    # Log RBs for debugging
+                    if row['position'] == 'RB':
+                        global_sv = row.get('smart_value_global', 0)
+                        debug_log.append(f"{row['name']}: Pos SV={player_smart_value:.1f}, Global SV={global_sv:.1f}, Pass={player_smart_value >= smart_threshold}")
+                    
                     if player_smart_value >= smart_threshold:
                         st.session_state['selections'][player_key] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
                     else:
                         st.session_state['selections'][player_key] = PlayerSelection.NORMAL.value
                 
+                # Write debug log to file
+                if debug_log:
+                    with open('/Users/raybargas/Desktop/Gauntlet_Flow/DFS/filter_debug.txt', 'w') as f:
+                        f.write(f"Threshold: {smart_threshold}\n")
+                        f.write(f"RB Filtering Results:\n")
+                        f.write("\n".join(debug_log))
+                
                 # Store to player_selections as well for navigation
                 st.session_state['player_selections'] = st.session_state['selections'].copy()
                 
-                # Show success message
+                # Show success message with debug info
                 selected_count = sum(1 for s in st.session_state['selections'].values() if s != PlayerSelection.NORMAL.value)
                 st.success(f"✅ Selected {selected_count} players with Position SV ≥ {smart_threshold}")
+                
+                # DEBUG: Show sample of what was filtered (RBs only)
+                if debug_log:
+                    with st.expander("🐛 DEBUG: RB Filtering Details (click to see Position SV vs Global SV)", expanded=True):
+                        st.code("\n".join(debug_log[:15]))
                 
                 # CRITICAL: Rerun to update AgGrid with new selections
                 st.rerun()
@@ -1528,8 +1549,21 @@ Smart Value =
                         tooltipField="Smart_Value_Tooltip",
                         headerTooltip="SMART VALUE SCORE 🧠 - Ranks players ACROSS ALL POSITIONS for cross-position comparison. Combines value, opportunity, leverage, matchup, and game script intelligence. A QB with 90 Smart Value is comparable to an RB with 90 Smart Value in actual tournament impact. Higher = Better overall DFS value. Sort by this column to find true tournament-winning plays. NOTE: Position-specific Smart Value (used for filters) is calculated separately but hidden from this view.")
     
-    # Hide Position SV - only needed for backend filtering, not user display
-    gb.configure_column("Pos SV", hide=True)
+    # UNHIDE Position SV - show both for debugging the filtering issue
+    gb.configure_column("Pos SV", 
+                        header_name="Pos SV",
+                        type=["numericColumn"],
+                        valueFormatter="value ? value.toFixed(0) : ''",
+                        filter="agNumberColumnFilter",
+                        filterParams=filter_config,
+                        menuTabs=menu_tabs,
+                        width=90,
+                        cellStyle={
+                            'textAlign': 'center',
+                            'fontWeight': '600',
+                            'color': '#fbbf24'  # Amber text to differentiate
+                        },
+                        headerTooltip="POSITION SMART VALUE - Ranks within position ONLY. The threshold slider filters by THIS value, not Global SV!")
     
     # Hide "Rank" column - no longer needed with Smart Value
     gb.configure_column("Rank", hide=True)
