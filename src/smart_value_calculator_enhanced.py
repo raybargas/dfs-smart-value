@@ -17,21 +17,44 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Copy all the existing constants and helper functions from original
-from smart_value_calculator import (
+from .smart_value_calculator import (
     TEAM_ABBREV_TO_FULL,
     PROJECTION_GATES,
     WEIGHT_PROFILES,
     get_ceiling_boost_multiplier,
     min_max_scale_by_position,
+    calculate_base_score,
+    calculate_opportunity_score,
     calculate_trends_score,
     calculate_risk_score,
     calculate_matchup_score,
     calculate_leverage_score,
     calculate_regression_score,
-    calculate_anti_chalk_penalty,
-    calculate_smart_value,
     get_available_profiles
 )
+
+
+def calculate_anti_chalk_penalty(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate anti-chalk penalty to reduce ownership of highly owned players.
+    
+    Args:
+        df: Player DataFrame with 'ownership' column
+        
+    Returns:
+        DataFrame with 'chalk_penalty' column (negative values)
+    """
+    df['chalk_penalty'] = 0.0
+    
+    if 'ownership' in df.columns:
+        # Penalty increases with ownership above 20%
+        high_ownership = df['ownership'] > 20.0
+        if high_ownership.any():
+            penalty = (df['ownership'] - 20.0) / 80.0  # Scale 20-100% to 0-1
+            penalty = penalty.clip(0, 1)  # Cap at 1
+            df.loc[high_ownership, 'chalk_penalty'] = -penalty * 5.0  # Max -5 penalty
+    
+    return df
 
 
 def calculate_base_score_enhanced(df: pd.DataFrame, weight: float) -> pd.DataFrame:
@@ -360,8 +383,7 @@ def calculate_smart_value_enhanced(
         opp_func = calculate_opportunity_score_enhanced
         risk_func = calculate_risk_score_enhanced
     else:
-        # Import original functions (would need to be exposed from smart_value_calculator)
-        from smart_value_calculator import calculate_base_score, calculate_opportunity_score, calculate_risk_score
+        # Use original functions (already imported)
         base_func = calculate_base_score
         opp_func = calculate_opportunity_score
         risk_func = calculate_risk_score
@@ -392,8 +414,8 @@ def calculate_smart_value_enhanced(
             pos_df = base_func(pos_df, pos_weights['base'])
             pos_df = opp_func(pos_df, pos_weights['opportunity'], sub_weights)
             pos_df = calculate_trends_score(pos_df, pos_weights['trends'], sub_weights)
-            pos_df = risk_func(pos_df, pos_weights['risk'], sub_weights)
-            pos_df = calculate_matchup_score(pos_df, pos_weights['matchup'], week)
+            pos_df = risk_func(pos_df, pos_weights['risk'])
+            pos_df = calculate_matchup_score(pos_df, pos_weights['matchup'], None, week)
             pos_df = calculate_leverage_score(pos_df, pos_weights.get('leverage', 0.15))
             pos_df = calculate_regression_score(pos_df, pos_weights.get('regression', 0.05))
 
@@ -405,8 +427,8 @@ def calculate_smart_value_enhanced(
         df = base_func(df, weights['base'])
         df = opp_func(df, weights['opportunity'], sub_weights)
         df = calculate_trends_score(df, weights['trends'], sub_weights)
-        df = risk_func(df, weights['risk'], sub_weights)
-        df = calculate_matchup_score(df, weights['matchup'], week)
+        df = risk_func(df, weights['risk'])
+        df = calculate_matchup_score(df, weights['matchup'], None, week)
         df = calculate_leverage_score(df, weights.get('leverage', 0.15))
         df = calculate_regression_score(df, weights.get('regression', 0.05))
 

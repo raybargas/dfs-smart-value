@@ -20,7 +20,8 @@ from src.models import PlayerSelection
 from src.regression_analyzer import check_regression_risk, check_regression_risk_batch
 from src.opponent_lookup import add_opponents_to_dataframe
 from src.season_stats_analyzer import analyze_season_stats, format_trend_display, format_consistency_display, format_momentum_display, format_variance_display
-from src.smart_value_calculator import calculate_smart_value, get_available_profiles
+from src.smart_value_calculator import get_available_profiles
+from src.smart_value_calculator_enhanced import calculate_smart_value_enhanced as calculate_smart_value
 from src.profile_manager import (
     load_profiles, save_profile_config, get_profile_config, 
     validate_config, get_profile_display_name, ALL_PROFILES,
