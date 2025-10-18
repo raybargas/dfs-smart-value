@@ -171,13 +171,27 @@ def _generate_single_lineup(
         for player in players
     }
     
-    # Objective function: Maximize projected fantasy points
-    # Note: Smart Value should be used to FILTER the player pool before calling this function,
-    # not as an optimization objective (position-specific scaling makes it incompatible 
-    # with cross-position LP optimization)
-    prob += pulp.lpSum([
-        player_vars[p.name] * p.projection for p in players
-    ]), "Total_Projection"
+    # Objective function: Weighted combination of projections and Smart Value
+    # This allows Smart Value configuration changes to directly impact lineup generation
+    # Weight can be adjusted based on strategy: 0.7/0.3 = projection-focused, 0.5/0.5 = balanced
+    
+    # Check if players have Smart Value scores
+    players_with_sv = [p for p in players if hasattr(p, 'smart_value') and p.smart_value is not None]
+    
+    if len(players_with_sv) == len(players):
+        # All players have Smart Value - use weighted objective
+        projection_weight = 0.7  # 70% weight on projections
+        smart_value_weight = 0.3  # 30% weight on Smart Value
+        
+        prob += pulp.lpSum([
+            player_vars[p.name] * (p.projection * projection_weight + p.smart_value * smart_value_weight) 
+            for p in players
+        ]), "Weighted_Projection_SmartValue"
+    else:
+        # Fallback: some players missing Smart Value - use projection only
+        prob += pulp.lpSum([
+            player_vars[p.name] * p.projection for p in players
+        ]), "Total_Projection"
     
     # Constraint 1: Salary cap ($50,000)
     prob += pulp.lpSum([
@@ -402,6 +416,25 @@ def _generate_single_lineup(
     # expressions which PuLP cannot handle (requires quadratic programming).
     # The strengthened game stack constraint (3+ from same game) enforces
     # cohesion sufficiently.
+    
+    # Constraint 9: MAX PLAYERS PER TEAM (Prevent over-stacking)
+    # Limit to maximum 3 offensive players from any single team
+    # This prevents excessive team concentration (e.g. QB + 3 WRs from same team)
+    # while still allowing beneficial stacking (QB + 2 pass catchers)
+    # NOTE: DST is excluded from this count as team defense stacks are a separate strategy
+    team_groups = {}
+    for player in players:
+        # Only count offensive players (exclude DST/D/ST/DEF)
+        if player.position not in ['DST', 'D/ST', 'DEF']:
+            if player.team not in team_groups:
+                team_groups[player.team] = []
+            team_groups[player.team].append(player)
+    
+    # Apply constraint: No more than 3 offensive players from any team
+    for team, team_players in team_groups.items():
+        if len(team_players) > 0:  # Only add constraint if team has players
+            prob += pulp.lpSum([player_vars[p.name] for p in team_players]) <= 3, \
+                   f"Max_3_Offensive_From_{team.replace(' ', '_').replace('/', '_')}"
     
     # Solve the LP problem using CBC solver (suppress output)
     status = prob.solve(pulp.PULP_CBC_CMD(msg=0))

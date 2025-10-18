@@ -12,7 +12,7 @@
     "sub_weights": {
       "opp_target_share": 0.4,
       "opp_snap_pct": 0.3,
-      "opp_redzone": 0.2,
+      "opp_rz_targets": 0.2,
       "opp_air_yards": 0.1,
       "trend_momentum": 0.4,
       "trend_role_growth": 0.35,
@@ -41,7 +41,7 @@
     "sub_weights": {
       "opp_target_share": 0.4,
       "opp_snap_pct": 0.3,
-      "opp_redzone": 0.2,
+      "opp_rz_targets": 0.2,
       "opp_air_yards": 0.1,
       "trend_momentum": 0.4,
       "trend_role_growth": 0.35,
@@ -70,7 +70,7 @@
     "sub_weights": {
       "opp_target_share": 0.4,
       "opp_snap_pct": 0.3,
-      "opp_redzone": 0.2,
+      "opp_rz_targets": 0.2,
       "opp_air_yards": 0.1,
       "trend_momentum": 0.4,
       "trend_role_growth": 0.35,
@@ -99,7 +99,7 @@
     "sub_weights": {
       "opp_target_share": 0.4,
       "opp_snap_pct": 0.3,
-      "opp_redzone": 0.2,
+      "opp_rz_targets": 0.2,
       "opp_air_yards": 0.1,
       "trend_momentum": 0.4,
       "trend_role_growth": 0.35,
@@ -128,7 +128,7 @@
     "sub_weights": {
       "opp_target_share": 0.4,
       "opp_snap_pct": 0.3,
-      "opp_redzone": 0.2,
+      "opp_rz_targets": 0.2,
       "opp_air_yards": 0.1,
       "trend_momentum": 0.4,
       "trend_role_growth": 0.35,
@@ -157,7 +157,7 @@
     "sub_weights": {
       "opp_target_share": 0.4,
       "opp_snap_pct": 0.3,
-      "opp_redzone": 0.2,
+      "opp_rz_targets": 0.2,
       "opp_air_yards": 0.1,
       "trend_momentum": 0.4,
       "trend_role_growth": 0.35,

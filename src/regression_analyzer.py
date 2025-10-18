@@ -65,7 +65,7 @@ def get_prior_week_performance(
     
     Args:
         player_name: Player's full name (e.g., "Lamar Jackson")
-        week: Week to query (default: 5 for Week 5 data)
+        week: Week to query (default: 6 for Week 6 data)
         db_path: Path to SQLite database
     
     Returns:
@@ -81,6 +81,7 @@ def get_prior_week_performance(
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
+        # Use unified player_game_stats table for all weeks (including Week 6)
         query = """
         SELECT 
             p.player_name,
@@ -93,7 +94,8 @@ def get_prior_week_performance(
             p.rush_touchdowns,
             p.receptions,
             p.receiving_yards,
-            p.receiving_touchdowns
+            p.receiving_touchdowns,
+            p.fantasy_points_draftkings
         FROM player_game_stats p
         JOIN game_boxscores g ON p.game_id = g.game_id
         WHERE g.week = ?
@@ -108,7 +110,12 @@ def get_prior_week_performance(
             return None
         
         stats = dict(row)
-        dk_points = calculate_dk_fantasy_points(stats)
+        
+        # Use fantasy_points_draftkings if available, otherwise calculate
+        if stats.get('fantasy_points_draftkings') is not None:
+            dk_points = stats['fantasy_points_draftkings']
+        else:
+            dk_points = calculate_dk_fantasy_points(stats)
         
         return {
             'player_name': stats['player_name'],
@@ -135,7 +142,7 @@ def get_high_scorers_from_prior_week(
     
     Args:
         threshold: Fantasy points threshold (default: 20.0)
-        week: Week to query (default: 5)
+        week: Week to query (default: 6)
         db_path: Path to SQLite database
     
     Returns:
@@ -150,6 +157,7 @@ def get_high_scorers_from_prior_week(
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
+        # Use unified player_game_stats table for all weeks
         query = """
         SELECT 
             p.player_name,
@@ -162,32 +170,37 @@ def get_high_scorers_from_prior_week(
             p.rush_touchdowns,
             p.receptions,
             p.receiving_yards,
-            p.receiving_touchdowns
+            p.receiving_touchdowns,
+            p.fantasy_points_draftkings
         FROM player_game_stats p
         JOIN game_boxscores g ON p.game_id = g.game_id
         WHERE g.week = ?
-        AND p.position = 'WR'
+        AND p.fantasy_points_draftkings IS NOT NULL
+        AND p.fantasy_points_draftkings >= ?
+        ORDER BY p.fantasy_points_draftkings DESC
         """
         
-        cursor.execute(query, (week,))
+        cursor.execute(query, (week, threshold))
         rows = cursor.fetchall()
         conn.close()
         
         high_scorers = []
         for row in rows:
             stats = dict(row)
-            dk_points = calculate_dk_fantasy_points(stats)
             
-            if dk_points >= threshold:
-                high_scorers.append({
-                    'player_name': stats['player_name'],
-                    'team': stats['team'],
-                    'position': stats['position'],
-                    'dk_points': dk_points
-                })
+            # Use fantasy_points_draftkings if available, otherwise calculate
+            if stats.get('fantasy_points_draftkings') is not None:
+                dk_points = stats['fantasy_points_draftkings']
+            else:
+                dk_points = calculate_dk_fantasy_points(stats)
+            
+            high_scorers.append({
+                'player_name': stats['player_name'],
+                'team': stats['team'],
+                'position': stats['position'],
+                'dk_points': dk_points
+            })
         
-        # Sort by points descending
-        high_scorers.sort(key=lambda x: x['dk_points'], reverse=True)
         return high_scorers
     
     except Exception as e:
@@ -252,7 +265,7 @@ def check_regression_risk_batch(
     
     Args:
         player_names: List of player names to check
-        week: Prior week to check (default: 5)
+        week: Prior week to check (default: 6)
         threshold: Points threshold for regression risk (default: 20.0)
         db_path: Path to database
     
@@ -261,7 +274,7 @@ def check_regression_risk_batch(
         Players not found in database will have (False, None, None)
     
     Example:
-        results = check_regression_risk_batch(['Lamar Jackson', 'Justin Jefferson'], week=5)
+        results = check_regression_risk_batch(['Lamar Jackson', 'Justin Jefferson'], week=6)
         is_at_risk, points, stats = results['Lamar Jackson']
     """
     db_file = Path(db_path)
@@ -280,7 +293,7 @@ def check_regression_risk_batch(
         # Create placeholders for IN clause (?, ?, ?, ...)
         placeholders = ','.join('?' * len(player_names))
         
-        # Query all players at once
+        # Use unified player_game_stats table for all weeks
         query = f"""
         SELECT 
             p.player_name,
@@ -293,7 +306,8 @@ def check_regression_risk_batch(
             p.rush_touchdowns,
             p.receptions,
             p.receiving_yards,
-            p.receiving_touchdowns
+            p.receiving_touchdowns,
+            p.fantasy_points_draftkings
         FROM player_game_stats p
         JOIN game_boxscores g ON p.game_id = g.game_id
         WHERE g.week = ?
@@ -327,7 +341,12 @@ def check_regression_risk_batch(
                 'receiving_touchdowns': row['receiving_touchdowns'] or 0
             }
             
-            dk_points = calculate_dk_fantasy_points(raw_stats)
+            # Use fantasy_points_draftkings if available, otherwise calculate
+            if row['fantasy_points_draftkings'] is not None:
+                dk_points = row['fantasy_points_draftkings']
+            else:
+                dk_points = calculate_dk_fantasy_points(raw_stats)
+            
             is_at_risk = dk_points >= threshold
             
             stats_summary = {

@@ -30,7 +30,7 @@ DEFAULT_WEIGHTS = {
 DEFAULT_SUB_WEIGHTS = {
     'opp_target_share': 0.40,
     'opp_snap_pct': 0.30,
-    'opp_redzone': 0.20,
+    'opp_rz_targets': 0.20,  # Changed from 'opp_redzone' to match smart_value_calculator.py
     'opp_air_yards': 0.10,
     'trend_momentum': 0.40,
     'trend_role_growth': 0.35,
