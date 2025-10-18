@@ -100,7 +100,9 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     # Check each player's prior week performance
     # PERFORMANCE OPTIMIZATION: Use batch query to fetch all players in ONE database call
     player_names = df['name'].tolist()
-    regression_results = check_regression_risk_batch(player_names, week=5, threshold=20.0, db_path="dfs_optimizer.db")
+    current_week = st.session_state.get('current_week', 7)
+    prior_week = current_week - 1  # For Week 7, use Week 6 data
+    regression_results = check_regression_risk_batch(player_names, week=prior_week, threshold=20.0, db_path="dfs_optimizer.db")
     
     regression_risks = []
     prior_week_points = []
