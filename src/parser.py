@@ -149,7 +149,9 @@ def standardize_draftkings(df: pd.DataFrame) -> pd.DataFrame:
         # Default to 70 (neutral consistency score)
         standardized['consistency'] = 70.0
     
-    if 'ownership' not in standardized.columns:
+    # Check for ownership column with different case variations
+    ownership_cols = [col for col in standardized.columns if col.lower() in ['ownership', 'own', 'own%', 'own_pct']]
+    if not ownership_cols:
         # Default to 10% ownership (current behavior)
         standardized['ownership'] = 10.0
     
@@ -193,9 +195,13 @@ def parse_file(uploaded_file: Any) -> pd.DataFrame:
         # Try reading with default header first
         df = pd.read_excel(uploaded_file)
         
-        # If columns are mostly "Unnamed", try reading with header in row 1
+        # Check for problematic column headers:
+        # 1. Mostly "Unnamed" columns (original logic)
+        # 2. Duplicate column names (new fix for this error)
         unnamed_count = sum(1 for col in df.columns if str(col).startswith('Unnamed'))
-        if unnamed_count > len(df.columns) * 0.5:  # More than 50% unnamed
+        has_duplicate_cols = df.columns.duplicated().any()
+        
+        if unnamed_count > len(df.columns) * 0.5 or has_duplicate_cols:
             # Seek back to beginning before re-reading
             if hasattr(uploaded_file, 'seek'):
                 uploaded_file.seek(0)
