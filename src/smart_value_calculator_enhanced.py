@@ -447,40 +447,24 @@ def calculate_smart_value_enhanced(
         df['chalk_penalty']  # Negative values reduce score
     )
 
-    # Scale to 0-100 (rest of the logic same as original)
-    if 'position' in df.columns:
-        # Position-specific scaling
-        df['_pos_min'] = df.groupby('position')['smart_value_raw'].transform('min')
-        df['_pos_max'] = df.groupby('position')['smart_value_raw'].transform('max')
-
-        def scale_position_transform(group):
-            group_min = group.min()
-            group_max = group.max()
-
-            if group_max > group_min:
-                return ((group - group_min) / (group_max - group_min)) * 100
-            else:
-                return pd.Series([50.0] * len(group), index=group.index)
-
-        df['smart_value'] = df.groupby('position', group_keys=False)['smart_value_raw'].transform(scale_position_transform)
+    # Scale to 0-100 using GLOBAL scaling (not position-specific)
+    # Position-specific scaling creates artificial equality where every position has players at 100
+    # This makes Smart Value meaningless for optimization and causes stacking constraints to dominate
+    
+    min_val = df['smart_value_raw'].min()
+    max_val = df['smart_value_raw'].max()
+    
+    if max_val > min_val:
+        df['smart_value'] = ((df['smart_value_raw'] - min_val) / (max_val - min_val)) * 100
     else:
-        # Global scaling
-        df['_pos_min'] = df['smart_value_raw'].min()
-        df['_pos_max'] = df['smart_value_raw'].max()
-
-        if df['_pos_max'].iloc[0] > df['_pos_min'].iloc[0]:
-            df['smart_value'] = ((df['smart_value_raw'] - df['_pos_min']) / (df['_pos_max'] - df['_pos_min'])) * 100
-        else:
-            df['smart_value'] = 50.0
-
-    # Calculate global smart value
-    global_min = df['smart_value_raw'].min()
-    global_max = df['smart_value_raw'].max()
-
-    if global_max > global_min:
-        df['smart_value_global'] = ((df['smart_value_raw'] - global_min) / (global_max - global_min)) * 100
-    else:
-        df['smart_value_global'] = 50.0
+        df['smart_value'] = 50.0  # Default if all same
+    
+    # Store global min/max for tooltip calculation
+    df['_global_min'] = min_val
+    df['_global_max'] = max_val
+    
+    # smart_value_global is the same as smart_value now (both use global scaling)
+    df['smart_value_global'] = df['smart_value']
 
     # Round scores
     df['smart_value'] = df['smart_value'].round(1)
@@ -495,11 +479,11 @@ def calculate_smart_value_enhanced(
                 if col in row and pd.notna(row[col]) and row[col] != 0:
                     advanced_metrics.append(col.replace('adv_', '').upper())
 
-        pos_min = row['_pos_min']
-        pos_max = row['_pos_max']
+        global_min = row['_global_min']
+        global_max = row['_global_max']
 
-        if pos_max > pos_min:
-            scale_factor = 100 / (pos_max - pos_min)
+        if global_max > global_min:
+            scale_factor = 100 / (global_max - global_min)
             base_val = row['base_score'] * scale_factor
             opp_val = row['opp_score'] * scale_factor
             trend_val = row['trends_score'] * scale_factor
@@ -511,8 +495,7 @@ def calculate_smart_value_enhanced(
             base_val = opp_val = trend_val = risk_val = match_val = leverage_val = chalk_penalty_val = 0
 
         tooltip = (
-            f"Position Smart Value: {row['smart_value']:.1f}/100\n"
-            f"Global Smart Value: {row['smart_value_global']:.1f}/100\n"
+            f"Smart Value: {row['smart_value']:.1f}/100\n"
         )
 
         if advanced_metrics:
