@@ -761,18 +761,19 @@ def calculate_anti_chalk_penalty(df: pd.DataFrame) -> pd.DataFrame:
     
     chalk_trap = high_own & bad_matchup
     
-    # Progressive penalty based on ownership level
-    # 25-30% own = -15 pts, 30-40% own = -20 pts, 40%+ own = -25 pts
+    # FIXED: Proportional penalty based on ownership level
+    # Scale penalties to be proportional to typical raw scores (0.1-0.5 range)
+    # 25-30% own = -0.3 pts, 30-40% own = -0.4 pts, 40%+ own = -0.5 pts
     penalty_amounts = []
     for idx, row in df.iterrows():
         if chalk_trap[idx]:
             own = row['ownership']
             if own >= 40:
-                penalty_amounts.append(-25)
+                penalty_amounts.append(-0.5)
             elif own >= 30:
-                penalty_amounts.append(-20)
+                penalty_amounts.append(-0.4)
             else:
-                penalty_amounts.append(-15)
+                penalty_amounts.append(-0.3)
         else:
             penalty_amounts.append(0)
     
@@ -925,11 +926,16 @@ def calculate_smart_value(df: pd.DataFrame, profile: str = 'balanced', custom_we
     # This normalizes across ALL positions for narrative/ranking purposes
     # Use cases: Elite Plays, cross-position comparisons, tournament strategy
     
-    global_min = df['smart_value_raw'].min()
-    global_max = df['smart_value_raw'].max()
+    # FIXED: Use percentile-based scaling to prevent outlier clustering
+    # This prevents extreme outliers from compressing all other scores to 98-100 range
+    global_p5 = df['smart_value_raw'].quantile(0.05)  # 5th percentile
+    global_p95 = df['smart_value_raw'].quantile(0.95)  # 95th percentile
     
-    if global_max > global_min:
-        df['smart_value_global'] = ((df['smart_value_raw'] - global_min) / (global_max - global_min)) * 100
+    if global_p95 > global_p5:
+        # Scale using 5th-95th percentile range to avoid outlier compression
+        df['smart_value_global'] = ((df['smart_value_raw'] - global_p5) / (global_p95 - global_p5)) * 100
+        # Clip values outside the percentile range
+        df['smart_value_global'] = df['smart_value_global'].clip(0, 100)
     else:
         df['smart_value_global'] = 50.0
     
