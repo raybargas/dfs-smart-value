@@ -930,3 +930,13 @@ def generate_ab_comparison_report(lineups_with: pd.DataFrame, lineups_without: p
     logger.info("=" * 60)
 
     return report
+
+
+def get_available_profiles() -> list:
+    """
+    Get list of available Smart Value profiles.
+    
+    Returns:
+        List of profile names
+    """
+    return list(WEIGHT_PROFILES.keys())
