@@ -515,12 +515,7 @@ def render_player_selection():
                             }
                         }
                         
-                        # Debug info
-                        st.write("Debug - Current config:")
-                        st.write(f"Slider values: Base={base_weight}%, Opp={opp_weight}%, Total={total}%")
-                        st.write(f"Normalized weights: {current_config['main_weights']}")
-                        st.write(f"Sub weights: {current_config['sub_weights']}")
-                        st.write(f"Thresholds: {current_config['thresholds']}")
+                        # Debug info removed for production
                         
                         if validate_config(current_config):
                             if save_profile_config(selected_profile, current_config):
@@ -1017,21 +1012,10 @@ Smart Value =
     
     df = st.session_state['player_data'].copy()
     
-    # CRITICAL VALIDATION: Verify filter worked
+    # Validation: Ensure reasonable player count
     if len(df) > 400:
-        st.error(f"🚨 **FILTER BYPASS DETECTED ON PLAYER SELECTION SCREEN**")
-        st.error(f"Received {len(df)} players (expected max ~259)")
-        st.error(f"This proves zero-projection filter did NOT work!")
-        st.json({
-            'player_count': len(df),
-            'has_projection_column': 'projection' in df.columns,
-            'zero_projection_count': len(df[df['projection'] == 0]) if 'projection' in df.columns else 'N/A',
-            'nonzero_projection_count': len(df[df['projection'] > 0]) if 'projection' in df.columns else 'N/A'
-        })
-        st.stop()
-    
-    # PROOF: Display actual count being processed
-    st.info(f"✅ Player Selection: Processing {len(df)} players (filter validation passed)")
+        st.error(f"⚠️ Too many players loaded ({len(df)}). Please check your data.")
+        return
     
     # Add opponent data from Vegas lines lookup
     if 'opponent_lookup' in st.session_state and st.session_state['opponent_lookup']:
@@ -1110,8 +1094,7 @@ Smart Value =
             current_week = st.session_state.get('current_week', 7)
             df = calculate_smart_value(df, profile='balanced', custom_weights=custom_weights, position_weights=position_weights, sub_weights=sub_weights, week=current_week)
             
-            # DEBUG: Check what's actually in smart_value column
-            st.info(f"🐛 DEBUG: Sample smart_value column values:\n{df[['name', 'position', 'smart_value', 'smart_value_global']].head(10).to_string()}")
+            # Smart Value calculation completed
             
             st.session_state['smart_value_data'] = df
             st.session_state['smart_value_calculated'] = True
@@ -1222,48 +1205,22 @@ Smart Value =
                 st.session_state['last_threshold'] = smart_threshold
                 
                 # Select players at or above threshold - use player_key instead of index
-                # DEBUG: Log RB filtering to file to see what's happening
-                import os
-                debug_log = []
+                # Apply Smart Value filtering
                 for idx, row in df.iterrows():
                     player_key = row['_player_key']
                     player_smart_value = row['smart_value'] if 'smart_value' in df.columns else 0
-                    
-                    # Log RBs for debugging
-                    if row['position'] == 'RB':
-                        global_sv = row.get('smart_value_global', 0)
-                        debug_log.append(f"{row['name']}: Pos SV={player_smart_value:.1f}, Global SV={global_sv:.1f}, Pass={player_smart_value >= smart_threshold}")
                     
                     if player_smart_value >= smart_threshold:
                         st.session_state['selections'][player_key] = PlayerSelection.EXCLUDED.value  # Excluded means selected in pool
                     else:
                         st.session_state['selections'][player_key] = PlayerSelection.NORMAL.value
                 
-                # Write debug log to file (only if writable - skip on cloud)
-                if debug_log:
-                    try:
-                        import tempfile
-                        import os
-                        # Use temp directory that works on both local and cloud
-                        debug_file = os.path.join(tempfile.gettempdir(), 'dfs_filter_debug.txt')
-                        with open(debug_file, 'w') as f:
-                            f.write(f"Threshold: {smart_threshold}\n")
-                            f.write(f"RB Filtering Results:\n")
-                            f.write("\n".join(debug_log))
-                    except:
-                        pass  # Silently fail on Streamlit Cloud if can't write
-                
                 # Store to player_selections as well for navigation
                 st.session_state['player_selections'] = st.session_state['selections'].copy()
                 
-                # Show success message with debug info
+                # Show success message
                 selected_count = sum(1 for s in st.session_state['selections'].values() if s != PlayerSelection.NORMAL.value)
-                st.success(f"✅ Selected {selected_count} players with Position SV ≥ {smart_threshold}")
-                
-                # DEBUG: Show sample of what was filtered (RBs only)
-                if debug_log:
-                    with st.expander("🐛 DEBUG: RB Filtering Details (click to see Position SV vs Global SV)", expanded=True):
-                        st.code("\n".join(debug_log[:15]))
+                st.success(f"✅ Selected {selected_count} players with Smart Value ≥ {smart_threshold}")
                 
                 # CRITICAL: Rerun to update AgGrid with new selections
                 st.rerun()
@@ -1563,7 +1520,7 @@ Smart Value =
                         tooltipField="Smart_Value_Tooltip",
                         headerTooltip="SMART VALUE SCORE 🧠 - Ranks players ACROSS ALL POSITIONS for cross-position comparison. Combines value, opportunity, leverage, matchup, and game script intelligence. A QB with 90 Smart Value is comparable to an RB with 90 Smart Value in actual tournament impact. Higher = Better overall DFS value. Sort by this column to find true tournament-winning plays. NOTE: Position-specific Smart Value (used for filters) is calculated separately but hidden from this view.")
     
-    # UNHIDE Position SV - show both for debugging the filtering issue
+    # Show Smart Value columns
     gb.configure_column("Pos SV", 
                         header_name="Pos SV",
                         type=["numericColumn"],
