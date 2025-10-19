@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS smart_value_profiles_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_svph_profile_name ON smart_value_profiles_history(profile_name);
-CREATE INDEX IF NOT EXISTS idx_svph_week ON smart_value_profiles_history(week, season);
+CREATE INDEX IF NOT EXISTS idx_svph_week ON smart_value_profiles_history(week_used, season);
 CREATE INDEX IF NOT EXISTS idx_svph_performance ON smart_value_profiles_history(performance_score DESC);
 
 -- ============================================================================
