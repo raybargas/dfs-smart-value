@@ -380,7 +380,49 @@ def render_optimization_config():
     
     st.session_state['temp_config']['max_ownership_enabled'] = max_ownership_enabled
     st.session_state['temp_config']['max_ownership_pct'] = max_ownership_pct
-    
+
+    # Task 2.4: Max WRs with High Ownership (NEW FEATURE)
+    st.markdown("### 🎯 High Ownership WR Limit")
+
+    max_high_own_wrs_enabled = st.checkbox(
+        "Limit WRs with >20% ownership",
+        value=False,
+        help="Restrict the number of WRs with projected ownership >20%. WRs have higher bust rates than RBs, so limiting chalk WRs reduces concentration risk in GPP tournaments.",
+        key="max_high_own_wrs_enabled"
+    )
+
+    max_high_own_wrs = 1  # Default to 1
+    if max_high_own_wrs_enabled:
+        if not has_ownership:
+            st.warning("⚠️ Ownership data not available in uploaded file. Filter disabled.")
+            max_high_own_wrs_enabled = False
+        else:
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                max_high_own_wrs = st.slider(
+                    "Max WRs with >20% ownership",
+                    min_value=0,
+                    max_value=3,
+                    value=1,
+                    step=1,
+                    help="Maximum number of WRs allowed to have >20% ownership in a lineup. Prevents overexposure to high-bust-rate chalk WRs.",
+                    key="max_high_own_wrs_input"
+                )
+            with col2:
+                st.markdown('<div style="padding-top: 1.75rem;">', unsafe_allow_html=True)
+                st.metric("", f"{max_high_own_wrs}", label_visibility="collapsed")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            # Show impact
+            high_own_wrs = pool_df[(pool_df['position'] == 'WR') & (pool_df['ownership'] > 20)]
+            if len(high_own_wrs) > 0:
+                st.info(f"📊 Pool has {len(high_own_wrs)} WR(s) with >20% ownership to manage: {', '.join(high_own_wrs['name'].tolist())}")
+            else:
+                st.caption("✅ No WRs with >20% ownership in current pool")
+
+    st.session_state['temp_config']['max_high_own_wrs_enabled'] = max_high_own_wrs_enabled
+    st.session_state['temp_config']['max_high_own_wrs'] = max_high_own_wrs
+
     # 5. Validation (before displaying constraints and buttons)
     validation_result = validate_configuration(
         pool_df, lineup_count, uniqueness_pct, max_ownership_enabled, max_ownership_pct
@@ -422,6 +464,8 @@ def render_optimization_config():
                     'portfolio_avg_smart_value': portfolio_avg if filter_strategy == 'portfolio' else None,  # For portfolio mode
                     'stacking_enabled': stacking_enabled,
                     'stacking_penalty_weight': st.session_state['temp_config'].get('stacking_penalty_weight', 0.5),
+                    'max_high_own_wrs_enabled': max_high_own_wrs_enabled,
+                    'max_high_own_wrs': max_high_own_wrs,
                     'estimated_time': validation_result['estimated_time'],
                     'validation_status': validation_result['status'],
                     'validation_message': validation_result['message']

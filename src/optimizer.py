@@ -23,20 +23,22 @@ def generate_lineups(
     stacking_enabled: bool = True,
     portfolio_avg_smart_value: float = None,
     stacking_penalty_weight: float = 1.0,
-    max_exposure_pct: float = 1.0
+    max_exposure_pct: float = 1.0,
+    max_high_own_wrs_enabled: bool = False,
+    max_high_own_wrs: int = 1
 ) -> Tuple[List[Lineup], Optional[str]]:
     """
     Generate N unique DraftKings-valid lineups using linear programming.
-    
+
     This function generates lineups sequentially, adding uniqueness constraints
     after each successful lineup to ensure diversity. The optimization uses
     PuLP with CBC solver to maximize projected fantasy points while respecting
     all DraftKings contest rules.
-    
+
     Note: Smart Value should be used to filter the player pool BEFORE calling this
     function, not as an optimization objective (position-specific scaling makes it
     incompatible with cross-position LP optimization).
-    
+
     Args:
         player_pool_df: DataFrame with player data (filtered pool from Component 2)
             Required columns: name, position, salary, projection, team, opponent
@@ -55,13 +57,15 @@ def generate_lineups(
         max_exposure_pct: Maximum exposure percentage for any single player (0.20-1.0)
             Example: 0.40 means no player can appear in more than 40% of lineups
             Default: 1.0 (no exposure limit)
-    
+        max_high_own_wrs_enabled: Whether to limit WRs with >20% ownership
+        max_high_own_wrs: Maximum number of WRs with >20% ownership allowed per lineup (default: 1)
+
     Returns:
         Tuple of (List of Lineup objects, Error message or None)
         - On full success: (all lineups, None)
         - On partial success: (N-1 lineups, error message explaining why Nth failed)
         - On immediate failure: ([], error message)
-    
+
     Raises:
         ValueError: If player_pool_df is empty or missing required columns
     """
@@ -97,7 +101,9 @@ def generate_lineups(
             stacking_enabled=stacking_enabled,
             portfolio_avg_smart_value=portfolio_avg_smart_value,
             player_exposure_count=player_exposure_count,
-            max_lineups_per_player=max_lineups_per_player
+            max_lineups_per_player=max_lineups_per_player,
+            max_high_own_wrs_enabled=max_high_own_wrs_enabled,
+            max_high_own_wrs=max_high_own_wrs
         )
         
         if error:
@@ -132,7 +138,9 @@ def _generate_single_lineup(
     stacking_enabled: bool = True,
     portfolio_avg_smart_value: float = None,
     player_exposure_count: dict = None,
-    max_lineups_per_player: int = None
+    max_lineups_per_player: int = None,
+    max_high_own_wrs_enabled: bool = False,
+    max_high_own_wrs: int = 1
 ) -> Tuple[Optional[Lineup], Optional[str]]:
     """
     Generate a single lineup using PuLP linear programming.
@@ -259,7 +267,21 @@ def _generate_single_lineup(
                 # - If player_vars = 1: constraint is (ownership/100) <= max
                 prob += player_vars[player.name] * (player.ownership / 100) <= max_ownership_pct, \
                        f"Ownership_{player.name.replace(' ', '_')}"
-    
+
+    # Constraint 4b: Max WRs with High Ownership (if enabled)
+    if max_high_own_wrs_enabled:
+        # Find WRs with ownership > 20%
+        high_own_wrs = [
+            p for p in wrs
+            if p.ownership is not None and p.ownership > 20
+        ]
+
+        if high_own_wrs:
+            # Limit the number of high-ownership WRs to max_high_own_wrs
+            prob += pulp.lpSum([
+                player_vars[p.name] for p in high_own_wrs
+            ]) <= max_high_own_wrs, "Max_High_Ownership_WRs"
+
     # Constraint 5: Uniqueness (relative to all previous lineups)
     for prev_idx, prev_lineup in enumerate(previous_lineups):
         # Get names of players in previous lineup
