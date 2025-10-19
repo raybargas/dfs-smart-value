@@ -309,8 +309,8 @@ def render_optimization_config():
     
     stacking_enabled = st.toggle(
         "Primary Stack (QB + WR/TE same team)",
-        value=True,  # DEFAULT ON for tournament play
-        help="Forces QB + at least 1 WR/TE from same team. Standard GPP construction for correlated upside.",
+        value=False,  # DEFAULT OFF to allow Smart Value to drive optimization
+        help="Forces QB + at least 1 WR/TE from same team. When OFF, optimizer uses pure Smart Value optimization without stacking constraints.",
         key="stacking_enabled"
     )
     

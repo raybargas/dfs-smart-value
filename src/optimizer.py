@@ -173,15 +173,15 @@ def _generate_single_lineup(
     
     # Objective function: Weighted combination of projections and Smart Value
     # This allows Smart Value configuration changes to directly impact lineup generation
-    # Weight can be adjusted based on strategy: 0.7/0.3 = projection-focused, 0.5/0.5 = balanced
+    # Weight can be adjusted based on strategy: 0.5/0.5 = balanced, 0.3/0.7 = Smart Value-focused
     
     # Check if players have Smart Value scores
     players_with_sv = [p for p in players if hasattr(p, 'smart_value') and p.smart_value is not None]
     
     if len(players_with_sv) == len(players):
         # All players have Smart Value - use weighted objective
-        projection_weight = 0.7  # 70% weight on projections
-        smart_value_weight = 0.3  # 30% weight on Smart Value
+        projection_weight = 0.5  # 50% weight on projections
+        smart_value_weight = 0.5  # 50% weight on Smart Value
         
         prob += pulp.lpSum([
             player_vars[p.name] * (p.projection * projection_weight + p.smart_value * smart_value_weight) 
