@@ -50,12 +50,12 @@ def render_data_ingestion():
     selected_week = st.selectbox(
         "NFL Week",
         options=list(range(1, 19)),
-        index=st.session_state.get('current_week', 7) - 1,
+        index=st.session_state.get('current_week', 8) - 1,
         key="week_selector"
     )
     
     # Update session state if week changed
-    if selected_week != st.session_state.get('current_week', 7):
+    if selected_week != st.session_state.get('current_week', 8):
         st.session_state['current_week'] = selected_week
         
         # Try to load historical data for this week from database
