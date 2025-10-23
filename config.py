@@ -29,7 +29,19 @@ MAX_WEEK = 18
 # ============================================================================
 # Database Configuration
 # ============================================================================
-DEFAULT_DB_PATH = "dfs_optimizer.db"
+import os
+from pathlib import Path
+
+# Use Streamlit Cloud persistent storage if available, otherwise local
+# Streamlit Cloud provides /mount/src/.streamlit/ for persistent data
+if os.path.exists("/mount/src/.streamlit"):
+    # Production: Use persistent storage directory
+    PERSISTENT_DIR = Path("/mount/src/.streamlit/data")
+    PERSISTENT_DIR.mkdir(parents=True, exist_ok=True)
+    DEFAULT_DB_PATH = str(PERSISTENT_DIR / "dfs_optimizer.db")
+else:
+    # Local development: Use current directory
+    DEFAULT_DB_PATH = "dfs_optimizer.db"
 
 # ============================================================================
 # API Configuration
