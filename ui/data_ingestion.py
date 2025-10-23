@@ -292,7 +292,7 @@ def render_data_ingestion():
                             f.write(uploaded_file.getbuffer())
                         
                         saved_count += 1
-                        st.success(f"✅ Saved {file_type_mapping[file_type]} as {expected_files[file_type]}")
+                        # Don't show individual success messages - wait for database verification
                     except Exception as e:
                         st.error(f"❌ Failed to save {file_type_mapping[file_type]}: {str(e)}")
                 
@@ -348,7 +348,9 @@ def render_data_ingestion():
                     
                     # Only show final success if database save succeeded AND verified
                     if db_saved:
-                        st.success(f"🎉 Successfully saved {saved_count} file(s) for Week {selected_week}! Refresh to see updated status.")
+                        files_list = ", ".join([expected_files[ft] for ft in uploaded_files.keys()])
+                        st.success(f"🎉 Successfully saved {saved_count} file(s) for Week {selected_week}: {files_list}")
+                        st.info("✨ Refresh the page to see updated status indicators")
                     else:
                         st.info(f"💾 Files saved to disk for Week {selected_week}. Database save had issues - you can retry by uploading again.")
     
