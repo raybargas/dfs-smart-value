@@ -137,16 +137,8 @@ def render_data_ingestion():
         </div>
         """, unsafe_allow_html=True)
         
-        # WEEK-SPECIFIC file naming
-        import os
-        season_stats_dir = Path(__file__).parent.parent / "seasonStats"
+        # Check database for existing data (no file dependency)
         files_status = {}
-        expected_files = {
-            'pass': f'Pass_2025_WK{selected_week}.xlsx',
-            'rush': f'Rush_2025_WK{selected_week}.xlsx',
-            'receiving': f'Receiving_2025_WK{selected_week}.xlsx',
-            'snaps': f'Snaps_2025_WK{selected_week}.xlsx'
-        }
         
         # Check database for season stats records for this week
         def check_season_stats_in_db(week: int) -> Dict[str, bool]:
@@ -154,8 +146,10 @@ def render_data_ingestion():
             import sqlite3
             db_path = Path(__file__).parent.parent / "dfs_optimizer.db"
             
+            file_types = ['pass', 'rush', 'receiving', 'snaps']
+            
             if not db_path.exists():
-                return {file_type: False for file_type in expected_files.keys()}
+                return {file_type: False for file_type in file_types}
             
             try:
                 conn = sqlite3.connect(str(db_path))
@@ -214,17 +208,17 @@ def render_data_ingestion():
                 
             except Exception as e:
                 # On error, return all False
-                return {file_type: False for file_type in expected_files.keys()}
+                file_types = ['pass', 'rush', 'receiving', 'snaps']
+                return {file_type: False for file_type in file_types}
         
         # Check database for records
         db_status = check_season_stats_in_db(selected_week)
         
-        # Check if files exist for CURRENT week
-        for file_type, filename in expected_files.items():
-            file_path = season_stats_dir / filename
+        # Build status for each file type based on database records only
+        file_types = ['pass', 'rush', 'receiving', 'snaps']
+        for file_type in file_types:
             files_status[file_type] = {
-                'exists': db_status.get(file_type, False),  # Check database, not file existence
-                'filename': filename,
+                'exists': db_status.get(file_type, False),  # Database-driven only
                 'display_name': file_type.capitalize()
             }
         
@@ -278,99 +272,76 @@ def render_data_ingestion():
         # Save uploaded files
         if uploaded_files:
             if st.button(f"💾 Save Week {selected_week} Season Stats", type="primary", use_container_width=True):
-                import shutil
+                # Parse uploaded files directly and save to database
+                # No disk storage needed - files are parsed from upload buffer
+                db_saved = False  # Initialize to False in case of errors
                 
-                # Ensure directory exists
-                season_stats_dir.mkdir(exist_ok=True)
-                
-                # Save each uploaded file with week-specific name
-                saved_count = 0
-                for file_type, uploaded_file in uploaded_files.items():
-                    dest_path = season_stats_dir / expected_files[file_type]
-                    
+                try:
+                    # Import database save function (lightweight, no heavy dependencies)
+                    save_advanced_stats_to_database = None
                     try:
-                        # Read the uploaded file
-                        uploaded_file.seek(0)  # Reset file pointer
-                        
-                        # Save to destination
-                        with open(dest_path, 'wb') as f:
-                            f.write(uploaded_file.getbuffer())
-                        
-                        saved_count += 1
-                        # Don't show individual success messages - wait for database verification
-                    except Exception as e:
-                        st.error(f"❌ Failed to save {file_type_mapping[file_type]}: {str(e)}")
-                
-                if saved_count > 0:
-                    # Save to database
-                    db_saved = False  # Initialize to False in case of errors
-                    try:
-                        # Import database save function (lightweight, no heavy dependencies)
-                        save_advanced_stats_to_database = None
+                        from advanced_stats_db import save_advanced_stats_to_database
+                    except ImportError:
                         try:
-                            from advanced_stats_db import save_advanced_stats_to_database
-                        except ImportError:
-                            try:
-                                from src.advanced_stats_db import save_advanced_stats_to_database
-                            except ImportError as import_err:
-                                st.error(f"❌ Could not import save_advanced_stats_to_database: {str(import_err)}")
-                                raise
-                        
-                        # Load the Excel files directly (bypass FileLoader to avoid import issues)
-                        season_files = {}
-                        for file_type, filename in expected_files.items():
-                            file_path = season_stats_dir / filename
-                            if file_path.exists():
-                                try:
-                                    df = pd.read_excel(file_path)
-                                    season_files[file_type] = df
-                                except Exception as e:
-                                    st.warning(f"⚠️ Could not read {filename}: {str(e)}")
-                                    season_files[file_type] = None
-                            else:
-                                season_files[file_type] = None
-                        
-                        # Save to database
-                        db_saved = save_advanced_stats_to_database(season_files, selected_week)
-                        
-                        if db_saved:
-                            # Verify data was actually written to database
-                            import sqlite3
-                            db_path = Path(__file__).parent.parent / "dfs_optimizer.db"
-                            
-                            try:
-                                conn = sqlite3.connect(str(db_path))
-                                cursor = conn.cursor()
-                                
-                                # Check if records exist for this week
-                                cursor.execute("""
-                                    SELECT COUNT(*) FROM advanced_stats WHERE week = ?
-                                """, (selected_week,))
-                                
-                                record_count = cursor.fetchone()[0]
-                                conn.close()
-                                
-                                if record_count > 0:
-                                    st.success(f"💾 Saved {record_count} advanced stats records to database for Week {selected_week}")
-                                else:
-                                    st.warning("⚠️ Database save completed but no records found in database")
-                                    db_saved = False  # Don't show success if verification failed
-                            except Exception as verify_err:
-                                st.warning(f"⚠️ Could not verify database records: {str(verify_err)}")
-                                db_saved = False  # Don't show success if verification failed
-                        else:
-                            st.warning("⚠️ Files saved to disk but database save failed")
-                    except Exception as e:
-                        st.warning(f"⚠️ Database save failed: {str(e)}")
-                        db_saved = False  # Make sure this is False on exception
+                            from src.advanced_stats_db import save_advanced_stats_to_database
+                        except ImportError as import_err:
+                            st.error(f"❌ Could not import save_advanced_stats_to_database: {str(import_err)}")
+                            raise
                     
-                    # Only show final success if database save succeeded AND verified
+                    # Parse Excel files directly from upload buffer
+                    season_files = {}
+                    parse_errors = []
+                    
+                    for file_type, uploaded_file in uploaded_files.items():
+                        try:
+                            uploaded_file.seek(0)  # Reset file pointer
+                            df = pd.read_excel(uploaded_file)
+                            season_files[file_type] = df
+                        except Exception as e:
+                            parse_errors.append(f"{file_type_mapping[file_type]}: {str(e)}")
+                            season_files[file_type] = None
+                    
+                    # Show parse errors if any
+                    if parse_errors:
+                        for error in parse_errors:
+                            st.warning(f"⚠️ Could not parse {error}")
+                    
+                    # Save to database
+                    db_saved = save_advanced_stats_to_database(season_files, selected_week)
+                    
                     if db_saved:
-                        files_list = ", ".join([expected_files[ft] for ft in uploaded_files.keys()])
-                        st.success(f"🎉 Successfully saved {saved_count} file(s) for Week {selected_week}: {files_list}")
-                        st.info("✨ Refresh the page to see updated status indicators")
+                        # Verify data was actually written to database
+                        import sqlite3
+                        db_path = Path(__file__).parent.parent / "dfs_optimizer.db"
+                        
+                        try:
+                            conn = sqlite3.connect(str(db_path))
+                            cursor = conn.cursor()
+                            
+                            # Check if records exist for this week
+                            cursor.execute("""
+                                SELECT COUNT(*) FROM advanced_stats WHERE week = ?
+                            """, (selected_week,))
+                            
+                            record_count = cursor.fetchone()[0]
+                            conn.close()
+                            
+                            if record_count > 0:
+                                st.success(f"💾 Saved {record_count} advanced stats records to database for Week {selected_week}")
+                                st.success(f"🎉 Successfully saved {len(uploaded_files)} file(s) for Week {selected_week}")
+                                st.info("✨ Refresh the page to see updated status indicators")
+                            else:
+                                st.warning("⚠️ Database save completed but no records found in database")
+                                db_saved = False  # Don't show success if verification failed
+                        except Exception as verify_err:
+                            st.warning(f"⚠️ Could not verify database records: {str(verify_err)}")
+                            db_saved = False  # Don't show success if verification failed
                     else:
-                        st.info(f"💾 Files saved to disk for Week {selected_week}. Database save had issues - you can retry by uploading again.")
+                        st.warning("⚠️ Database save failed - please try uploading again")
+                        
+                except Exception as e:
+                    st.error(f"❌ Upload failed: {str(e)}")
+                    db_saved = False
     
     st.markdown("---")
     
