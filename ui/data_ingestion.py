@@ -164,7 +164,8 @@ def render_data_ingestion():
                 
                 if total_records == 0:
                     conn.close()
-                    return {file_type: False for file_type in expected_files.keys()}
+                    file_types = ['pass', 'rush', 'receiving', 'snaps']
+                    return {file_type: False for file_type in file_types}
                 
                 # Check which metrics are populated to determine which file types have data
                 # Use COUNT(DISTINCT ...) to ensure we have multiple unique records, not just one
@@ -207,7 +208,10 @@ def render_data_ingestion():
                 }
                 
             except Exception as e:
-                # On error, return all False
+                # On error, log it and return all False
+                import traceback
+                st.error(f"❌ Error checking database: {str(e)}")
+                st.code(traceback.format_exc())
                 file_types = ['pass', 'rush', 'receiving', 'snaps']
                 return {file_type: False for file_type in file_types}
         
