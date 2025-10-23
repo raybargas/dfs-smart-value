@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS receiving_stats (
     mtf INTEGER,               -- Missed Tackles Forced
     mtf_rec REAL,              -- MTF per Reception
     first_downs INTEGER,       -- 1st Downs
-    drop INTEGER,              -- Drops
+    drops INTEGER,             -- Drops (renamed from 'drop' - SQL reserved word)
     drop_pct REAL,             -- Drop %
     adot REAL,                 -- Average Depth of Target
     
