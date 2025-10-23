@@ -104,7 +104,8 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     player_names = df['name'].tolist()
     current_week = st.session_state.get('current_week', DEFAULT_NFL_WEEK)
     prior_week = current_week - 1  # For Week 7, use Week 6 data
-    regression_results = check_regression_risk_batch(player_names, week=prior_week, threshold=20.0, db_path="dfs_optimizer.db")
+    from config import DEFAULT_DB_PATH
+    regression_results = check_regression_risk_batch(player_names, week=prior_week, threshold=20.0, db_path=DEFAULT_DB_PATH)
     
     regression_risks = []
     prior_week_points = []
@@ -1125,7 +1126,7 @@ Smart Value =
     # PHASE 2C: Integrate Narrative Intelligence flags for color-coding and player insights
     if NARRATIVE_INTELLIGENCE_AVAILABLE:
         try:
-            builder = PlayerContextBuilder(db_path="dfs_optimizer.db", week=current_week)
+            builder = PlayerContextBuilder(db_path=DEFAULT_DB_PATH, week=current_week)
             df = builder.enrich_players(df)
             # df now has columns: 'flags', 'flag_count', 'red_flags', 'yellow_flags', 'green_flags', 'player_score'
             st.session_state['narrative_flags_enriched'] = True

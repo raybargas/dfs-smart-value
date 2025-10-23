@@ -144,7 +144,8 @@ def render_data_ingestion():
         def check_season_stats_in_db(week: int) -> Dict[str, bool]:
             """Check which file types have data in the database for given week."""
             import sqlite3
-            db_path = Path(__file__).parent.parent / "dfs_optimizer.db"
+            from config import DEFAULT_DB_PATH
+            db_path = Path(DEFAULT_DB_PATH)
             
             file_types = ['pass', 'rush', 'receiving', 'snaps']
             
@@ -301,7 +302,8 @@ def render_data_ingestion():
                     if db_saved:
                         # Verify data was actually written to database
                         import sqlite3
-                        db_path = Path(__file__).parent.parent / "dfs_optimizer.db"
+                        from config import DEFAULT_DB_PATH
+                        db_path = Path(DEFAULT_DB_PATH)
                         
                         try:
                             conn = sqlite3.connect(str(db_path))
@@ -822,7 +824,8 @@ def render_data_ingestion():
                 # Build opponent lookup from Vegas lines for selected week
                 # This creates a clean team -> opponent mapping
                 current_week = st.session_state.get('current_week', DEFAULT_NFL_WEEK)
-                opponent_map = build_opponent_lookup(week=current_week, db_path="dfs_optimizer.db")
+                from config import DEFAULT_DB_PATH
+                opponent_map = build_opponent_lookup(week=current_week, db_path=DEFAULT_DB_PATH)
                 st.session_state['opponent_lookup'] = opponent_map
             
             # Clear any cached DFS metrics, season stats, and smart value when new data is loaded
