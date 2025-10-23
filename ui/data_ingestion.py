@@ -155,69 +155,41 @@ def render_data_ingestion():
                 conn = sqlite3.connect(str(db_path))
                 cursor = conn.cursor()
                 
-                # Check if table exists first
-                cursor.execute("""
-                    SELECT name FROM sqlite_master 
-                    WHERE type='table' AND name='advanced_stats'
-                """)
+                # Check each of the 4 separate tables
+                tables = {
+                    'pass': 'pass_stats',
+                    'rush': 'rush_stats',
+                    'receiving': 'receiving_stats',
+                    'snaps': 'snap_stats'
+                }
                 
-                if not cursor.fetchone():
-                    # Table doesn't exist yet - return all False
-                    conn.close()
-                    file_types = ['pass', 'rush', 'receiving', 'snaps']
-                    return {file_type: False for file_type in file_types}
+                result = {}
                 
-                # Check for advanced_stats records for this week
-                cursor.execute("""
-                    SELECT COUNT(*) FROM advanced_stats WHERE week = ?
-                """, (week,))
-                
-                total_records = cursor.fetchone()[0]
-                
-                if total_records == 0:
-                    conn.close()
-                    file_types = ['pass', 'rush', 'receiving', 'snaps']
-                    return {file_type: False for file_type in file_types}
-                
-                # Check which metrics are populated to determine which file types have data
-                # Use COUNT(DISTINCT ...) to ensure we have multiple unique records, not just one
-                # Pass metrics: adv_cpoe (primary), adv_adot, adv_deep_throw_pct
-                cursor.execute("""
-                    SELECT COUNT(DISTINCT player_name) FROM advanced_stats 
-                    WHERE week = ? AND adv_cpoe IS NOT NULL
-                """, (week,))
-                pass_records = cursor.fetchone()[0]
-                
-                # Rush metrics: adv_yaco_att (primary), adv_success_rate, adv_mtf_att
-                cursor.execute("""
-                    SELECT COUNT(DISTINCT player_name) FROM advanced_stats 
-                    WHERE week = ? AND adv_yaco_att IS NOT NULL
-                """, (week,))
-                rush_records = cursor.fetchone()[0]
-                
-                # Receiving metrics: adv_tprr (primary), adv_yprr, adv_rte_pct
-                cursor.execute("""
-                    SELECT COUNT(DISTINCT player_name) FROM advanced_stats 
-                    WHERE week = ? AND adv_tprr IS NOT NULL
-                """, (week,))
-                receiving_records = cursor.fetchone()[0]
-                
-                # Snaps: Check for adv_1read_pct (comes from receiving file but indicates snap data loaded)
-                cursor.execute("""
-                    SELECT COUNT(DISTINCT player_name) FROM advanced_stats 
-                    WHERE week = ? AND adv_1read_pct IS NOT NULL
-                """, (week,))
-                snaps_records = cursor.fetchone()[0]
+                for file_type, table_name in tables.items():
+                    # Check if table exists
+                    cursor.execute("""
+                        SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name=?
+                    """, (table_name,))
+                    
+                    if not cursor.fetchone():
+                        # Table doesn't exist yet
+                        result[file_type] = False
+                        continue
+                    
+                    # Count distinct players for this week
+                    cursor.execute(f"""
+                        SELECT COUNT(DISTINCT player_name) 
+                        FROM {table_name} 
+                        WHERE week = ?
+                    """, (week,))
+                    
+                    count = cursor.fetchone()[0]
+                    # Require at least 10 players to show checkmark
+                    result[file_type] = count >= 10
                 
                 conn.close()
-                
-                # Require at least 10 records to consider file "loaded"
-                return {
-                    'pass': pass_records >= 10,
-                    'rush': rush_records >= 10,
-                    'receiving': receiving_records >= 10,
-                    'snaps': snaps_records >= 10
-                }
+                return result
                 
             except Exception as e:
                 # On error, log it and return all False

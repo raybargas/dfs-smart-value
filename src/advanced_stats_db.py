@@ -1,8 +1,8 @@
 """
-Advanced Stats Database Operations
+Advanced Stats Database Operations - 4 Separate Tables
 
 Lightweight module for saving/loading advanced stats to/from database.
-Separated from advanced_stats_loader.py to avoid heavy import dependencies.
+Uses 4 separate tables to avoid INSERT OR REPLACE conflicts.
 """
 
 import sqlite3
@@ -11,16 +11,49 @@ from typing import Dict, Optional
 from pathlib import Path
 
 
+def _normalize_column_name(col: str) -> str:
+    """Normalize column names to handle variations between file versions."""
+    # Convert to lowercase and replace spaces with underscores
+    normalized = col.lower().replace(' ', '_').replace('%', 'pct').replace('/', '_')
+    # Remove special characters
+    normalized = ''.join(c for c in normalized if c.isalnum() or c == '_')
+    return normalized
+
+
+def _get_player_name(row: pd.Series) -> str:
+    """Extract player name from row, handling different column names."""
+    for col in ['Name', 'name', 'Player', 'player']:
+        if col in row.index:
+            return row[col]
+    return None
+
+
+def _get_team(row: pd.Series) -> str:
+    """Extract team from row, handling different column names."""
+    for col in ['Team', 'team']:
+        if col in row.index:
+            return row[col]
+    return None
+
+
+def _get_position(row: pd.Series) -> str:
+    """Extract position from row, handling different column names."""
+    for col in ['POS', 'pos', 'Position', 'position']:
+        if col in row.index:
+            return row[col]
+    return None
+
+
 def save_advanced_stats_to_database(
     season_files: Dict[str, Optional[pd.DataFrame]],
     week: int,
     db_path: str = "dfs_optimizer.db"
 ) -> bool:
     """
-    Save advanced stats from loaded files to database.
+    Save advanced stats from loaded files to 4 separate database tables.
     
     Args:
-        season_files: Dictionary of loaded DataFrames from FileLoader
+        season_files: Dictionary of loaded DataFrames from file uploads
         week: Week number
         db_path: Path to SQLite database
     
@@ -31,135 +64,135 @@ def save_advanced_stats_to_database(
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # Ensure table exists (migration should handle this, but safe check)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS advanced_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                player_name TEXT NOT NULL,
-                team TEXT NOT NULL,
-                position TEXT NOT NULL,
-                week INTEGER NOT NULL,
-                adv_tprr REAL,
-                adv_yprr REAL,
-                adv_rte_pct REAL,
-                adv_yaco_att REAL,
-                adv_success_rate REAL,
-                adv_cpoe REAL,
-                adv_adot REAL,
-                adv_deep_throw_pct REAL,
-                adv_1read_pct REAL,
-                adv_mtf_att REAL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(player_name, team, position, week)
-            )
-        """)
+        # Create tables if they don't exist (run migration)
+        migration_path = Path(__file__).parent.parent / "migrations" / "008_separate_advanced_stats_tables.sql"
+        if migration_path.exists():
+            with open(migration_path, 'r') as f:
+                migration_sql = f.read()
+                cursor.executescript(migration_sql)
         
-        # Import from each file type
-        # For each file type, clear ONLY that stat type's columns for this week
-        # This allows uploading files one at a time without wiping other data
         records_saved = 0
         
-        # Receiving stats (TPRR, YPRR, RTE%, 1READ%)
-        if season_files.get('receiving') is not None:
-            # Clear only receiving-specific columns for this week
-            cursor.execute("""
-                UPDATE advanced_stats 
-                SET adv_tprr = NULL, adv_yprr = NULL, adv_rte_pct = NULL
-                WHERE week = ?
-            """, (week,))
-            
-            rec_df = season_files['receiving']
-            for _, row in rec_df.iterrows():
-                cursor.execute("""
-                    INSERT OR REPLACE INTO advanced_stats 
-                    (player_name, team, position, week, adv_tprr, adv_yprr, adv_rte_pct, adv_1read_pct)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    row.get('Name'),
-                    row.get('Team'),
-                    row.get('POS'),
-                    week,
-                    row.get('TPRR'),
-                    row.get('YPRR'),
-                    row.get('RTE %'),
-                    row.get('1READ %')
-                ))
-                records_saved += 1
-        
-        # Rush stats (YACO/ATT, Success Rate, MTF/ATT)
-        if season_files.get('rush') is not None:
-            # Clear only rush-specific columns for this week
-            cursor.execute("""
-                UPDATE advanced_stats 
-                SET adv_yaco_att = NULL, adv_success_rate = NULL, adv_mtf_att = NULL
-                WHERE week = ?
-            """, (week,))
-            
-            rush_df = season_files['rush']
-            for _, row in rush_df.iterrows():
-                cursor.execute("""
-                    INSERT OR REPLACE INTO advanced_stats 
-                    (player_name, team, position, week, adv_yaco_att, adv_success_rate, adv_mtf_att)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    row.get('Name'),
-                    row.get('Team'),
-                    row.get('POS'),
-                    week,
-                    row.get('YACO/ATT'),
-                    row.get('Success Rate'),
-                    row.get('MTF/ATT')
-                ))
-                records_saved += 1
-        
-        # Pass stats (CPOE, aDOT, Deep Throw%)
+        # ====================================================================
+        # PASS STATS
+        # ====================================================================
         if season_files.get('pass') is not None:
-            # Clear only pass-specific columns for this week
-            cursor.execute("""
-                UPDATE advanced_stats 
-                SET adv_cpoe = NULL, adv_adot = NULL, adv_deep_throw_pct = NULL
-                WHERE week = ?
-            """, (week,))
-            
             pass_df = season_files['pass']
+            
             for _, row in pass_df.iterrows():
+                player_name = _get_player_name(row)
+                team = _get_team(row)
+                position = _get_position(row)
+                
+                if not player_name or not team or not position:
+                    continue
+                
                 cursor.execute("""
-                    INSERT OR REPLACE INTO advanced_stats 
-                    (player_name, team, position, week, adv_cpoe, adv_adot, adv_deep_throw_pct)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT OR REPLACE INTO pass_stats 
+                    (player_name, team, position, week, cpoe, adot, deep_throw_pct,
+                     att, cmp, cmp_pct, yds, ypa, td, int, rate, sack, sack_pct,
+                     any_a, read1_pct, acc_pct, press_pct)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    row.get('Name'),
-                    row.get('Team'),
-                    row.get('POS'),
-                    week,
-                    row.get('CPOE'),
-                    row.get('aDOT'),
-                    row.get('Deep Throw %')
+                    player_name, team, position, week,
+                    row.get('CPOE'), row.get('aDOT'), row.get('Deep Throw %'),
+                    row.get('ATT'), row.get('CMP'), row.get('CMP %'),
+                    row.get('YDS'), row.get('YPA'), row.get('TD'), row.get('INT'),
+                    row.get('RATE'), row.get('SACK'), row.get('SACK %'),
+                    row.get('ANY/A'), row.get('1Read %'), row.get('ACC %'), row.get('PRESS %')
                 ))
                 records_saved += 1
         
-        # Snap stats (1READ%)
-        if season_files.get('snaps') is not None:
-            # Clear only snap-specific columns for this week
-            cursor.execute("""
-                UPDATE advanced_stats 
-                SET adv_1read_pct = NULL
-                WHERE week = ?
-            """, (week,))
+        # ====================================================================
+        # RUSH STATS
+        # ====================================================================
+        if season_files.get('rush') is not None:
+            rush_df = season_files['rush']
             
-            snaps_df = season_files['snaps']
-            for _, row in snaps_df.iterrows():
+            for _, row in rush_df.iterrows():
+                player_name = _get_player_name(row)
+                team = _get_team(row)
+                position = _get_position(row)
+                
+                if not player_name or not team or not position:
+                    continue
+                
                 cursor.execute("""
-                    INSERT OR REPLACE INTO advanced_stats 
-                    (player_name, team, position, week, adv_1read_pct)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT OR REPLACE INTO rush_stats 
+                    (player_name, team, position, week, yaco_att, success_rate, mtf_att,
+                     att, yds, ypc, td, fum, first_downs, stuff_pct, mtf, yaco, yaco_pct)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    row.get('Name'),
-                    row.get('Team'),
-                    row.get('POS'),
-                    week,
-                    row.get('1READ %')
+                    player_name, team, position, week,
+                    row.get('YACO/ATT'), row.get('Success Rate'), row.get('MTF/ATT'),
+                    row.get('ATT'), row.get('YDS'), row.get('YPC'), row.get('TD'),
+                    row.get('FUM'), row.get('1D'), row.get('STUFF %'),
+                    row.get('MTF'), row.get('YACO'), row.get('YACO %')
+                ))
+                records_saved += 1
+        
+        # ====================================================================
+        # RECEIVING STATS
+        # ====================================================================
+        if season_files.get('receiving') is not None:
+            rec_df = season_files['receiving']
+            
+            for _, row in rec_df.iterrows():
+                player_name = _get_player_name(row)
+                team = _get_team(row)
+                position = _get_position(row)
+                
+                if not player_name or not team or not position:
+                    continue
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO receiving_stats 
+                    (player_name, team, position, week, tprr, yprr, rte_pct,
+                     rte, tgt, tgt_pct, rec, cr_pct, yds, ypr, yac, yac_rec,
+                     td, read1_pct, mtf, mtf_rec, first_downs, drop, drop_pct, adot)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    player_name, team, position, week,
+                    row.get('TPRR'), row.get('YPRR'), row.get('RTE %'),
+                    row.get('RTE'), row.get('TGT'), row.get('TGT %'),
+                    row.get('REC'), row.get('CR %'), row.get('YDS'), row.get('YPR'),
+                    row.get('YAC'), row.get('YAC/REC'), row.get('TD'), row.get('1READ %'),
+                    row.get('MTF'), row.get('MTF/REC'), row.get('1D'),
+                    row.get('DRP'), row.get('DRP %'), row.get('aDOT')
+                ))
+                records_saved += 1
+        
+        # ====================================================================
+        # SNAP STATS (Handle both Week 7 and Week 8 formats)
+        # ====================================================================
+        if season_files.get('snaps') is not None:
+            snaps_df = season_files['snaps']
+            
+            for _, row in snaps_df.iterrows():
+                player_name = _get_player_name(row)
+                team = _get_team(row)
+                position = _get_position(row)
+                
+                if not player_name or not team or not position:
+                    continue
+                
+                # Handle different column formats
+                snaps = row.get('Snaps') or row.get('snaps')
+                snap_pct = row.get('Snap %') or row.get('snap_pct')
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO snap_stats 
+                    (player_name, team, position, week, snaps, snap_pct,
+                     tm_snaps, snaps_per_gp, rush_per_snap, rush_share,
+                     tgt_per_snap, tgt_share, touch_per_snap, util_per_snap)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    player_name, team, position, week,
+                    snaps, snap_pct,
+                    row.get('TM Snaps'), row.get('snaps_per_gp'),
+                    row.get('rush_per_snap'), row.get('rush_share'),
+                    row.get('tgt_per_snap'), row.get('tgt_share'),
+                    row.get('touch_per_snap'), row.get('util_per_snap')
                 ))
                 records_saved += 1
         
@@ -170,52 +203,50 @@ def save_advanced_stats_to_database(
         
     except Exception as e:
         print(f"Error saving advanced stats to database: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
 def load_advanced_stats_from_database(
     week: int,
     db_path: str = "dfs_optimizer.db"
-) -> Optional[pd.DataFrame]:
+) -> Dict[str, Optional[pd.DataFrame]]:
     """
-    Load advanced stats for a specific week from database.
+    Load advanced stats for a specific week from all 4 tables.
     
     Args:
         week: Week number
         db_path: Path to SQLite database
     
     Returns:
-        DataFrame with advanced stats or None if error
+        Dictionary with DataFrames for each stat type or None if error
     """
     try:
         conn = sqlite3.connect(db_path)
         
-        query = """
-            SELECT 
-                player_name,
-                team,
-                position,
-                week,
-                adv_tprr,
-                adv_yprr,
-                adv_rte_pct,
-                adv_yaco_att,
-                adv_success_rate,
-                adv_cpoe,
-                adv_adot,
-                adv_deep_throw_pct,
-                adv_1read_pct,
-                adv_mtf_att
-            FROM advanced_stats
-            WHERE week = ?
-        """
+        result = {}
         
-        df = pd.read_sql_query(query, conn, params=(week,))
+        # Load from each table
+        tables = {
+            'pass': 'pass_stats',
+            'rush': 'rush_stats',
+            'receiving': 'receiving_stats',
+            'snaps': 'snap_stats'
+        }
+        
+        for key, table_name in tables.items():
+            try:
+                query = f"SELECT * FROM {table_name} WHERE week = ?"
+                df = pd.read_sql_query(query, conn, params=(week,))
+                result[key] = df if len(df) > 0 else None
+            except Exception as e:
+                print(f"Error loading {table_name}: {e}")
+                result[key] = None
+        
         conn.close()
-        
-        return df if len(df) > 0 else None
+        return result
         
     except Exception as e:
         print(f"Error loading advanced stats from database: {e}")
-        return None
-
+        return {'pass': None, 'rush': None, 'receiving': None, 'snaps': None}
