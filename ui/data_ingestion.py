@@ -300,25 +300,30 @@ def render_data_ingestion():
                     # Save to database
                     db_saved = False  # Initialize to False in case of errors
                     try:
-                        # Try importing with better error handling - try multiple import paths
+                        # Import FileLoader and database save function
+                        # Use lightweight advanced_stats_db module to avoid heavy import dependencies
                         FileLoader = None
                         save_advanced_stats_to_database = None
                         
-                        # Try direct import first (works if src is in sys.path)
+                        # Import FileLoader (needs full advanced_stats_loader)
                         try:
-                            from advanced_stats_loader import FileLoader, save_advanced_stats_to_database
+                            from advanced_stats_loader import FileLoader
                         except ImportError:
-                            # Try absolute import path
                             try:
-                                from src.advanced_stats_loader import FileLoader, save_advanced_stats_to_database
+                                from src.advanced_stats_loader import FileLoader
                             except ImportError as import_err:
-                                st.error(f"❌ Import error: {str(import_err)}")
-                                st.error("💡 Could not import advanced_stats_loader functions. Check production logs.")
+                                st.error(f"❌ Could not import FileLoader: {str(import_err)}")
                                 raise
                         
-                        if FileLoader is None or save_advanced_stats_to_database is None:
-                            st.error("❌ Failed to import required functions from advanced_stats_loader")
-                            raise ImportError("FileLoader or save_advanced_stats_to_database is None")
+                        # Import database save function (lightweight, no heavy dependencies)
+                        try:
+                            from advanced_stats_db import save_advanced_stats_to_database
+                        except ImportError:
+                            try:
+                                from src.advanced_stats_db import save_advanced_stats_to_database
+                            except ImportError as import_err:
+                                st.error(f"❌ Could not import save_advanced_stats_to_database: {str(import_err)}")
+                                raise
                         
                         # Load the files we just saved
                         loader = FileLoader(str(season_stats_dir), week=selected_week)
