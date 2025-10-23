@@ -64,23 +64,10 @@ def save_advanced_stats_to_database(
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
-        # Create tables if they don't exist (run migration)
-        migration_path = Path(__file__).parent.parent / "migrations" / "008_separate_advanced_stats_tables.sql"
-        
-        print(f"🔍 Migration path: {migration_path}")
-        print(f"🔍 Migration exists: {migration_path.exists()}")
-        
-        if migration_path.exists():
-            print("📝 Running migration...")
-            with open(migration_path, 'r') as f:
-                migration_sql = f.read()
-                cursor.executescript(migration_sql)
-            print("✅ Migration completed")
-        else:
-            print("⚠️ Migration file not found, creating tables inline...")
-            # Fallback: Create tables inline if migration file missing
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS pass_stats (
+        # Create tables inline (simpler and more reliable than migration file)
+        print("📝 Creating tables...")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pass_stats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     player_name TEXT NOT NULL,
                     team TEXT NOT NULL,
@@ -94,10 +81,10 @@ def save_advanced_stats_to_database(
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(player_name, team, position, week)
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS rush_stats (
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rush_stats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     player_name TEXT NOT NULL,
                     team TEXT NOT NULL,
@@ -110,10 +97,10 @@ def save_advanced_stats_to_database(
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(player_name, team, position, week)
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS receiving_stats (
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS receiving_stats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     player_name TEXT NOT NULL,
                     team TEXT NOT NULL,
@@ -123,15 +110,15 @@ def save_advanced_stats_to_database(
                     rte INTEGER, tgt INTEGER, tgt_pct REAL, rec INTEGER,
                     cr_pct REAL, yds INTEGER, ypr REAL, yac INTEGER,
                     yac_rec REAL, td INTEGER, read1_pct REAL, mtf INTEGER,
-                    mtf_rec REAL, first_downs INTEGER, drop INTEGER,
+                    mtf_rec REAL, first_downs INTEGER, drops INTEGER,
                     drop_pct REAL, adot REAL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(player_name, team, position, week)
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS snap_stats (
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS snap_stats (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     player_name TEXT NOT NULL,
                     team TEXT NOT NULL,
@@ -145,8 +132,8 @@ def save_advanced_stats_to_database(
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(player_name, team, position, week)
                 )
-            """)
-            print("✅ Tables created inline")
+        """)
+        print("✅ Tables created")
         
         records_saved = 0
         
@@ -226,7 +213,7 @@ def save_advanced_stats_to_database(
                     INSERT OR REPLACE INTO receiving_stats 
                     (player_name, team, position, week, tprr, yprr, rte_pct,
                      rte, tgt, tgt_pct, rec, cr_pct, yds, ypr, yac, yac_rec,
-                     td, read1_pct, mtf, mtf_rec, first_downs, drop, drop_pct, adot)
+                     td, read1_pct, mtf, mtf_rec, first_downs, drops, drop_pct, adot)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     player_name, team, position, week,
