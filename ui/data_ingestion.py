@@ -295,7 +295,8 @@ def render_data_ingestion():
                             st.warning(f"⚠️ Could not parse {error}")
                     
                     # Save to database
-                    db_saved = save_advanced_stats_to_database(season_files, selected_week)
+                    with st.spinner("💾 Saving to database..."):
+                        db_saved = save_advanced_stats_to_database(season_files, selected_week)
                     
                     if db_saved:
                         # Verify data was actually written to database

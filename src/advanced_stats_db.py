@@ -66,10 +66,87 @@ def save_advanced_stats_to_database(
         
         # Create tables if they don't exist (run migration)
         migration_path = Path(__file__).parent.parent / "migrations" / "008_separate_advanced_stats_tables.sql"
+        
+        print(f"🔍 Migration path: {migration_path}")
+        print(f"🔍 Migration exists: {migration_path.exists()}")
+        
         if migration_path.exists():
+            print("📝 Running migration...")
             with open(migration_path, 'r') as f:
                 migration_sql = f.read()
                 cursor.executescript(migration_sql)
+            print("✅ Migration completed")
+        else:
+            print("⚠️ Migration file not found, creating tables inline...")
+            # Fallback: Create tables inline if migration file missing
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pass_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player_name TEXT NOT NULL,
+                    team TEXT NOT NULL,
+                    position TEXT NOT NULL,
+                    week INTEGER NOT NULL,
+                    cpoe REAL, adot REAL, deep_throw_pct REAL,
+                    att INTEGER, cmp INTEGER, cmp_pct REAL, yds INTEGER,
+                    ypa REAL, td INTEGER, int INTEGER, rate REAL,
+                    sack INTEGER, sack_pct REAL, any_a REAL,
+                    read1_pct REAL, acc_pct REAL, press_pct REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(player_name, team, position, week)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS rush_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player_name TEXT NOT NULL,
+                    team TEXT NOT NULL,
+                    position TEXT NOT NULL,
+                    week INTEGER NOT NULL,
+                    yaco_att REAL, success_rate REAL, mtf_att REAL,
+                    att INTEGER, yds INTEGER, ypc REAL, td INTEGER,
+                    fum INTEGER, first_downs INTEGER, stuff_pct REAL,
+                    mtf INTEGER, yaco INTEGER, yaco_pct REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(player_name, team, position, week)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS receiving_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player_name TEXT NOT NULL,
+                    team TEXT NOT NULL,
+                    position TEXT NOT NULL,
+                    week INTEGER NOT NULL,
+                    tprr REAL, yprr REAL, rte_pct REAL,
+                    rte INTEGER, tgt INTEGER, tgt_pct REAL, rec INTEGER,
+                    cr_pct REAL, yds INTEGER, ypr REAL, yac INTEGER,
+                    yac_rec REAL, td INTEGER, read1_pct REAL, mtf INTEGER,
+                    mtf_rec REAL, first_downs INTEGER, drop INTEGER,
+                    drop_pct REAL, adot REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(player_name, team, position, week)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS snap_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player_name TEXT NOT NULL,
+                    team TEXT NOT NULL,
+                    position TEXT NOT NULL,
+                    week INTEGER NOT NULL,
+                    snaps INTEGER, snap_pct REAL, tm_snaps INTEGER,
+                    snaps_per_gp REAL, rush_per_snap REAL, rush_share REAL,
+                    tgt_per_snap REAL, tgt_share REAL, touch_per_snap REAL,
+                    util_per_snap REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(player_name, team, position, week)
+                )
+            """)
+            print("✅ Tables created inline")
         
         records_saved = 0
         
