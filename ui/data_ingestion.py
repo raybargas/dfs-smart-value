@@ -307,16 +307,35 @@ def render_data_ingestion():
                             conn = sqlite3.connect(str(db_path))
                             cursor = conn.cursor()
                             
-                            # Check if records exist for this week
-                            cursor.execute("""
-                                SELECT COUNT(*) FROM advanced_stats WHERE week = ?
-                            """, (selected_week,))
+                            # Check if records exist for this week across the 4 new tables
+                            tables = {
+                                'pass': 'pass_stats',
+                                'rush': 'rush_stats',
+                                'receiving': 'receiving_stats',
+                                'snaps': 'snap_stats'
+                            }
                             
-                            record_count = cursor.fetchone()[0]
+                            total_records = 0
+                            for file_type, table_name in tables.items():
+                                # Check if table exists first
+                                cursor.execute("""
+                                    SELECT name FROM sqlite_master 
+                                    WHERE type='table' AND name=?
+                                """, (table_name,))
+                                
+                                if cursor.fetchone():
+                                    # Table exists, count records for this week
+                                    cursor.execute(f"""
+                                        SELECT COUNT(DISTINCT player_name) 
+                                        FROM {table_name} 
+                                        WHERE week = ?
+                                    """, (selected_week,))
+                                    total_records += cursor.fetchone()[0]
+                            
                             conn.close()
                             
-                            if record_count > 0:
-                                st.success(f"💾 Saved {record_count} advanced stats records to database for Week {selected_week}")
+                            if total_records > 0:
+                                st.success(f"💾 Saved {total_records} advanced stats records to database for Week {selected_week}")
                                 st.success(f"🎉 Successfully saved {len(uploaded_files)} file(s) for Week {selected_week}")
                                 st.info("✨ Refresh the page to see updated status indicators")
                             else:
