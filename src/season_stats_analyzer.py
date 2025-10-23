@@ -29,6 +29,9 @@ try:
 except ImportError:
     logger.warning("Advanced stats modules not available. Using legacy mode.")
     ADVANCED_STATS_AVAILABLE = False
+    # Define dummy types for type hints when imports fail
+    PlayerNameMapper = None
+    MetricRegistry = None
 
 
 # ========================================
