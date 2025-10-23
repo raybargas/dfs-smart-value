@@ -315,14 +315,39 @@ def render_data_ingestion():
                         db_saved = save_advanced_stats_to_database(season_files, selected_week)
                         
                         if db_saved:
-                            st.success(f"💾 Saved advanced stats to database for Week {selected_week}")
+                            # Verify data was actually written to database
+                            import sqlite3
+                            db_path = Path(__file__).parent.parent / "dfs_optimizer.db"
+                            
+                            try:
+                                conn = sqlite3.connect(str(db_path))
+                                cursor = conn.cursor()
+                                
+                                # Check if records exist for this week
+                                cursor.execute("""
+                                    SELECT COUNT(*) FROM advanced_stats WHERE week = ?
+                                """, (selected_week,))
+                                
+                                record_count = cursor.fetchone()[0]
+                                conn.close()
+                                
+                                if record_count > 0:
+                                    st.success(f"💾 Saved {record_count} advanced stats records to database for Week {selected_week}")
+                                else:
+                                    st.warning("⚠️ Database save completed but no records found in database")
+                            except Exception as verify_err:
+                                st.warning(f"⚠️ Could not verify database records: {str(verify_err)}")
                         else:
                             st.warning("⚠️ Files saved to disk but database save failed")
                     except Exception as e:
                         st.warning(f"⚠️ Database save failed: {str(e)}")
                         st.info("💡 Files were saved successfully. The database save will be retried on next upload.")
                     
-                    st.success(f"🎉 Successfully saved {saved_count} file(s) for Week {selected_week}! Refresh to see updated status.")
+                    # Only show final success if database save succeeded
+                    if db_saved:
+                        st.success(f"🎉 Successfully saved {saved_count} file(s) for Week {selected_week}! Refresh to see updated status.")
+                    else:
+                        st.info(f"💾 Files saved to disk for Week {selected_week}. Database save had issues - you can retry by uploading again.")
     
     st.markdown("---")
     
