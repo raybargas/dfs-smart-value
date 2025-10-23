@@ -299,7 +299,13 @@ def render_data_ingestion():
                 if saved_count > 0:
                     # Save to database
                     try:
-                        from src.advanced_stats_loader import FileLoader, save_advanced_stats_to_database
+                        # Try importing with better error handling
+                        try:
+                            # Use direct import since src is added to sys.path
+                            from advanced_stats_loader import FileLoader, save_advanced_stats_to_database
+                        except ImportError as import_err:
+                            st.error(f"❌ Import error: {str(import_err)}")
+                            raise
                         
                         # Load the files we just saved
                         loader = FileLoader(str(season_stats_dir), week=selected_week)
@@ -314,6 +320,7 @@ def render_data_ingestion():
                             st.warning("⚠️ Files saved to disk but database save failed")
                     except Exception as e:
                         st.warning(f"⚠️ Database save failed: {str(e)}")
+                        st.info("💡 Files were saved successfully. The database save will be retried on next upload.")
                     
                     st.success(f"🎉 Successfully saved {saved_count} file(s) for Week {selected_week}! Refresh to see updated status.")
     
