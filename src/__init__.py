@@ -13,6 +13,7 @@ from .validator import (
     get_data_quality_score
 )
 from .models import Player
+from .advanced_stats_loader import FileLoader, save_advanced_stats_to_database, load_advanced_stats_from_database
 
 __all__ = [
     'parse_file',
@@ -22,7 +23,10 @@ __all__ = [
     'validate_data_types',
     'validate_data_ranges',
     'get_data_quality_score',
-    'Player'
+    'Player',
+    'FileLoader',
+    'save_advanced_stats_to_database',
+    'load_advanced_stats_from_database'
 ]
 
 __version__ = '1.0.0'
