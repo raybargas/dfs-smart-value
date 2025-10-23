@@ -55,14 +55,20 @@ def save_advanced_stats_to_database(
             )
         """)
         
-        # Clear existing records for this week
-        cursor.execute("DELETE FROM advanced_stats WHERE week = ?", (week,))
-        
         # Import from each file type
+        # For each file type, clear ONLY that stat type's columns for this week
+        # This allows uploading files one at a time without wiping other data
         records_saved = 0
         
         # Receiving stats (TPRR, YPRR, RTE%, 1READ%)
         if season_files.get('receiving') is not None:
+            # Clear only receiving-specific columns for this week
+            cursor.execute("""
+                UPDATE advanced_stats 
+                SET adv_tprr = NULL, adv_yprr = NULL, adv_rte_pct = NULL
+                WHERE week = ?
+            """, (week,))
+            
             rec_df = season_files['receiving']
             for _, row in rec_df.iterrows():
                 cursor.execute("""
@@ -83,6 +89,13 @@ def save_advanced_stats_to_database(
         
         # Rush stats (YACO/ATT, Success Rate, MTF/ATT)
         if season_files.get('rush') is not None:
+            # Clear only rush-specific columns for this week
+            cursor.execute("""
+                UPDATE advanced_stats 
+                SET adv_yaco_att = NULL, adv_success_rate = NULL, adv_mtf_att = NULL
+                WHERE week = ?
+            """, (week,))
+            
             rush_df = season_files['rush']
             for _, row in rush_df.iterrows():
                 cursor.execute("""
@@ -102,6 +115,13 @@ def save_advanced_stats_to_database(
         
         # Pass stats (CPOE, aDOT, Deep Throw%)
         if season_files.get('pass') is not None:
+            # Clear only pass-specific columns for this week
+            cursor.execute("""
+                UPDATE advanced_stats 
+                SET adv_cpoe = NULL, adv_adot = NULL, adv_deep_throw_pct = NULL
+                WHERE week = ?
+            """, (week,))
+            
             pass_df = season_files['pass']
             for _, row in pass_df.iterrows():
                 cursor.execute("""
@@ -121,6 +141,13 @@ def save_advanced_stats_to_database(
         
         # Snap stats (1READ%)
         if season_files.get('snaps') is not None:
+            # Clear only snap-specific columns for this week
+            cursor.execute("""
+                UPDATE advanced_stats 
+                SET adv_1read_pct = NULL
+                WHERE week = ?
+            """, (week,))
+            
             snaps_df = season_files['snaps']
             for _, row in snaps_df.iterrows():
                 cursor.execute("""
