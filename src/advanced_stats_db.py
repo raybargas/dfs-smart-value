@@ -9,6 +9,13 @@ import sqlite3
 import pandas as pd
 from typing import Dict, Optional
 from pathlib import Path
+import sys
+
+# Add parent directory to path for config import
+parent_path = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_path))
+
+from config import DEFAULT_DB_PATH
 
 
 def _normalize_column_name(col: str) -> str:
@@ -47,7 +54,7 @@ def _get_position(row: pd.Series) -> str:
 def save_advanced_stats_to_database(
     season_files: Dict[str, Optional[pd.DataFrame]],
     week: int,
-    db_path: str = "dfs_optimizer.db"
+    db_path: str = None
 ) -> bool:
     """
     Save advanced stats from loaded files to 4 separate database tables.
@@ -55,11 +62,15 @@ def save_advanced_stats_to_database(
     Args:
         season_files: Dictionary of loaded DataFrames from file uploads
         week: Week number
-        db_path: Path to SQLite database
+        db_path: Path to SQLite database (defaults to config.DEFAULT_DB_PATH)
     
     Returns:
         True if successful, False otherwise
     """
+    # Use config default if not specified
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
+    
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -274,18 +285,22 @@ def save_advanced_stats_to_database(
 
 def load_advanced_stats_from_database(
     week: int,
-    db_path: str = "dfs_optimizer.db"
+    db_path: str = None
 ) -> Dict[str, Optional[pd.DataFrame]]:
     """
     Load advanced stats for a specific week from all 4 tables.
     
     Args:
         week: Week number
-        db_path: Path to SQLite database
+        db_path: Path to SQLite database (defaults to config.DEFAULT_DB_PATH)
     
     Returns:
         Dictionary with DataFrames for each stat type or None if error
     """
+    # Use config default if not specified
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
+    
     try:
         conn = sqlite3.connect(db_path)
         
