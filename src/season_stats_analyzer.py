@@ -19,7 +19,10 @@ logger = logging.getLogger(__name__)
 
 # Import Phase 1 infrastructure components
 try:
-    from .advanced_stats_loader import FileLoader, load_season_stats_files, create_player_mapper
+    from .advanced_stats_loader import (
+        FileLoader, load_season_stats_files, create_player_mapper,
+        save_advanced_stats_to_database, load_advanced_stats_from_database
+    )
     from .player_name_mapper import PlayerNameMapper, normalize_name
     from .metric_definitions import MetricRegistry
     ADVANCED_STATS_AVAILABLE = True
@@ -639,16 +642,18 @@ def analyze_season_stats(
     player_df: pd.DataFrame,
     season_stats_dir: str = "DFS/seasonStats/",
     legacy_file: str = "DFS/2025 Stats thru week 5.xlsx",
-    use_advanced_stats: bool = True
+    use_advanced_stats: bool = True,
+    week: int = None
 ) -> pd.DataFrame:
     """
-    Main entry point - enhanced to use new 4-file system with legacy fallback.
+    Main entry point - prioritizes database, then files, then legacy fallback.
 
     Args:
         player_df: Player DataFrame to enrich
-        season_stats_dir: Directory with new 4-file system
-        legacy_file: Path to legacy single file (fallback)
+        season_stats_dir: Directory with new 4-file system (fallback)
+        legacy_file: Path to legacy single file (last resort fallback)
         use_advanced_stats: Whether to extract advanced metrics (Tier 1 & 2)
+        week: Week number for database/file loading (e.g., 8). If None, uses generic names.
 
     Returns:
         Enriched player DataFrame with original 9 metrics + advanced metrics
@@ -659,36 +664,59 @@ def analyze_season_stats(
         logger.info("Advanced stats modules not available. Using legacy analysis.")
         return analyze_season_stats_legacy(player_df, legacy_file)
 
-    # Check if new system available
-    if os.path.exists(season_stats_dir) and os.listdir(season_stats_dir):
-        logger.info("✅ Using new 4-file advanced stats system")
-
-        # Load files
-        season_files = load_season_stats_files(season_stats_dir)
-
+    season_files = None
+    
+    # PRIORITY 1: Try loading from database (preferred for production)
+    if week is not None:
+        try:
+            logger.info(f"🗄️  Attempting to load advanced stats from database (week={week})")
+            season_files = load_advanced_stats_from_database(week=week)
+            
+            # Check if we got any data
+            files_loaded = sum(1 for df in season_files.values() if df is not None and len(df) > 0)
+            if files_loaded > 0:
+                logger.info(f"✅ Loaded {files_loaded} stat types from database for week {week}")
+            else:
+                logger.info("📂 No data in database, trying files...")
+                season_files = None
+        except Exception as e:
+            logger.warning(f"⚠️  Database load failed: {e}. Trying files...")
+            season_files = None
+    
+    # PRIORITY 2: Try loading from files (fallback)
+    if season_files is None and os.path.exists(season_stats_dir) and os.listdir(season_stats_dir):
+        logger.info(f"📂 Loading from files in {season_stats_dir} (week={week})")
+        season_files = load_season_stats_files(season_stats_dir, week=week)
+        
         # Check if we got any files
         files_loaded = sum(1 for df in season_files.values() if df is not None)
         if files_loaded == 0:
-            logger.warning("No files loaded from new system. Falling back to legacy.")
-            return analyze_season_stats_legacy(player_df, legacy_file)
+            logger.warning("No files loaded from directory.")
+            season_files = None
+    
+    # If we have data (from database or files), process it
+    if season_files is not None:
+        files_loaded = sum(1 for df in season_files.values() if df is not None and len(df) > 0)
+        if files_loaded > 0:
+            # Create player mapper (ONE-TIME fuzzy matching)
+            player_mapper = create_player_mapper(player_df, season_files)
 
-        # Create player mapper (ONE-TIME fuzzy matching)
-        player_mapper = create_player_mapper(player_df, season_files)
+            # Extract original 9 metrics
+            player_df = _enrich_with_base_metrics(player_df, season_files, player_mapper)
 
-        # Extract original 9 metrics from new files
-        player_df = _enrich_with_base_metrics(player_df, season_files, player_mapper)
-
-        # Extract advanced metrics (Tier 1 + 2) if requested
-        if use_advanced_stats:
-            player_df = enrich_with_advanced_stats(player_df, season_files, player_mapper, tiers=[1, 2])
-
+            # Extract advanced metrics (Tier 1 + 2) if requested
+            if use_advanced_stats:
+                player_df = enrich_with_advanced_stats(player_df, season_files, player_mapper, tiers=[1, 2])
+            
+            return player_df
+    
+    # PRIORITY 3: Last resort - legacy file (if it exists)
+    if os.path.exists(legacy_file):
+        logger.warning(f"⚠️  No database or file data found. Using legacy file: {legacy_file}")
+        player_df = analyze_season_stats_legacy(player_df, legacy_file)
     else:
-        # Fallback to legacy file
-        if os.path.exists(legacy_file):
-            logger.warning(f"⚠️  New season stats not found. Falling back to legacy file: {legacy_file}")
-            player_df = analyze_season_stats_legacy(player_df, legacy_file)
-        else:
-            logger.error("❌ No season stats data found (neither new nor legacy)")
+        logger.warning("⚠️  No season stats data available (database, files, or legacy)")
+        # Return player_df unchanged - app will work without advanced stats
 
     return player_df
 

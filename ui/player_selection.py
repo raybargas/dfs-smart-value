@@ -1070,7 +1070,8 @@ Smart Value =
     
     if 'season_stats_enriched' not in st.session_state or force_recalc:
         with st.spinner("📈 Analyzing historical trends..."):
-            df = analyze_season_stats(df, legacy_file="2025 Stats thru week 5.xlsx", week=current_week)
+            # Prioritizes database, then files, then legacy fallback
+            df = analyze_season_stats(df, week=current_week)
             st.session_state['season_stats_data'] = df
             st.session_state['season_stats_enriched'] = True
             st.session_state['ceiling_migrated_v2'] = True
