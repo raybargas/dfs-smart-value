@@ -155,6 +155,18 @@ def render_data_ingestion():
                 conn = sqlite3.connect(str(db_path))
                 cursor = conn.cursor()
                 
+                # Check if table exists first
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='advanced_stats'
+                """)
+                
+                if not cursor.fetchone():
+                    # Table doesn't exist yet - return all False
+                    conn.close()
+                    file_types = ['pass', 'rush', 'receiving', 'snaps']
+                    return {file_type: False for file_type in file_types}
+                
                 # Check for advanced_stats records for this week
                 cursor.execute("""
                     SELECT COUNT(*) FROM advanced_stats WHERE week = ?
