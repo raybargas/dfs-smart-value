@@ -300,22 +300,8 @@ def render_data_ingestion():
                     # Save to database
                     db_saved = False  # Initialize to False in case of errors
                     try:
-                        # Import FileLoader and database save function
-                        # Use lightweight advanced_stats_db module to avoid heavy import dependencies
-                        FileLoader = None
-                        save_advanced_stats_to_database = None
-                        
-                        # Import FileLoader (needs full advanced_stats_loader)
-                        try:
-                            from advanced_stats_loader import FileLoader
-                        except ImportError:
-                            try:
-                                from src.advanced_stats_loader import FileLoader
-                            except ImportError as import_err:
-                                st.error(f"❌ Could not import FileLoader: {str(import_err)}")
-                                raise
-                        
                         # Import database save function (lightweight, no heavy dependencies)
+                        save_advanced_stats_to_database = None
                         try:
                             from advanced_stats_db import save_advanced_stats_to_database
                         except ImportError:
@@ -325,9 +311,19 @@ def render_data_ingestion():
                                 st.error(f"❌ Could not import save_advanced_stats_to_database: {str(import_err)}")
                                 raise
                         
-                        # Load the files we just saved
-                        loader = FileLoader(str(season_stats_dir), week=selected_week)
-                        season_files = loader.load_all_files()
+                        # Load the Excel files directly (bypass FileLoader to avoid import issues)
+                        season_files = {}
+                        for file_type, filename in expected_files.items():
+                            file_path = season_stats_dir / filename
+                            if file_path.exists():
+                                try:
+                                    df = pd.read_excel(file_path)
+                                    season_files[file_type] = df
+                                except Exception as e:
+                                    st.warning(f"⚠️ Could not read {filename}: {str(e)}")
+                                    season_files[file_type] = None
+                            else:
+                                season_files[file_type] = None
                         
                         # Save to database
                         db_saved = save_advanced_stats_to_database(season_files, selected_week)
