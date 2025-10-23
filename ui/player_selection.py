@@ -101,7 +101,7 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     # Check each player's prior week performance
     # PERFORMANCE OPTIMIZATION: Use batch query to fetch all players in ONE database call
     player_names = df['name'].tolist()
-    current_week = st.session_state.get('current_week', 7)
+    current_week = st.session_state.get('current_week', 8)
     prior_week = current_week - 1  # For Week 7, use Week 6 data
     regression_results = check_regression_risk_batch(player_names, week=prior_week, threshold=20.0, db_path="dfs_optimizer.db")
     
@@ -1058,12 +1058,22 @@ Smart Value =
     # FORCE RECALCULATION: Check if we need to migrate to new ceiling calculation
     force_recalc = 'ceiling_migrated_v2' not in st.session_state
     
+    # Clear cache if week changed (season stats are week-specific)
+    current_week = st.session_state.get('current_week', 8)
+    if 'season_stats_week' not in st.session_state or st.session_state['season_stats_week'] != current_week:
+        if 'season_stats_enriched' in st.session_state:
+            del st.session_state['season_stats_enriched']
+        if 'season_stats_data' in st.session_state:
+            del st.session_state['season_stats_data']
+        st.session_state['season_stats_week'] = current_week
+    
     if 'season_stats_enriched' not in st.session_state or force_recalc:
         with st.spinner("📈 Analyzing historical trends..."):
-            df = analyze_season_stats(df, legacy_file="2025 Stats thru week 5.xlsx")
+            df = analyze_season_stats(df, legacy_file="2025 Stats thru week 5.xlsx", week=current_week)
             st.session_state['season_stats_data'] = df
             st.session_state['season_stats_enriched'] = True
             st.session_state['ceiling_migrated_v2'] = True
+            st.session_state['season_stats_week'] = current_week
             
             # Clear Smart Value cache to force recalc with new ceilings
             if 'smart_value_calculated' in st.session_state:
@@ -1091,7 +1101,7 @@ Smart Value =
                 position_weights = {pos: weights for pos, weights in position_weights.items() if weights}
             
             # Get current week for Vegas lines lookup
-            current_week = st.session_state.get('current_week', 7)
+            current_week = st.session_state.get('current_week', 8)
             df = calculate_smart_value(df, profile='balanced', custom_weights=custom_weights, position_weights=position_weights, sub_weights=sub_weights, week=current_week)
             
             # Smart Value calculation completed
@@ -1107,8 +1117,21 @@ Smart Value =
             df = add_opponents_to_dataframe(df, opponent_map)
     
     # Add injury flags to player names
-    current_week = st.session_state.get('current_week', 7)
+    current_week = st.session_state.get('current_week', 8)
     df = add_injury_flags_to_dataframe(df, week=current_week)
+    
+    # PHASE 2C: Integrate Narrative Intelligence flags for color-coding and player insights
+    if NARRATIVE_INTELLIGENCE_AVAILABLE:
+        try:
+            builder = PlayerContextBuilder(db_path="dfs_optimizer.db", week=current_week)
+            df = builder.enrich_players(df)
+            # df now has columns: 'flags', 'flag_count', 'red_flags', 'yellow_flags', 'green_flags', 'player_score'
+            st.session_state['narrative_flags_enriched'] = True
+        except Exception as e:
+            print(f"Warning: Could not enrich players with narrative intelligence: {e}")
+            st.session_state['narrative_flags_enriched'] = False
+    else:
+        st.session_state['narrative_flags_enriched'] = False
     
     # Verify required columns exist before storing
     required_cols = ['position', 'name', 'salary', 'projection', 'team']
@@ -1355,12 +1378,26 @@ Smart Value =
         if tooltip_parts:
             player_tooltip = " | ".join(tooltip_parts)
         
-        # Prepare player data with DFS metrics + Season stats + Warning flags + Injury flags
+        # Get narrative intelligence player score for color-coding (PHASE 2C)
+        player_score = row.get('player_score', None) if st.session_state.get('narrative_flags_enriched', False) else None
+        narrative_flags = row.get('flags', []) if st.session_state.get('narrative_flags_enriched', False) else []
+        
+        # Extract injury status for badge display (from PlayerContextBuilder or injury_tooltip)
+        injury_status = row.get('injury_status', None)
+        if not injury_status and injury_tooltip:
+            # Parse injury status from tooltip if not in row
+            injury_status = row.get('injury_flag', '').strip().replace('[', '').replace(']', '')
+        
+        # Prepare player data with DFS metrics + Season stats + Warning flags + Injury flags + Narrative Intelligence
         player_data = {
             '_index': idx,  # Hidden column to track original index
             '_warning_flag': has_warning,  # Hidden flag for row styling
             '_warning_tooltip': combined_tooltip,  # Combined tooltip (injury + warnings)
             '_regression_risk': has_regression_risk,  # Hidden boolean for cell styling
+            '_player_score': player_score,  # Hidden player score for color-coding (green/yellow/red)
+            '_narrative_flags': narrative_flags,  # Hidden flags for expandable detail panels
+            'injury_status': injury_status,  # Injury status for badge display (Q, D, O, IR)
+            'injury_tooltip': injury_tooltip,  # Injury tooltip for badge hover
             'Pool': is_in_pool,
             'Lock': is_locked,
             'Player': row['name'],
@@ -1391,7 +1428,13 @@ Smart Value =
             'FP/G': row.get('season_fpg', 0),
             'Var': format_variance_display(row.get('season_var', 0)),
             'Tgt%': row.get('season_tgt', 0) if row['position'] in ['WR', 'TE'] else None,
-            'RZ Tgt': row.get('season_eztgt', 0) if row['position'] in ['WR', 'TE'] else None
+            'RZ Tgt': row.get('season_eztgt', 0) if row['position'] in ['WR', 'TE'] else None,
+            # Tier 2 Advanced Metrics
+            'CPOE': row.get('adv_cpoe', None) if row['position'] == 'QB' else None,
+            'aDOT': row.get('adv_adot', None) if row['position'] == 'QB' else None,
+            'Deep%': row.get('adv_deep_throw_pct', None) if row['position'] == 'QB' else None,
+            'MTF/ATT': row.get('adv_mtf_att', None) if row['position'] == 'RB' else None,
+            '1Read%': row.get('adv_1read_pct', None)
         }
         
         display_data.append(player_data)
@@ -1401,16 +1444,45 @@ Smart Value =
     # Configure AgGrid
     gb = GridOptionsBuilder.from_dataframe(grid_df)
     
-    # Custom cell renderer for Player column to color names red if regression risk
+    # Custom cell renderer for Player column with injury badges and regression risk styling
     player_cell_renderer = JsCode("""
     class PlayerCellRenderer {
         init(params) {
             this.eGui = document.createElement('div');
-            this.eGui.innerText = params.value;
+            this.eGui.style.display = 'flex';
+            this.eGui.style.alignItems = 'center';
+            this.eGui.style.gap = '6px';
+            
+            // Create player name
+            const nameSpan = document.createElement('span');
+            nameSpan.innerText = params.value;
+            
             // Check if player has regression risk (80/20 rule)
             if (params.data._regression_risk) {
-                this.eGui.style.color = 'red';
-                this.eGui.style.fontWeight = '600';
+                nameSpan.style.color = 'red';
+                nameSpan.style.fontWeight = '600';
+            }
+            
+            this.eGui.appendChild(nameSpan);
+            
+            // PHASE 2C: Add injury badge icons
+            const injuryStatus = params.data.injury_status;
+            if (injuryStatus) {
+                const badge = document.createElement('span');
+                badge.style.fontSize = '16px';
+                badge.style.cursor = 'help';
+                
+                if (injuryStatus === 'Q' || injuryStatus === 'D') {
+                    badge.innerText = '⚠️';
+                    badge.title = params.data.injury_tooltip || `Injury Status: ${injuryStatus}`;
+                } else if (injuryStatus === 'O' || injuryStatus === 'IR') {
+                    badge.innerText = '❌';
+                    badge.title = params.data.injury_tooltip || `Injury Status: ${injuryStatus}`;
+                }
+                
+                if (badge.innerText) {
+                    this.eGui.appendChild(badge);
+                }
             }
         }
         getGui() {
@@ -1424,6 +1496,10 @@ Smart Value =
     gb.configure_column("_warning_flag", hide=True)  # Hide warning flag (used for row styling)
     gb.configure_column("_warning_tooltip", hide=True)  # Hide warning tooltip
     gb.configure_column("_regression_risk", hide=True)  # Hide regression risk boolean
+    gb.configure_column("_player_score", hide=True)  # Hide player score (used for color-coding)
+    gb.configure_column("_narrative_flags", hide=True)  # Hide narrative flags (used for expandable panels)
+    gb.configure_column("injury_status", hide=True)  # Hide injury status (used by badge renderer)
+    gb.configure_column("injury_tooltip", hide=True)  # Hide injury tooltip (used by badge renderer)
     gb.configure_column("Player_Tooltip", hide=True)  # Hide player tooltip (used by cellRenderer)
     
     gb.configure_column("Pool", 
@@ -1568,6 +1644,37 @@ Smart Value =
     gb.configure_column("Mom_Tooltip", hide=True)
     gb.configure_column("Smart_Value_Tooltip", hide=True)
     
+    # === TIER 2 ADVANCED METRICS COLUMNS ===
+    gb.configure_column("CPOE", 
+                        header_name="CPOE",
+                        width=80,
+                        cellStyle={'textAlign': 'center'},
+                        headerTooltip="CPOE (Completion % Over Expected) - Measures QB accuracy vs difficulty. Positive values = better than expected accuracy, negative = worse. Higher is better for QB efficiency validation. Range: -20 to +20")
+    
+    gb.configure_column("aDOT", 
+                        header_name="aDOT",
+                        width=80,
+                        cellStyle={'textAlign': 'center'},
+                        headerTooltip="aDOT (Average Depth of Target) - Indicates game script and ceiling potential. Higher values = more aggressive downfield passing. Used in high-total games for QB ceiling assessment. Range: 0-20 yards")
+    
+    gb.configure_column("Deep%", 
+                        header_name="Deep%",
+                        width=80,
+                        cellStyle={'textAlign': 'center'},
+                        headerTooltip="Deep Throw % - Percentage of throws >20 yards downfield. Higher values = more boom potential and ceiling upside. Key indicator for GPP tournaments. Range: 0-50%")
+    
+    gb.configure_column("MTF/ATT", 
+                        header_name="MTF/ATT",
+                        width=90,
+                        cellStyle={'textAlign': 'center'},
+                        headerTooltip="MTF/ATT (Missed Tackles Forced per Attempt) - Breakaway ability and ceiling indicator for RBs. Higher values = more explosive play potential and tournament upside. Range: 0-1.0")
+    
+    gb.configure_column("1Read%", 
+                        header_name="1Read%",
+                        width=90,
+                        cellStyle={'textAlign': 'center'},
+                        headerTooltip="1Read % - First Read Completion Percentage. Measures designed targets and QB trust. Higher values = more reliable opportunity and floor. Range: 0-100%")
+    
     gb.configure_column("Team", 
                         header_name="Team",
                         filter="agTextColumnFilter",
@@ -1704,9 +1811,30 @@ Smart Value =
     # Build grid options
     grid_options = gb.build()
     
-    # Add row styling for warning flags (light orange/pink for flagged players)
+    # Add row styling for narrative intelligence color-coding (PHASE 2C)
     grid_options['getRowStyle'] = JsCode("""
     function(params) {
+        // PHASE 2C: Color-code rows based on narrative intelligence player score
+        if (params.data._player_score) {
+            if (params.data._player_score === 'green') {
+                return {
+                    'backgroundColor': '#1a472a',  // Green for optimal plays
+                    'color': '#90EE90'  // Light green text for contrast
+                };
+            } else if (params.data._player_score === 'yellow') {
+                return {
+                    'backgroundColor': '#4a4419',  // Yellow for caution
+                    'color': '#FFD700'  // Gold text for contrast
+                };
+            } else if (params.data._player_score === 'red') {
+                return {
+                    'backgroundColor': '#4a1a1a',  // Red for warnings
+                    'color': '#FFB6C1'  // Light pink text for contrast
+                };
+            }
+        }
+        
+        // Fallback: Legacy warning flag styling (light orange/pink for flagged players)
         if (params.data._warning_flag === true) {
             return {
                 'backgroundColor': 'rgba(255, 165, 0, 0.15)',  // Light orange/pink
@@ -1714,6 +1842,58 @@ Smart Value =
             };
         }
         return null;
+    }
+    """)
+    
+    # PHASE 2C: Enable Master/Detail for expandable flag detail panels
+    grid_options['masterDetail'] = True
+    grid_options['detailRowHeight'] = 200
+    
+    # Flag details renderer for expandable panels
+    grid_options['detailCellRenderer'] = JsCode("""
+    function(params) {
+        const flags = params.data._narrative_flags || [];
+        
+        if (flags.length === 0) {
+            return '<div style="padding: 20px; color: #888;">No narrative intelligence flags available for this player.</div>';
+        }
+        
+        // Organize flags by severity
+        const passedChecks = flags.filter(f => f.severity === 'green');
+        const warnings = flags.filter(f => f.severity === 'yellow');
+        const failedChecks = flags.filter(f => f.severity === 'red');
+        
+        let html = '<div style="padding: 15px; background: #1e1e1e; border-left: 4px solid #444;">';
+        
+        // Passed Checks
+        if (passedChecks.length > 0) {
+            html += '<div style="margin-bottom: 15px;"><strong style="color: #90EE90;">✅ Passed Checks:</strong><ul style="margin: 5px 0; padding-left: 20px;">';
+            passedChecks.forEach(flag => {
+                html += `<li style="color: #ccc; margin: 3px 0;">${flag.message || flag.category}</li>`;
+            });
+            html += '</ul></div>';
+        }
+        
+        // Warnings
+        if (warnings.length > 0) {
+            html += '<div style="margin-bottom: 15px;"><strong style="color: #FFD700;">⚠️ Warnings:</strong><ul style="margin: 5px 0; padding-left: 20px;">';
+            warnings.forEach(flag => {
+                html += `<li style="color: #ccc; margin: 3px 0;">${flag.message || flag.category}</li>`;
+            });
+            html += '</ul></div>';
+        }
+        
+        // Failed Checks
+        if (failedChecks.length > 0) {
+            html += '<div style="margin-bottom: 15px;"><strong style="color: #FFB6C1;">❌ Failed Checks:</strong><ul style="margin: 5px 0; padding-left: 20px;">';
+            failedChecks.forEach(flag => {
+                html += `<li style="color: #ccc; margin: 3px 0;">${flag.message || flag.category}</li>`;
+            });
+            html += '</ul></div>';
+        }
+        
+        html += '</div>';
+        return html;
     }
     """)
     

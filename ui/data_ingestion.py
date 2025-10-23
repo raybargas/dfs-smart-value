@@ -837,7 +837,7 @@ def render_data_ingestion():
                 
                 # Build opponent lookup from Vegas lines for selected week
                 # This creates a clean team -> opponent mapping
-                current_week = st.session_state.get('current_week', 7)
+                current_week = st.session_state.get('current_week', 8)
                 opponent_map = build_opponent_lookup(week=current_week, db_path="dfs_optimizer.db")
                 st.session_state['opponent_lookup'] = opponent_map
             

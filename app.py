@@ -55,7 +55,7 @@ def main():
     if 'selections' not in st.session_state:
         st.session_state['selections'] = {}
     if 'current_week' not in st.session_state:
-        st.session_state['current_week'] = 7  # Default to current NFL week
+        st.session_state['current_week'] = 8  # Default to current NFL week
     
     # Route to appropriate page
     if st.session_state['page'] == 'data_ingestion':
