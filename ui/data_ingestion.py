@@ -14,6 +14,11 @@ from pathlib import Path
 src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
+# Add parent directory to path for config import
+parent_path = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_path))
+
+from config import DEFAULT_NFL_WEEK
 from parser import load_and_validate_player_data
 from opponent_lookup import build_opponent_lookup
 from styles import (
@@ -50,12 +55,12 @@ def render_data_ingestion():
     selected_week = st.selectbox(
         "NFL Week",
         options=list(range(1, 19)),
-        index=st.session_state.get('current_week', 8) - 1,
+        index=st.session_state.get('current_week', DEFAULT_NFL_WEEK) - 1,
         key="week_selector"
     )
     
     # Update session state if week changed
-    if selected_week != st.session_state.get('current_week', 8):
+    if selected_week != st.session_state.get('current_week', DEFAULT_NFL_WEEK):
         st.session_state['current_week'] = selected_week
         
         # Try to load historical data for this week from database
@@ -837,7 +842,7 @@ def render_data_ingestion():
                 
                 # Build opponent lookup from Vegas lines for selected week
                 # This creates a clean team -> opponent mapping
-                current_week = st.session_state.get('current_week', 8)
+                current_week = st.session_state.get('current_week', DEFAULT_NFL_WEEK)
                 opponent_map = build_opponent_lookup(week=current_week, db_path="dfs_optimizer.db")
                 st.session_state['opponent_lookup'] = opponent_map
             

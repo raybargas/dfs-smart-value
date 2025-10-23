@@ -5,6 +5,7 @@ This is the main entry point for the DFS Lineup Optimizer web application.
 """
 
 import streamlit as st
+from config import DEFAULT_NFL_WEEK
 from ui.data_ingestion import render_data_ingestion
 from ui.narrative_intelligence import show as render_narrative_intelligence
 from ui.player_selection import render_player_selection
@@ -55,7 +56,7 @@ def main():
     if 'selections' not in st.session_state:
         st.session_state['selections'] = {}
     if 'current_week' not in st.session_state:
-        st.session_state['current_week'] = 8  # Default to current NFL week
+        st.session_state['current_week'] = DEFAULT_NFL_WEEK
     
     # Route to appropriate page
     if st.session_state['page'] == 'data_ingestion':

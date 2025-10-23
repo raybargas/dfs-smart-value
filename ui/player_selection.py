@@ -16,6 +16,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 parent_path = Path(__file__).parent.parent
 sys.path.insert(0, str(parent_path))
 
+from config import DEFAULT_NFL_WEEK
 from src.models import PlayerSelection
 from src.regression_analyzer import check_regression_risk, check_regression_risk_batch
 from src.opponent_lookup import add_opponents_to_dataframe
@@ -101,7 +102,7 @@ def calculate_dfs_metrics(df: pd.DataFrame) -> pd.DataFrame:
     # Check each player's prior week performance
     # PERFORMANCE OPTIMIZATION: Use batch query to fetch all players in ONE database call
     player_names = df['name'].tolist()
-    current_week = st.session_state.get('current_week', 8)
+    current_week = st.session_state.get('current_week', DEFAULT_NFL_WEEK)
     prior_week = current_week - 1  # For Week 7, use Week 6 data
     regression_results = check_regression_risk_batch(player_names, week=prior_week, threshold=20.0, db_path="dfs_optimizer.db")
     
@@ -1059,7 +1060,7 @@ Smart Value =
     force_recalc = 'ceiling_migrated_v2' not in st.session_state
     
     # Clear cache if week changed (season stats are week-specific)
-    current_week = st.session_state.get('current_week', 8)
+    current_week = st.session_state.get('current_week', DEFAULT_NFL_WEEK)
     if 'season_stats_week' not in st.session_state or st.session_state['season_stats_week'] != current_week:
         if 'season_stats_enriched' in st.session_state:
             del st.session_state['season_stats_enriched']
@@ -1101,7 +1102,7 @@ Smart Value =
                 position_weights = {pos: weights for pos, weights in position_weights.items() if weights}
             
             # Get current week for Vegas lines lookup
-            current_week = st.session_state.get('current_week', 8)
+            current_week = st.session_state.get('current_week', DEFAULT_NFL_WEEK)
             df = calculate_smart_value(df, profile='balanced', custom_weights=custom_weights, position_weights=position_weights, sub_weights=sub_weights, week=current_week)
             
             # Smart Value calculation completed
@@ -1117,7 +1118,7 @@ Smart Value =
             df = add_opponents_to_dataframe(df, opponent_map)
     
     # Add injury flags to player names
-    current_week = st.session_state.get('current_week', 8)
+    current_week = st.session_state.get('current_week', DEFAULT_NFL_WEEK)
     df = add_injury_flags_to_dataframe(df, week=current_week)
     
     # PHASE 2C: Integrate Narrative Intelligence flags for color-coding and player insights
