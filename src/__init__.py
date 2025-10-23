@@ -13,7 +13,17 @@ from .validator import (
     get_data_quality_score
 )
 from .models import Player
-from .advanced_stats_loader import FileLoader, save_advanced_stats_to_database, load_advanced_stats_from_database
+
+# Advanced stats loader imports - only import when needed to avoid circular dependencies
+try:
+    from .advanced_stats_loader import FileLoader, save_advanced_stats_to_database, load_advanced_stats_from_database
+    _ADVANCED_STATS_AVAILABLE = True
+except ImportError:
+    # Fallback if advanced_stats_loader has import issues
+    _ADVANCED_STATS_AVAILABLE = False
+    FileLoader = None
+    save_advanced_stats_to_database = None
+    load_advanced_stats_from_database = None
 
 __all__ = [
     'parse_file',
@@ -24,10 +34,11 @@ __all__ = [
     'validate_data_ranges',
     'get_data_quality_score',
     'Player',
-    'FileLoader',
-    'save_advanced_stats_to_database',
-    'load_advanced_stats_from_database'
 ]
+
+# Only add advanced stats exports if successfully imported
+if _ADVANCED_STATS_AVAILABLE:
+    __all__.extend(['FileLoader', 'save_advanced_stats_to_database', 'load_advanced_stats_from_database'])
 
 __version__ = '1.0.0'
 
