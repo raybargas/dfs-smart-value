@@ -764,11 +764,30 @@ def analyze_season_stats(
                             pos = row.get('position', 'N/A')
                             sample_val = row[adv_cols[0]]
                             print(f"      {player_name} ({pos}): {adv_cols[0]}={sample_val}")
+                        
+                        # CRITICAL: Show Streamlit message so user can see this in UI
+                        try:
+                            import streamlit as st
+                            st.success(f"✅ Added {len(adv_cols)} advanced stats columns to DataFrame")
+                            st.info(f"📊 Sample columns: {', '.join(adv_cols[:5])}")
+                            st.info(f"✅ {len(sample_players)}/{len(player_df)} players have advanced stats data")
+                        except:
+                            pass  # Streamlit not available (testing mode)
                     else:
                         print(f"   ⚠️  WARNING: No players have advanced stats data!")
                         print(f"      This suggests player name matching failed")
+                        try:
+                            import streamlit as st
+                            st.warning("⚠️ Advanced stats columns added but no players have data - check player name matching")
+                        except:
+                            pass
                 else:
                     print(f"   ⚠️  WARNING: No advanced columns were added!")
+                    try:
+                        import streamlit as st
+                        st.error("❌ No advanced stats columns were added to DataFrame")
+                    except:
+                        pass
             
             print(f"{'='*80}\n")
             return player_df
