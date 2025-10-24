@@ -1678,6 +1678,121 @@ Smart Value =
                         cellStyle={'textAlign': 'center'},
                         headerTooltip="1Read % - First Read Completion Percentage. Measures designed targets and QB trust. Higher values = more reliable opportunity and floor. Range: 0-100%")
     
+    # === POSITION-SPECIFIC ADVANCED STATS (Week 8+) ===
+    # QB-specific metrics (light blue background)
+    qb_style = JsCode("""
+    function(params) {
+        if (params.data.Pos === 'QB' && params.value !== null && params.value !== '') {
+            return {'backgroundColor': '#E3F2FD', 'textAlign': 'center'};
+        }
+        return {'textAlign': 'center', 'color': '#666'};
+    }
+    """)
+    
+    gb.configure_column("adv_cpoe", 
+                        header_name="CPOE",
+                        width=80,
+                        cellStyle=qb_style,
+                        valueFormatter="params.data.Pos === 'QB' && params.value !== null && params.value !== 0 ? params.value.toFixed(1) : ''",
+                        headerTooltip="QB ONLY: Completion % Over Expected. Measures accuracy vs difficulty. Positive = better than expected. Range: -20 to +20")
+    
+    gb.configure_column("adv_adot", 
+                        header_name="aDOT",
+                        width=80,
+                        cellStyle=qb_style,
+                        valueFormatter="params.data.Pos === 'QB' && params.value !== null && params.value !== 0 ? params.value.toFixed(1) : ''",
+                        headerTooltip="QB ONLY: Average Depth of Target. Higher = more aggressive downfield passing. Range: 0-20 yards")
+    
+    gb.configure_column("adv_ypa", 
+                        header_name="YPA",
+                        width=80,
+                        cellStyle=qb_style,
+                        valueFormatter="params.data.Pos === 'QB' && params.value !== null && params.value !== 0 ? params.value.toFixed(1) : ''",
+                        headerTooltip="QB ONLY: Yards Per Attempt. Efficiency metric. Higher = more efficient passing. Range: 5-10 yards")
+    
+    # RB-specific metrics (light green background)
+    rb_style = JsCode("""
+    function(params) {
+        if (params.data.Pos === 'RB' && params.value !== null && params.value !== '') {
+            return {'backgroundColor': '#E8F5E9', 'textAlign': 'center'};
+        }
+        return {'textAlign': 'center', 'color': '#666'};
+    }
+    """)
+    
+    gb.configure_column("adv_ypc", 
+                        header_name="YPC",
+                        width=80,
+                        cellStyle=rb_style,
+                        valueFormatter="params.data.Pos === 'RB' && params.value !== null && params.value !== 0 ? params.value.toFixed(1) : ''",
+                        headerTooltip="RB ONLY: Yards Per Carry. Efficiency metric. Higher = more explosive. Range: 3-6 yards")
+    
+    gb.configure_column("adv_rush_share", 
+                        header_name="Rush%",
+                        width=80,
+                        cellStyle=rb_style,
+                        valueFormatter="params.data.Pos === 'RB' && params.value !== null && params.value !== 0 ? params.value.toFixed(1) + '%' : ''",
+                        headerTooltip="RB ONLY: Rush Share. % of team rushes. Higher = more volume. Range: 0-100%")
+    
+    gb.configure_column("adv_tgt_share", 
+                        header_name="Tgt%",
+                        width=80,
+                        cellStyle=rb_style,
+                        valueFormatter="params.data.Pos === 'RB' && params.value !== null && params.value !== 0 ? params.value.toFixed(1) + '%' : ''",
+                        headerTooltip="RB ONLY: Target Share. % of team targets. Higher = more receiving work. Range: 0-30%")
+    
+    # WR/TE-specific metrics (light orange/purple background)
+    wr_te_style = JsCode("""
+    function(params) {
+        if ((params.data.Pos === 'WR' || params.data.Pos === 'TE') && params.value !== null && params.value !== '') {
+            var bgColor = params.data.Pos === 'WR' ? '#FFF3E0' : '#F3E5F5';
+            return {'backgroundColor': bgColor, 'textAlign': 'center'};
+        }
+        return {'textAlign': 'center', 'color': '#666'};
+    }
+    """)
+    
+    gb.configure_column("adv_tprr", 
+                        header_name="TPRR",
+                        width=80,
+                        cellStyle=wr_te_style,
+                        valueFormatter="(params.data.Pos === 'WR' || params.data.Pos === 'TE') && params.value !== null && params.value !== 0 ? params.value.toFixed(2) : ''",
+                        headerTooltip="WR/TE ONLY: Targets Per Route Run. Volume efficiency. Higher = more targets per route. Range: 0-0.40")
+    
+    gb.configure_column("adv_yprr", 
+                        header_name="YPRR",
+                        width=80,
+                        cellStyle=wr_te_style,
+                        valueFormatter="(params.data.Pos === 'WR' || params.data.Pos === 'TE') && params.value !== null && params.value !== 0 ? params.value.toFixed(2) : ''",
+                        headerTooltip="WR/TE ONLY: Yards Per Route Run. Production efficiency. Higher = more yards per route. Range: 0-4.0")
+    
+    gb.configure_column("adv_catch_pct", 
+                        header_name="Catch%",
+                        width=80,
+                        cellStyle=wr_te_style,
+                        valueFormatter="(params.data.Pos === 'WR' || params.data.Pos === 'TE') && params.value !== null && params.value !== 0 ? params.value.toFixed(1) + '%' : ''",
+                        headerTooltip="WR/TE ONLY: Catch Percentage. Reliability metric. Higher = more reliable hands. Range: 50-90%")
+    
+    # Snap% for all skill positions (position-specific shading)
+    snap_style = JsCode("""
+    function(params) {
+        if (params.value !== null && params.value !== '' && params.value !== 0) {
+            if (params.data.Pos === 'QB') return {'backgroundColor': '#E3F2FD', 'textAlign': 'center'};
+            if (params.data.Pos === 'RB') return {'backgroundColor': '#E8F5E9', 'textAlign': 'center'};
+            if (params.data.Pos === 'WR') return {'backgroundColor': '#FFF3E0', 'textAlign': 'center'};
+            if (params.data.Pos === 'TE') return {'backgroundColor': '#F3E5F5', 'textAlign': 'center'};
+        }
+        return {'textAlign': 'center', 'color': '#666'};
+    }
+    """)
+    
+    gb.configure_column("adv_snap_pct", 
+                        header_name="Snap%",
+                        width=80,
+                        cellStyle=snap_style,
+                        valueFormatter="params.value !== null && params.value !== 0 ? params.value.toFixed(1) + '%' : ''",
+                        headerTooltip="ALL POSITIONS: Snap Percentage. % of offensive snaps played. Higher = more opportunity. Range: 0-100%")
+    
     gb.configure_column("Team", 
                         header_name="Team",
                         filter="agTextColumnFilter",
