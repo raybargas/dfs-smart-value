@@ -1437,7 +1437,18 @@ Smart Value =
             'aDOT': row.get('adv_adot', None) if row['position'] == 'QB' else None,
             'Deep%': row.get('adv_deep_throw_pct', None) if row['position'] == 'QB' else None,
             'MTF/ATT': row.get('adv_mtf_att', None) if row['position'] == 'RB' else None,
-            '1Read%': row.get('adv_1read_pct', None)
+            '1Read%': row.get('adv_1read_pct', None),
+            # Position-Specific Advanced Stats (Week 8+)
+            'adv_cpoe': row.get('adv_cpoe', None),
+            'adv_adot': row.get('adv_adot', None),
+            'adv_ypa': row.get('adv_ypa', None),
+            'adv_ypc': row.get('adv_ypc', None),
+            'adv_rush_share': row.get('adv_rush_share', None),
+            'adv_tgt_share': row.get('adv_tgt_share', None),
+            'adv_tprr': row.get('adv_tprr', None),
+            'adv_yprr': row.get('adv_yprr', None),
+            'adv_catch_pct': row.get('adv_catch_pct', None),
+            'adv_snap_pct': row.get('adv_snap_pct', None)
         }
         
         display_data.append(player_data)
