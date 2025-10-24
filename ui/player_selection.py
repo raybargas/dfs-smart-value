@@ -997,7 +997,7 @@ Smart Value =
     <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; margin-bottom: 0.75rem;">
         <div style="display: flex; align-items: baseline; gap: 1rem;">
             <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; display: inline;">
-                🏈 <span class="gradient-text">Player Pool Selection</span>
+                🏈 <span class="gradient-text">Player Pool Selection</span> ⚡
             </h2>
             <span style="color: #707070; font-size: 0.875rem;">Pool = include | Lock = must-start</span>
         </div>
