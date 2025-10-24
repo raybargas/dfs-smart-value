@@ -727,31 +727,48 @@ def analyze_season_stats(
             print(f"   Creating player mapper...")
             player_mapper = create_player_mapper(player_df, season_files)
             print(f"   ✅ Mapped {len(player_mapper)} players")
+            
+            # Show sample mappings
+            if len(player_mapper) > 0:
+                sample_mappings = list(player_mapper.items())[:3]
+                print(f"   Sample mappings:")
+                for orig_name, matches in sample_mappings:
+                    print(f"      '{orig_name}' → {list(matches.keys())}")
 
             # Extract original 9 metrics
             print(f"   Enriching with base metrics...")
+            player_df_before = len(player_df.columns)
             player_df = _enrich_with_base_metrics(player_df, season_files, player_mapper)
-            print(f"   ✅ Base metrics added")
+            player_df_after = len(player_df.columns)
+            print(f"   ✅ Base metrics added ({player_df_after - player_df_before} new columns)")
 
             # Extract advanced metrics (Tier 1 + 2) if requested
             if use_advanced_stats:
                 print(f"   Enriching with advanced stats (Tiers 1 & 2)...")
+                player_df_before = len(player_df.columns)
                 player_df = enrich_with_advanced_stats(player_df, season_files, player_mapper, tiers=[1, 2])
-                print(f"   ✅ Advanced stats added")
+                player_df_after = len(player_df.columns)
+                print(f"   ✅ Advanced stats added ({player_df_after - player_df_before} new columns)")
                 
                 # Show sample of enriched data
                 adv_cols = [col for col in player_df.columns if 'adv_' in col]
                 if adv_cols:
-                    print(f"\n   Advanced columns added: {len(adv_cols)}")
+                    print(f"\n   📊 Advanced columns added: {len(adv_cols)}")
                     print(f"   Sample columns: {adv_cols[:5]}")
                     # Show a sample player with advanced stats
-                    sample_player = player_df[player_df[adv_cols[0]].notna()].head(1)
-                    if len(sample_player) > 0:
-                        player_name = sample_player.iloc[0]['name']
-                        print(f"   Sample player '{player_name}':")
-                        for col in adv_cols[:3]:
-                            val = sample_player.iloc[0][col]
-                            print(f"      {col}: {val}")
+                    sample_players = player_df[player_df[adv_cols[0]].notna()].head(3)
+                    if len(sample_players) > 0:
+                        print(f"   ✅ Players with data: {len(sample_players)}/{len(player_df)}")
+                        for idx, row in sample_players.iterrows():
+                            player_name = row['name']
+                            pos = row.get('position', 'N/A')
+                            sample_val = row[adv_cols[0]]
+                            print(f"      {player_name} ({pos}): {adv_cols[0]}={sample_val}")
+                    else:
+                        print(f"   ⚠️  WARNING: No players have advanced stats data!")
+                        print(f"      This suggests player name matching failed")
+                else:
+                    print(f"   ⚠️  WARNING: No advanced columns were added!")
             
             print(f"{'='*80}\n")
             return player_df
