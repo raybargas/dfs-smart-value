@@ -1455,6 +1455,10 @@ Smart Value =
     
     grid_df = pd.DataFrame(display_data)
     
+    # DEBUG: Print DataFrame columns to verify advanced stats are included
+    print(f"DEBUG: DataFrame has {len(grid_df.columns)} columns")
+    print(f"DEBUG: Advanced stats columns present: {[col for col in grid_df.columns if 'adv_' in col]}")
+    
     # Configure AgGrid
     gb = GridOptionsBuilder.from_dataframe(grid_df)
     
