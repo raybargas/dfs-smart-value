@@ -40,6 +40,10 @@ def _get_default_db_path():
 # Cache the db path to avoid repeated detection
 _DEFAULT_DB_PATH = _get_default_db_path()
 
+# In development, prefer local dfs_optimizer.db if it exists
+if os.path.exists("dfs_optimizer.db"):
+    _DEFAULT_DB_PATH = "dfs_optimizer.db"
+
 
 def _normalize_column_name(col: str) -> str:
     """Normalize column names to handle variations between file versions."""
@@ -315,7 +319,7 @@ def load_advanced_stats_from_database(
     db_path: str = None
 ) -> Dict[str, Optional[pd.DataFrame]]:
     """
-    Load advanced stats for a specific week from all 4 tables.
+    Load advanced stats for a specific week from the consolidated advanced_stats table.
     
     Args:
         week: Week number
@@ -334,28 +338,111 @@ def load_advanced_stats_from_database(
     try:
         conn = sqlite3.connect(db_path)
         
-        result = {}
-        
-        # Load from each table
-        tables = {
-            'pass': 'pass_stats',
-            'rush': 'rush_stats',
-            'receiving': 'receiving_stats',
-            'snaps': 'snap_stats'
-        }
-        
-        for key, table_name in tables.items():
-            try:
-                query = f"SELECT * FROM {table_name} WHERE week = ?"
-                df = pd.read_sql_query(query, conn, params=(week,))
-                result[key] = df if len(df) > 0 else None
-            except Exception as e:
-                print(f"Error loading {table_name}: {e}")
-                result[key] = None
+        # Load from the consolidated advanced_stats table
+        query = "SELECT * FROM advanced_stats WHERE week = ?"
+        df_all = pd.read_sql_query(query, conn, params=(week,))
         
         conn.close()
+        
+        if len(df_all) == 0:
+            print("   No records found in database")
+            return {'pass': None, 'rush': None, 'receiving': None, 'snaps': None}
+        
+        print(f"   Loaded {len(df_all)} records from advanced_stats table")
+        
+        # Extract records by position to create separate DataFrames
+        # This matches the expected structure from the 4-file system
+        result = {}
+        
+        # Pass stats (QB only)
+        df_pass = df_all[df_all['position'] == 'QB'].copy()
+        if len(df_pass) > 0:
+            # Rename columns to match expected format
+            df_pass = df_pass.rename(columns={
+                'player_name': 'Name',
+                'team': 'Team',
+                'position': 'POS',
+                'week': 'W'
+            })
+            # Select only columns that exist and are expected
+            cols_to_keep = ['Name', 'Team', 'POS', 'W']
+            if 'adv_cpoe' in df_pass.columns:
+                cols_to_keep.append('adv_cpoe')
+            if 'adv_adot' in df_pass.columns:
+                cols_to_keep.append('adv_adot')
+            if 'adv_deep_throw_pct' in df_pass.columns:
+                cols_to_keep.append('adv_deep_throw_pct')
+            if 'adv_1read_pct' in df_pass.columns:
+                cols_to_keep.append('adv_1read_pct')
+            df_pass = df_pass[[col for col in cols_to_keep if col in df_pass.columns]]
+            result['pass'] = df_pass
+        else:
+            result['pass'] = None
+        
+        # Rush stats (RB only)
+        df_rush = df_all[df_all['position'] == 'RB'].copy()
+        if len(df_rush) > 0:
+            df_rush = df_rush.rename(columns={
+                'player_name': 'Name',
+                'team': 'Team',
+                'position': 'POS',
+                'week': 'W'
+            })
+            cols_to_keep = ['Name', 'Team', 'POS', 'W']
+            if 'adv_yaco_att' in df_rush.columns:
+                cols_to_keep.append('adv_yaco_att')
+            if 'adv_mtf_att' in df_rush.columns:
+                cols_to_keep.append('adv_mtf_att')
+            if 'adv_success_rate' in df_rush.columns:
+                cols_to_keep.append('adv_success_rate')
+            df_rush = df_rush[[col for col in cols_to_keep if col in df_rush.columns]]
+            result['rush'] = df_rush
+        else:
+            result['rush'] = None
+        
+        # Receiving stats (WR/TE)
+        df_receiving = df_all[df_all['position'].isin(['WR', 'TE'])].copy()
+        if len(df_receiving) > 0:
+            df_receiving = df_receiving.rename(columns={
+                'player_name': 'Name',
+                'team': 'Team',
+                'position': 'POS',
+                'week': 'W'
+            })
+            cols_to_keep = ['Name', 'Team', 'POS', 'W']
+            if 'adv_tprr' in df_receiving.columns:
+                cols_to_keep.append('adv_tprr')
+            if 'adv_yprr' in df_receiving.columns:
+                cols_to_keep.append('adv_yprr')
+            if 'adv_rte_pct' in df_receiving.columns:
+                cols_to_keep.append('adv_rte_pct')
+            if 'adv_1read_pct' in df_receiving.columns:
+                cols_to_keep.append('adv_1read_pct')
+            df_receiving = df_receiving[[col for col in cols_to_keep if col in df_receiving.columns]]
+            result['receiving'] = df_receiving
+        else:
+            result['receiving'] = None
+        
+        # Snaps stats (all positions)
+        df_snaps = df_all.copy()
+        if len(df_snaps) > 0:
+            df_snaps = df_snaps.rename(columns={
+                'player_name': 'Name',
+                'team': 'Team',
+                'position': 'POS',
+                'week': 'W'
+            })
+            cols_to_keep = ['Name', 'Team', 'POS', 'W']
+            df_snaps = df_snaps[[col for col in cols_to_keep if col in df_snaps.columns]]
+            result['snaps'] = df_snaps
+        else:
+            result['snaps'] = None
+        
+        print(f"   Parsed into {sum(1 for v in result.values() if v is not None)} stat types")
         return result
         
     except Exception as e:
         print(f"Error loading advanced stats from database: {e}")
+        import traceback
+        traceback.print_exc()
         return {'pass': None, 'rush': None, 'receiving': None, 'snaps': None}
