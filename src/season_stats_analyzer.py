@@ -664,7 +664,8 @@ def analyze_season_stats(
     Performance: <5 seconds total for 500 players
     """
     if not ADVANCED_STATS_AVAILABLE:
-        logger.info("Advanced stats modules not available. Using legacy analysis.")
+        logger.info("Advanced stats modules not available. Using legacy mode.")
+        print("⚠️  ADVANCED_STATS_AVAILABLE = False - Using legacy mode")
         return analyze_season_stats_legacy(player_df, legacy_file)
 
     season_files = None
@@ -673,17 +674,21 @@ def analyze_season_stats(
     if week is not None:
         try:
             logger.info(f"🗄️  Attempting to load advanced stats from database (week={week})")
+            print(f"🗄️  Loading advanced stats for week {week} from database...")
             season_files = load_advanced_stats_from_database(week=week)
             
             # Check if we got any data
             files_loaded = sum(1 for df in season_files.values() if df is not None and len(df) > 0)
             if files_loaded > 0:
                 logger.info(f"✅ Loaded {files_loaded} stat types from database for week {week}")
+                print(f"✅ Loaded {files_loaded} stat types from database")
             else:
                 logger.info("📂 No data in database, trying files...")
+                print("📂 No data in database, trying files...")
                 season_files = None
         except Exception as e:
             logger.warning(f"⚠️  Database load failed: {e}. Trying files...")
+            print(f"⚠️  Database load failed: {e}")
             season_files = None
     
     # PRIORITY 2: Try loading from files (fallback)

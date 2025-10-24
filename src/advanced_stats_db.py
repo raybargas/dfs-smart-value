@@ -10,12 +10,35 @@ import pandas as pd
 from typing import Dict, Optional
 from pathlib import Path
 import sys
+import os
 
-# Add parent directory to path for config import
-parent_path = Path(__file__).parent.parent
-sys.path.insert(0, str(parent_path))
+# Robust config import with multiple fallback strategies
+def _get_default_db_path():
+    """Get database path with fallback if config import fails."""
+    try:
+        # Try 1: Import from parent directory
+        parent_path = Path(__file__).parent.parent
+        sys.path.insert(0, str(parent_path))
+        from config import DEFAULT_DB_PATH
+        return DEFAULT_DB_PATH
+    except ImportError:
+        try:
+            # Try 2: Import directly (if already in path)
+            from config import DEFAULT_DB_PATH
+            return DEFAULT_DB_PATH
+        except ImportError:
+            # Try 3: Detect environment manually
+            if os.path.exists("/mount/src"):
+                # Streamlit Cloud - use home directory
+                persistent_dir = Path.home() / ".streamlit" / "data"
+                persistent_dir.mkdir(parents=True, exist_ok=True)
+                return str(persistent_dir / "dfs_optimizer.db")
+            else:
+                # Local fallback
+                return "dfs_optimizer.db"
 
-from config import DEFAULT_DB_PATH
+# Cache the db path to avoid repeated detection
+_DEFAULT_DB_PATH = _get_default_db_path()
 
 
 def _normalize_column_name(col: str) -> str:
@@ -69,7 +92,11 @@ def save_advanced_stats_to_database(
     """
     # Use config default if not specified
     if db_path is None:
-        db_path = DEFAULT_DB_PATH
+        db_path = _DEFAULT_DB_PATH
+    
+    print(f"💾 Saving to database: {db_path}")
+    print(f"   Week: {week}")
+    print(f"   Files to save: {list(season_files.keys())}")
     
     try:
         conn = sqlite3.connect(db_path)
@@ -299,7 +326,10 @@ def load_advanced_stats_from_database(
     """
     # Use config default if not specified
     if db_path is None:
-        db_path = DEFAULT_DB_PATH
+        db_path = _DEFAULT_DB_PATH
+    
+    print(f"📂 Loading from database: {db_path}")
+    print(f"   Week: {week}")
     
     try:
         conn = sqlite3.connect(db_path)

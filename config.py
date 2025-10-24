@@ -32,16 +32,40 @@ MAX_WEEK = 18
 import os
 from pathlib import Path
 
-# Use Streamlit Cloud persistent storage if available, otherwise local
-# Streamlit Cloud provides /mount/src/.streamlit/ for persistent data
-if os.path.exists("/mount/src/.streamlit"):
-    # Production: Use persistent storage directory
-    PERSISTENT_DIR = Path("/mount/src/.streamlit/data")
-    PERSISTENT_DIR.mkdir(parents=True, exist_ok=True)
-    DEFAULT_DB_PATH = str(PERSISTENT_DIR / "dfs_optimizer.db")
-else:
-    # Local development: Use current directory
-    DEFAULT_DB_PATH = "dfs_optimizer.db"
+# Detect Streamlit Cloud environment and use appropriate persistent storage
+# Multiple detection methods for robustness
+def _get_db_path():
+    """
+    Determine the correct database path for current environment.
+    
+    Streamlit Cloud detection (in priority order):
+    1. Check for /mount/src/ directory (always exists in Streamlit Cloud)
+    2. Check STREAMLIT_SHARING_MODE environment variable
+    3. Fall back to local development path
+    """
+    # Method 1: Check if we're in Streamlit Cloud (more reliable)
+    if os.path.exists("/mount/src"):
+        # Use home directory for persistent storage (writable)
+        persistent_dir = Path.home() / ".streamlit" / "data"
+        persistent_dir.mkdir(parents=True, exist_ok=True)
+        db_path = str(persistent_dir / "dfs_optimizer.db")
+        print(f"🌐 Streamlit Cloud detected - Using persistent storage: {db_path}")
+        return db_path
+    
+    # Method 2: Check environment variable
+    if os.getenv("STREAMLIT_SHARING_MODE") == "true":
+        persistent_dir = Path.home() / ".streamlit" / "data"
+        persistent_dir.mkdir(parents=True, exist_ok=True)
+        db_path = str(persistent_dir / "dfs_optimizer.db")
+        print(f"🌐 Streamlit Cloud (env var) - Using persistent storage: {db_path}")
+        return db_path
+    
+    # Method 3: Local development
+    db_path = "dfs_optimizer.db"
+    print(f"💻 Local development - Using: {db_path}")
+    return db_path
+
+DEFAULT_DB_PATH = _get_db_path()
 
 # ============================================================================
 # API Configuration
