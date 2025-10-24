@@ -33,34 +33,54 @@ import os
 from pathlib import Path
 
 # Detect Streamlit Cloud environment and use appropriate persistent storage
-# Multiple detection methods for robustness
+# Aggressive detection with multiple fallback methods
 def _get_db_path():
     """
     Determine the correct database path for current environment.
     
-    Streamlit Cloud detection (in priority order):
-    1. Check for /mount/src/ directory (always exists in Streamlit Cloud)
-    2. Check STREAMLIT_SHARING_MODE environment variable
-    3. Fall back to local development path
+    Uses aggressive detection to ensure Streamlit Cloud is always recognized.
+    Tries persistent storage first, falls back to ephemeral only if it fails.
     """
-    # Method 1: Check if we're in Streamlit Cloud (more reliable)
-    if os.path.exists("/mount/src"):
-        # Use home directory for persistent storage (writable)
+    # Method 1: Check HOME directory (most reliable for Streamlit Cloud)
+    home_dir = os.getenv("HOME", "")
+    if home_dir == "/home/appuser" or "/home/appuser" in home_dir:
         persistent_dir = Path.home() / ".streamlit" / "data"
         persistent_dir.mkdir(parents=True, exist_ok=True)
         db_path = str(persistent_dir / "dfs_optimizer.db")
-        print(f"🌐 Streamlit Cloud detected - Using persistent storage: {db_path}")
+        print(f"🌐 Streamlit Cloud detected (HOME={home_dir}) - Using: {db_path}")
         return db_path
     
-    # Method 2: Check environment variable
+    # Method 2: Check for /mount/src/ directory
+    if os.path.exists("/mount/src"):
+        persistent_dir = Path.home() / ".streamlit" / "data"
+        persistent_dir.mkdir(parents=True, exist_ok=True)
+        db_path = str(persistent_dir / "dfs_optimizer.db")
+        print(f"🌐 Streamlit Cloud detected (/mount/src) - Using: {db_path}")
+        return db_path
+    
+    # Method 3: Check environment variable
     if os.getenv("STREAMLIT_SHARING_MODE") == "true":
         persistent_dir = Path.home() / ".streamlit" / "data"
         persistent_dir.mkdir(parents=True, exist_ok=True)
         db_path = str(persistent_dir / "dfs_optimizer.db")
-        print(f"🌐 Streamlit Cloud (env var) - Using persistent storage: {db_path}")
+        print(f"🌐 Streamlit Cloud detected (env var) - Using: {db_path}")
         return db_path
     
-    # Method 3: Local development
+    # Method 4: Try persistent path anyway (works if home directory is writable)
+    try:
+        persistent_dir = Path.home() / ".streamlit" / "data"
+        persistent_dir.mkdir(parents=True, exist_ok=True)
+        # Test if writable
+        test_file = persistent_dir / ".test_write"
+        test_file.touch()
+        test_file.unlink()
+        db_path = str(persistent_dir / "dfs_optimizer.db")
+        print(f"📁 Using persistent home directory: {db_path}")
+        return db_path
+    except Exception as e:
+        print(f"⚠️  Persistent storage not available ({e}), using ephemeral")
+    
+    # Method 5: Local development fallback
     db_path = "dfs_optimizer.db"
     print(f"💻 Local development - Using: {db_path}")
     return db_path
