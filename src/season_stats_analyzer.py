@@ -674,7 +674,13 @@ def analyze_season_stats(
     if week is not None:
         try:
             logger.info(f"🗄️  Attempting to load advanced stats from database (week={week})")
-            print(f"🗄️  Loading advanced stats for week {week} from database...")
+            print(f"\n{'='*80}")
+            print(f"🗄️  ANALYZE_SEASON_STATS CALLED")
+            print(f"{'='*80}")
+            print(f"   Week: {week}")
+            print(f"   Players in DataFrame: {len(player_df)}")
+            print(f"   Loading from database...")
+            
             season_files = load_advanced_stats_from_database(week=week)
             
             # Check if we got any data
@@ -682,6 +688,13 @@ def analyze_season_stats(
             if files_loaded > 0:
                 logger.info(f"✅ Loaded {files_loaded} stat types from database for week {week}")
                 print(f"✅ Loaded {files_loaded} stat types from database")
+                
+                # Print detailed stats for each file type
+                for file_type, df in season_files.items():
+                    if df is not None and len(df) > 0:
+                        print(f"   {file_type}: {len(df)} records")
+                        if len(df) > 0:
+                            print(f"      Sample players: {df['player_name'].head(3).tolist()}")
             else:
                 logger.info("📂 No data in database, trying files...")
                 print("📂 No data in database, trying files...")
@@ -689,6 +702,8 @@ def analyze_season_stats(
         except Exception as e:
             logger.warning(f"⚠️  Database load failed: {e}. Trying files...")
             print(f"⚠️  Database load failed: {e}")
+            import traceback
+            print(traceback.format_exc())
             season_files = None
     
     # PRIORITY 2: Try loading from files (fallback)
@@ -706,16 +721,39 @@ def analyze_season_stats(
     if season_files is not None:
         files_loaded = sum(1 for df in season_files.values() if df is not None and len(df) > 0)
         if files_loaded > 0:
+            print(f"\n📊 Processing {files_loaded} stat types...")
+            
             # Create player mapper (ONE-TIME fuzzy matching)
+            print(f"   Creating player mapper...")
             player_mapper = create_player_mapper(player_df, season_files)
+            print(f"   ✅ Mapped {len(player_mapper)} players")
 
             # Extract original 9 metrics
+            print(f"   Enriching with base metrics...")
             player_df = _enrich_with_base_metrics(player_df, season_files, player_mapper)
+            print(f"   ✅ Base metrics added")
 
             # Extract advanced metrics (Tier 1 + 2) if requested
             if use_advanced_stats:
+                print(f"   Enriching with advanced stats (Tiers 1 & 2)...")
                 player_df = enrich_with_advanced_stats(player_df, season_files, player_mapper, tiers=[1, 2])
+                print(f"   ✅ Advanced stats added")
+                
+                # Show sample of enriched data
+                adv_cols = [col for col in player_df.columns if 'adv_' in col]
+                if adv_cols:
+                    print(f"\n   Advanced columns added: {len(adv_cols)}")
+                    print(f"   Sample columns: {adv_cols[:5]}")
+                    # Show a sample player with advanced stats
+                    sample_player = player_df[player_df[adv_cols[0]].notna()].head(1)
+                    if len(sample_player) > 0:
+                        player_name = sample_player.iloc[0]['name']
+                        print(f"   Sample player '{player_name}':")
+                        for col in adv_cols[:3]:
+                            val = sample_player.iloc[0][col]
+                            print(f"      {col}: {val}")
             
+            print(f"{'='*80}\n")
             return player_df
     
     # PRIORITY 3: Last resort - legacy file (if it exists)
