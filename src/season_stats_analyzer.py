@@ -791,14 +791,7 @@ def analyze_season_stats(
             # Create player mapper (ONE-TIME fuzzy matching)
             print(f"   Creating player mapper...")
             player_mapper = create_player_mapper(player_df, season_files)
-            print(f"   ✅ Mapped {len(player_mapper)} players")
-            
-            # Show sample mappings
-            if len(player_mapper) > 0:
-                sample_mappings = list(player_mapper.items())[:3]
-                print(f"   Sample mappings:")
-                for orig_name, matches in sample_mappings:
-                    print(f"      '{orig_name}' → {list(matches.keys())}")
+            print(f"   ✅ Player mapper created")
 
             # Extract original 9 metrics
             print(f"   Enriching with base metrics...")
