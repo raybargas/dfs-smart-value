@@ -123,7 +123,17 @@ def _create_mapping_dataframe(player_mapper: PlayerNameMapper, file_key: str) ->
     Returns:
         DataFrame with columns: original_name, matched_name, match_score, normalized_name
     """
-    return player_mapper.create_mapping_dataframe(file_key)
+    print(f"\n🔍 _create_mapping_dataframe called for file_key='{file_key}'")
+    mapping_df = player_mapper.create_mapping_dataframe(file_key)
+    print(f"   Mapping DataFrame shape: {mapping_df.shape}")
+    if len(mapping_df) > 0:
+        print(f"   Columns: {list(mapping_df.columns)}")
+        print(f"   Sample mappings:")
+        for idx, row in mapping_df.head(3).iterrows():
+            print(f"      '{row['original_name']}' → '{row['matched_name']}' (score: {row.get('match_score', 'N/A')})")
+    else:
+        print(f"   ⚠️ WARNING: Mapping DataFrame is EMPTY!")
+    return mapping_df
 
 
 def _prepare_stats_for_merge(file_df: pd.DataFrame, metrics: List) -> pd.DataFrame:
@@ -137,17 +147,27 @@ def _prepare_stats_for_merge(file_df: pd.DataFrame, metrics: List) -> pd.DataFra
     Returns:
         DataFrame with Name and metric columns only
     """
+    print(f"\n🔍 _prepare_stats_for_merge called")
+    print(f"   Input DataFrame shape: {file_df.shape}")
+    print(f"   Input columns: {list(file_df.columns)}")
+    print(f"   Metrics to extract: {[m.source_column for m in metrics]}")
+    
     # Get unique column names needed
     columns_needed = ['Name']
     for metric in metrics:
         if metric.source_column not in columns_needed:
             columns_needed.append(metric.source_column)
 
+    print(f"   Columns needed: {columns_needed}")
+    
     # Filter to only columns that exist
     columns_available = [col for col in columns_needed if col in file_df.columns]
+    
+    print(f"   Columns available: {columns_available}")
 
     if len(columns_available) < 2:  # Need at least Name + 1 metric
         logger.warning(f"Not enough columns available for merge. Needed: {columns_needed}, Available: {columns_available}")
+        print(f"   ⚠️ WARNING: Not enough columns! Returning empty DataFrame")
         return pd.DataFrame()
 
     # Create subset with aggregation (in case of multiple weeks)
@@ -162,6 +182,12 @@ def _prepare_stats_for_merge(file_df: pd.DataFrame, metrics: List) -> pd.DataFra
     else:
         stats_subset = file_df[columns_available].copy()
 
+    print(f"   Output DataFrame shape: {stats_subset.shape}")
+    if len(stats_subset) > 0:
+        print(f"   Sample rows:")
+        for idx, row in stats_subset.head(3).iterrows():
+            print(f"      Name='{row['Name']}', values={dict(row[columns_available[1:]])}")
+    
     return stats_subset
 
 
@@ -256,19 +282,26 @@ def enrich_with_advanced_stats(
             logger.debug(f"Skipping {file_key} file (not loaded or empty)")
             continue
 
+        print(f"\n{'='*80}")
+        print(f"Processing file: {file_key}")
+        print(f"{'='*80}")
+
         # Get metrics from this file
         file_metrics = [m for m in metrics_to_extract.values() if m.source_file == file_key]
         if not file_metrics:
             logger.debug(f"No metrics to extract from {file_key}")
+            print(f"⏩ No metrics defined for {file_key}")
             continue
 
         logger.info(f"Extracting {len(file_metrics)} metrics from {file_key}: {[m.display_name for m in file_metrics]}")
+        print(f"📊 Extracting {len(file_metrics)} metrics: {[m.display_name for m in file_metrics]}")
 
         # Create mapping DataFrame for this file
         mapping_df = _create_mapping_dataframe(player_mapper, file_key)
 
         if mapping_df.empty:
             logger.warning(f"No mappings available for {file_key}")
+            print(f"⚠️ No mappings available for {file_key} - SKIPPING")
             continue
 
         # Prepare stats for merge
@@ -276,8 +309,13 @@ def enrich_with_advanced_stats(
 
         if stats_for_merge.empty:
             logger.warning(f"No stats available for merge from {file_key}")
+            print(f"⚠️ No stats prepared for merge from {file_key} - SKIPPING")
             continue
 
+        print(f"\n🔄 Attempting merge...")
+        print(f"   mapping_df shape: {mapping_df.shape}")
+        print(f"   stats_for_merge shape: {stats_for_merge.shape}")
+        
         # Merge stats with mapping
         merged_stats = mapping_df.merge(
             stats_for_merge,
@@ -285,18 +323,33 @@ def enrich_with_advanced_stats(
             right_on='Name',
             how='left'
         )
+        
+        print(f"   merged_stats shape after merge: {merged_stats.shape}")
+        print(f"   Non-null values in first metric column:")
+        if len(file_metrics) > 0 and file_metrics[0].source_column in merged_stats.columns:
+            non_null_count = merged_stats[file_metrics[0].source_column].notna().sum()
+            print(f"      {file_metrics[0].source_column}: {non_null_count}/{len(merged_stats)}")
 
         # Rename columns to metric IDs
         for metric in file_metrics:
             if metric.source_column in merged_stats.columns:
                 # Create the advanced metric column name
                 merged_stats[metric.metric_id] = merged_stats[metric.source_column]
+                print(f"   ✓ Renamed '{metric.source_column}' → '{metric.metric_id}'")
 
         # Select only the columns we need for final merge
         merge_cols = ['original_name'] + [m.metric_id for m in file_metrics if m.metric_id in merged_stats.columns]
         merged_stats_final = merged_stats[merge_cols].copy()
+        
+        print(f"   merged_stats_final shape: {merged_stats_final.shape}")
+        print(f"   merged_stats_final columns: {list(merged_stats_final.columns)}")
 
         # Merge into enriched_df (BULK OPERATION)
+        print(f"\n🔀 Final merge into player DataFrame...")
+        print(f"   enriched_df shape before: {enriched_df.shape}")
+        print(f"   enriched_df['name'] sample: {enriched_df['name'].head(3).tolist()}")
+        print(f"   merged_stats_final['original_name'] sample: {merged_stats_final['original_name'].head(3).tolist()}")
+        
         enriched_df = enriched_df.merge(
             merged_stats_final,
             left_on='name',
@@ -304,6 +357,14 @@ def enrich_with_advanced_stats(
             how='left',
             suffixes=('', '_new')
         )
+        
+        print(f"   enriched_df shape after: {enriched_df.shape}")
+        
+        # Check if metrics were actually added
+        for metric in file_metrics:
+            if metric.metric_id in enriched_df.columns:
+                non_null = enriched_df[metric.metric_id].notna().sum()
+                print(f"   {metric.metric_id}: {non_null} non-null values")
 
         # Clean up duplicate columns
         enriched_df = enriched_df.drop(columns=['original_name'], errors='ignore')
