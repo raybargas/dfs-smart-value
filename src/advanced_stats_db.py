@@ -319,7 +319,7 @@ def load_advanced_stats_from_database(
     db_path: str = None
 ) -> Dict[str, Optional[pd.DataFrame]]:
     """
-    Load advanced stats for a specific week from the consolidated advanced_stats table.
+    Load advanced stats for a specific week from separate tables (migration 008).
     
     Args:
         week: Week number
@@ -338,107 +338,123 @@ def load_advanced_stats_from_database(
     try:
         conn = sqlite3.connect(db_path)
         
-        # Load from the consolidated advanced_stats table
-        query = "SELECT * FROM advanced_stats WHERE week = ?"
-        df_all = pd.read_sql_query(query, conn, params=(week,))
+        result = {}
+        
+        # Load from SEPARATE tables (migration 008)
+        # Pass stats
+        try:
+            query_pass = "SELECT * FROM pass_stats WHERE week = ?"
+            df_pass = pd.read_sql_query(query_pass, conn, params=(week,))
+            if len(df_pass) > 0:
+                # Rename to match expected column names from Excel files
+                df_pass = df_pass.rename(columns={
+                    'player_name': 'Name',
+                    'team': 'Team',
+                    'position': 'POS',
+                    'week': 'W',
+                    'cpoe': 'CPOE',
+                    'adot': 'aDOT',
+                    'deep_throw_pct': 'Deep Throw %',
+                    'read1_pct': '1Read %',
+                    'acc_pct': 'ACC %',
+                    'press_pct': 'PRESS %'
+                })
+                result['pass'] = df_pass
+                print(f"   Loaded {len(df_pass)} pass stats")
+            else:
+                result['pass'] = None
+        except Exception as e:
+            print(f"   No pass stats found: {e}")
+            result['pass'] = None
+        
+        # Rush stats
+        try:
+            query_rush = "SELECT * FROM rush_stats WHERE week = ?"
+            df_rush = pd.read_sql_query(query_rush, conn, params=(week,))
+            if len(df_rush) > 0:
+                # Rename to match expected column names from Excel files
+                df_rush = df_rush.rename(columns={
+                    'player_name': 'Name',
+                    'team': 'Team',
+                    'position': 'POS',
+                    'week': 'W',
+                    'yaco_att': 'YACO/ATT',
+                    'success_rate': 'Success Rate',
+                    'mtf_att': 'MTF/ATT',
+                    'stuff_pct': 'STUFF %',
+                    'yaco_pct': 'YACO %'
+                })
+                result['rush'] = df_rush
+                print(f"   Loaded {len(df_rush)} rush stats")
+            else:
+                result['rush'] = None
+        except Exception as e:
+            print(f"   No rush stats found: {e}")
+            result['rush'] = None
+        
+        # Receiving stats
+        try:
+            query_receiving = "SELECT * FROM receiving_stats WHERE week = ?"
+            df_receiving = pd.read_sql_query(query_receiving, conn, params=(week,))
+            if len(df_receiving) > 0:
+                # Rename to match expected column names from Excel files
+                df_receiving = df_receiving.rename(columns={
+                    'player_name': 'Name',
+                    'team': 'Team',
+                    'position': 'POS',
+                    'week': 'W',
+                    'tprr': 'TPRR',
+                    'yprr': 'YPRR',
+                    'rte_pct': 'RTE %',
+                    'tgt_pct': 'TGT %',
+                    'cr_pct': 'CR %',
+                    'yac_rec': 'YAC/REC',
+                    'read1_pct': '1READ %',
+                    'mtf_rec': 'MTF/REC',
+                    'drop_pct': 'DRP %',
+                    'adot': 'aDOT'
+                })
+                result['receiving'] = df_receiving
+                print(f"   Loaded {len(df_receiving)} receiving stats")
+            else:
+                result['receiving'] = None
+        except Exception as e:
+            print(f"   No receiving stats found: {e}")
+            result['receiving'] = None
+        
+        # Snap stats
+        try:
+            query_snaps = "SELECT * FROM snap_stats WHERE week = ?"
+            df_snaps = pd.read_sql_query(query_snaps, conn, params=(week,))
+            if len(df_snaps) > 0:
+                # Rename to match expected column names from Excel files
+                df_snaps = df_snaps.rename(columns={
+                    'player_name': 'Name',
+                    'team': 'Team',
+                    'position': 'POS',
+                    'week': 'W',
+                    'snap_pct': 'Snap %',
+                    'snaps_per_gp': 'snaps_per_gp',
+                    'rush_per_snap': 'rush_per_snap',
+                    'rush_share': 'rush_share',
+                    'tgt_per_snap': 'tgt_per_snap',
+                    'tgt_share': 'tgt_share',
+                    'touch_per_snap': 'touch_per_snap',
+                    'util_per_snap': 'util_per_snap'
+                })
+                result['snaps'] = df_snaps
+                print(f"   Loaded {len(df_snaps)} snap stats")
+            else:
+                result['snaps'] = None
+        except Exception as e:
+            print(f"   No snap stats found: {e}")
+            result['snaps'] = None
         
         conn.close()
         
-        if len(df_all) == 0:
-            print("   No records found in database")
-            return {'pass': None, 'rush': None, 'receiving': None, 'snaps': None}
+        files_loaded = sum(1 for v in result.values() if v is not None)
+        print(f"   Total: {files_loaded} stat types loaded")
         
-        print(f"   Loaded {len(df_all)} records from advanced_stats table")
-        
-        # Extract records by position to create separate DataFrames
-        # This matches the expected structure from the 4-file system
-        result = {}
-        
-        # Pass stats (QB only)
-        df_pass = df_all[df_all['position'] == 'QB'].copy()
-        if len(df_pass) > 0:
-            # Rename columns to match expected format
-            df_pass = df_pass.rename(columns={
-                'player_name': 'Name',
-                'team': 'Team',
-                'position': 'POS',
-                'week': 'W'
-            })
-            # Select only columns that exist and are expected
-            cols_to_keep = ['Name', 'Team', 'POS', 'W']
-            if 'adv_cpoe' in df_pass.columns:
-                cols_to_keep.append('adv_cpoe')
-            if 'adv_adot' in df_pass.columns:
-                cols_to_keep.append('adv_adot')
-            if 'adv_deep_throw_pct' in df_pass.columns:
-                cols_to_keep.append('adv_deep_throw_pct')
-            if 'adv_1read_pct' in df_pass.columns:
-                cols_to_keep.append('adv_1read_pct')
-            df_pass = df_pass[[col for col in cols_to_keep if col in df_pass.columns]]
-            result['pass'] = df_pass
-        else:
-            result['pass'] = None
-        
-        # Rush stats (RB only)
-        df_rush = df_all[df_all['position'] == 'RB'].copy()
-        if len(df_rush) > 0:
-            df_rush = df_rush.rename(columns={
-                'player_name': 'Name',
-                'team': 'Team',
-                'position': 'POS',
-                'week': 'W'
-            })
-            cols_to_keep = ['Name', 'Team', 'POS', 'W']
-            if 'adv_yaco_att' in df_rush.columns:
-                cols_to_keep.append('adv_yaco_att')
-            if 'adv_mtf_att' in df_rush.columns:
-                cols_to_keep.append('adv_mtf_att')
-            if 'adv_success_rate' in df_rush.columns:
-                cols_to_keep.append('adv_success_rate')
-            df_rush = df_rush[[col for col in cols_to_keep if col in df_rush.columns]]
-            result['rush'] = df_rush
-        else:
-            result['rush'] = None
-        
-        # Receiving stats (WR/TE)
-        df_receiving = df_all[df_all['position'].isin(['WR', 'TE'])].copy()
-        if len(df_receiving) > 0:
-            df_receiving = df_receiving.rename(columns={
-                'player_name': 'Name',
-                'team': 'Team',
-                'position': 'POS',
-                'week': 'W'
-            })
-            cols_to_keep = ['Name', 'Team', 'POS', 'W']
-            if 'adv_tprr' in df_receiving.columns:
-                cols_to_keep.append('adv_tprr')
-            if 'adv_yprr' in df_receiving.columns:
-                cols_to_keep.append('adv_yprr')
-            if 'adv_rte_pct' in df_receiving.columns:
-                cols_to_keep.append('adv_rte_pct')
-            if 'adv_1read_pct' in df_receiving.columns:
-                cols_to_keep.append('adv_1read_pct')
-            df_receiving = df_receiving[[col for col in cols_to_keep if col in df_receiving.columns]]
-            result['receiving'] = df_receiving
-        else:
-            result['receiving'] = None
-        
-        # Snaps stats (all positions)
-        df_snaps = df_all.copy()
-        if len(df_snaps) > 0:
-            df_snaps = df_snaps.rename(columns={
-                'player_name': 'Name',
-                'team': 'Team',
-                'position': 'POS',
-                'week': 'W'
-            })
-            cols_to_keep = ['Name', 'Team', 'POS', 'W']
-            df_snaps = df_snaps[[col for col in cols_to_keep if col in df_snaps.columns]]
-            result['snaps'] = df_snaps
-        else:
-            result['snaps'] = None
-        
-        print(f"   Parsed into {sum(1 for v in result.values() if v is not None)} stat types")
         return result
         
     except Exception as e:

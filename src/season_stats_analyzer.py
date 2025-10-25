@@ -19,9 +19,13 @@ logger = logging.getLogger(__name__)
 
 # Import Phase 1 infrastructure components
 try:
-    from .advanced_stats_loader import (
-        FileLoader, load_season_stats_files, create_player_mapper,
+    # Use advanced_stats_db for database operations (supports separate tables from migration 008)
+    from .advanced_stats_db import (
         save_advanced_stats_to_database, load_advanced_stats_from_database
+    )
+    # Use advanced_stats_loader for file operations
+    from .advanced_stats_loader import (
+        FileLoader, load_season_stats_files, create_player_mapper
     )
     from .player_name_mapper import PlayerNameMapper, normalize_name
     from .metric_definitions import MetricRegistry
