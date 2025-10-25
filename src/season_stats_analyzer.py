@@ -698,7 +698,7 @@ def analyze_season_stats(
                     if df is not None and len(df) > 0:
                         print(f"   {file_type}: {len(df)} records")
                         if len(df) > 0:
-                            print(f"      Sample players: {df['player_name'].head(3).tolist()}")
+                            print(f"      Sample players: {df['Name'].head(3).tolist()}")
             else:
                 logger.info("📂 No data in database, trying files...")
                 print("📂 No data in database, trying files...")
